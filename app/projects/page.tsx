@@ -68,11 +68,17 @@ const handleEdit = (project: Project) => {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!projectName.trim() || !description.trim() || !imageUrl.trim()) {
-      setErrorMessage("Please fill in the project name, description, and project image.");
-      setSuccessMessage("");
-      return;
-    }
+    const trimmedProjectName = projectName.trim();
+const trimmedDescription = description.trim();
+const trimmedImageUrl = imageUrl.trim();
+
+if (!trimmedProjectName || !trimmedDescription || !trimmedImageUrl) {
+  setErrorMessage(
+    "Please fill in the project name, description, and project image.",
+  );
+  setSuccessMessage("");
+  return;
+}
 
     const updatedProjects = editingProjectId
   ? projects.map((project) =>

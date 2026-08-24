@@ -55,6 +55,65 @@ type ProfileStructure = {
   recommendedSections: ProfileSection[];
 };
 
+type PdfLayoutBlock = {
+  type:
+    | "header"
+    | "textSection"
+    | "fullWidthSection"
+    | "twoColumnSection"
+    | "projectGrid"
+    | "projectFeature";
+  sectionId?: string;
+  projectNames?: string[];
+};
+
+type PdfLayoutPlan = {
+  version: 1;
+  blocks: PdfLayoutBlock[];
+};
+
+const isPdfLayoutPlan = (value: unknown): value is PdfLayoutPlan => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const plan = value as { version?: unknown; blocks?: unknown };
+  return plan.version === 1
+    && Array.isArray(plan.blocks)
+    && plan.blocks.every((block) => {
+      if (!block || typeof block !== "object") {
+        return false;
+      }
+
+      const candidate = block as PdfLayoutBlock;
+      return [
+        "header",
+        "textSection",
+        "fullWidthSection",
+        "twoColumnSection",
+        "projectGrid",
+        "projectFeature",
+      ].includes(candidate.type)
+        && (candidate.type === "header" || typeof candidate.sectionId === "string");
+    });
+};
+
+const createFallbackPdfLayoutPlan = (profile: GeneratedProfile): PdfLayoutPlan => ({
+  version: 1,
+  blocks: [
+    { type: "header" },
+    ...profile.sections.map((section) =>
+      section.id === "projects"
+        ? {
+            type: "projectGrid" as const,
+            sectionId: section.id,
+            projectNames: section.items.map((item) => item.name),
+          }
+        : { type: "fullWidthSection" as const, sectionId: section.id },
+    ),
+  ],
+});
+
 const polishProjectDescription = (description: string) => {
   const sentences = description
     .trim()
@@ -113,11 +172,14 @@ const [profileStructure, setProfileStructure] =
   useState<ProfileStructure | null>(null);
 const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
 const [structureConfirmed, setStructureConfirmed] = useState(false);
+const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+const [editingSectionTitle, setEditingSectionTitle] = useState("");
 const [loading, setLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
   const [exportMessage, setExportMessage] = useState("");
+
 const handleAnalyze = async () => {
   setLoading(true);
   setErrorMessage("");
@@ -125,7 +187,6 @@ const handleAnalyze = async () => {
   try {
     const savedCompanyData = localStorage.getItem("companyData");
     const savedProjectsData = localStorage.getItem("projectsData");
-
     if (!savedCompanyData) {
       throw new Error("Please save your company information first.");
     }
@@ -166,13 +227,13 @@ setSelectedSectionIds(
 );
 setStructureConfirmed(false);
     localStorage.setItem(
-  "profileStructure",
-  JSON.stringify({
-    companyData,
-    analysis: data,
-    selectedSections: data.recommendedSections,
-  }),
-);
+      "profileStructure",
+      JSON.stringify({
+        companyData,
+        analysis: data,
+        selectedSections: data.recommendedSections,
+      }),
+    );
   } catch (error) {
     setErrorMessage(
       error instanceof Error
@@ -183,6 +244,7 @@ setStructureConfirmed(false);
     setLoading(false);
   }
 };
+
   const handleGenerate = () => {
     setLoading(true);
     setErrorMessage("");
@@ -205,18 +267,14 @@ setStructureConfirmed(false);
           setErrorMessage("Please complete your company information before generating a profile.");
           return;
         }
-const savedStructure = localStorage.getItem("profileStructure");
-
-if (!savedStructure) {
+if (!profileStructure) {
   setProfile(null);
   setErrorMessage("Please analyze the company structure before generating the profile.");
   return;
 }
 
-const structure = JSON.parse(savedStructure);
-
 const selectedSections =
-  structure.analysis?.recommendedSections?.filter(
+  profileStructure.recommendedSections.filter(
     (section: ProfileSection) =>
       selectedSectionIds.includes(section.id)
   ) || [];
@@ -361,13 +419,60 @@ setProfile({
     setExportMessage("");
 
     try {
+      const fallbackLayoutPlan = createFallbackPdfLayoutPlan(profile);
+      let layoutPlan = fallbackLayoutPlan;
+      const plannerController = new AbortController();
+      const plannerTimeout = window.setTimeout(() => plannerController.abort(), 8000);
+
+      try {
+        let companyData: Partial<CompanyData> = {
+          name: profile.companyName,
+          logoUrl: profile.logoUrl,
+        };
+        const savedCompanyData = localStorage.getItem("companyData");
+
+        if (savedCompanyData) {
+          try {
+            const parsedCompanyData = JSON.parse(savedCompanyData);
+            if (parsedCompanyData && typeof parsedCompanyData === "object") {
+              companyData = parsedCompanyData;
+            }
+          } catch {
+            companyData = { name: profile.companyName, logoUrl: profile.logoUrl };
+          }
+        }
+
+        const plannerResponse = await fetch("/api/plan-pdf-layout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: plannerController.signal,
+          body: JSON.stringify({
+            company: companyData,
+            profile,
+            projects: profile.projects,
+          }),
+        });
+        const plannerData: unknown = await plannerResponse.json();
+
+        if (!plannerResponse.ok || !isPdfLayoutPlan(plannerData)) {
+          throw new Error("Invalid PDF layout plan");
+        }
+
+        layoutPlan = plannerData;
+      } catch {
+        layoutPlan = fallbackLayoutPlan;
+      } finally {
+        window.clearTimeout(plannerTimeout);
+      }
+
       const pdf = new jsPDF({ unit: "mm", format: "a4" });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
       const bottomMargin = 16;
-      let y = 20;
+      const topContent = 22;
+      let y = topContent;
       const logo = profile.logoUrl ? await loadPdfImage(profile.logoUrl) : null;
       const logoSource = logo && profile.logoUrl
         ? await getPdfImageSource(logo)
@@ -393,7 +498,7 @@ setProfile({
       const startNewPage = () => {
         pdf.addPage();
         addHeader();
-        y = 20;
+        y = topContent;
       };
 
       const ensureSpace = (height: number) => {
@@ -402,153 +507,216 @@ setProfile({
         }
       };
 
-      const addSectionHeading = (heading: string) => {
-        ensureSpace(18);
+      const addSectionHeading = (
+        heading: string,
+        followingHeight = 12,
+        minimumFollowingHeight = 12,
+      ) => {
+        const headingGap = 11;
+        const availableHeight = pageHeight - bottomMargin - y;
+        const requiredHeight = headingGap + followingHeight;
+        const minimumHeight = headingGap + minimumFollowingHeight;
 
+        ensureSpace(
+          requiredHeight <= availableHeight ? requiredHeight : minimumHeight,
+        );
         pdf.setTextColor(17, 24, 39);
         pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(15);
+        pdf.setFontSize(16.5);
         pdf.text(heading, margin, y);
         pdf.setDrawColor(17, 24, 39);
-        pdf.line(margin, y + 3, margin + 14, y + 3);
-        y += 8;
+        pdf.setLineWidth(0.6);
+        pdf.line(margin, y + 4, margin + 18, y + 4);
+        y += headingGap;
       };
 
-      const addBodyText = (text: string, size = 10, lineHeight = 5.5) => {
+      const addBodyText = (text: string, size = 11.5, lineHeight = 7.2) => {
         pdf.setTextColor(55, 65, 81);
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(size);
         const lines = pdf.splitTextToSize(text, contentWidth) as string[];
-        const height = lines.length * lineHeight;
+        const availableHeight = pageHeight - bottomMargin - y;
+        const linesPerPage = Math.max(1, Math.floor((availableHeight - 2) / lineHeight));
 
-        ensureSpace(height + 2);
+        for (let index = 0; index < lines.length; index += linesPerPage) {
+          const pageLines = lines.slice(index, index + linesPerPage);
+          pdf.text(pageLines, margin, y);
+          y += pageLines.length * lineHeight + 4;
 
-        pdf.text(lines, margin, y);
-        y += height + 2;
+          if (index + linesPerPage < lines.length) {
+            startNewPage();
+          }
+        }
       };
 
       addHeader();
       pdf.setTextColor(17, 24, 39);
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(25);
-      pdf.text("Company Profile", margin, y + 8);
+      pdf.text(profile.companyName, margin, y + 8);
       y += 21;
 
-      addSectionHeading("About Us");
-      addBodyText(profile.about, 11, 6.5);
-
-      addSectionHeading("Our Expertise");
-      profile.expertise.forEach((item) => addBodyText(`- ${item}`, 10, 5.5));
-
-      addSectionHeading("Our Experience");
-      addBodyText(profile.experience, 11, 6.5);
-
-      addSectionHeading("Featured Projects");
       const projectColumnWidth = (contentWidth - 6) / 2;
-      const loadedProjects = await Promise.all(
-        profile.projects.map(async (project) => ({
-          project,
-          image: project.imageUrl ? await loadPdfImage(project.imageUrl) : null,
-        })),
-      );
+      const cardPadding = 6;
+      const imageAreaHeight = 55;
+      const titleLineHeight = 5.8;
+      const descriptionLineHeight = 4.8;
+      const cardGap = 3;
+      const rowGap = 10;
 
-      for (let index = 0; index < loadedProjects.length; index += 2) {
-        const rowProjects = loadedProjects.slice(index, index + 2);
-        const isSingleProjectRow = rowProjects.length === 1;
-        const cardWidth = isSingleProjectRow ? contentWidth : projectColumnWidth;
-        const imageWidth = cardWidth - 10;
-        const imageHeights = rowProjects.map(({ image }) => {
-          if (!image) {
-            return 0;
-          }
-
-          const maxImageHeight = isSingleProjectRow ? 62 : 62;
-          return Math.min(maxImageHeight, imageWidth / (image.naturalWidth / image.naturalHeight));
-        });
-        const cardHeights = rowProjects.map(({ project }, projectIndex) => {
-            const titleLines = pdf.splitTextToSize(project.name, cardWidth - 10) as string[];
-            const descriptionLines = pdf.splitTextToSize(project.description, cardWidth - 6) as string[];
-            return (imageHeights[projectIndex] || 0) + titleLines.length * 5 + descriptionLines.length * 4.5 + 19;
-          });
-        const rowHeight = Math.max(...cardHeights);
-
-        ensureSpace(rowHeight);
-        rowProjects.forEach(({ project, image }, columnIndex) => {
-          const cardX = isSingleProjectRow ? margin : margin + columnIndex * (projectColumnWidth + 6);
-          const titleLines = pdf.splitTextToSize(project.name, cardWidth - 10) as string[];
-          const descriptionLines = pdf.splitTextToSize(project.description, cardWidth - 6) as string[];
-          const projectImageHeight = imageHeights[columnIndex];
-          const cardHeight = isSingleProjectRow ? cardHeights[columnIndex] + 8 : rowHeight + 8;
-
-          pdf.setFillColor(249, 250, 251);
-          pdf.setDrawColor(229, 231, 235);
-          pdf.roundedRect(cardX, y, cardWidth, cardHeight, 3, 3, "FD");
-
-          const imageX = cardX + 5;
-          const imageY = y + 5;
-          const imageAreaHeight = projectImageHeight || 0;
-
-          if (image) {
-  const imageSource = getPdfImageSource(image);
-
-  const imageRatio = image.naturalWidth / image.naturalHeight;
-  const renderedHeight = Math.min(
-    isSingleProjectRow ? 62 : 52,
-    imageWidth / imageRatio
-  );
-  const renderedWidth = renderedHeight * imageRatio;
-
-  pdf.addImage(
-    imageSource,
-    imageX + (imageWidth - renderedWidth) / 2,
-    imageY,
-    renderedWidth,
-    renderedHeight
-  );
-}
-
-          pdf.setTextColor(17, 24, 39);
-          pdf.setFont("helvetica", "bold");
-          pdf.setFontSize(10.5);
-          pdf.text(titleLines, cardX + 5, y + imageAreaHeight + 12);
-          pdf.setTextColor(55, 65, 81);
-          pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(9);
-          pdf.text(descriptionLines, cardX + 3, y + imageAreaHeight + 12 + titleLines.length * 5 + 2);
-        });
-        y += rowHeight + 9;
-      }
-
-      y += 12;
-      addSectionHeading("Why Choose Us");
-      const reasonColumnWidth = (contentWidth - 6) / 2;
-      const reasonRows = Math.ceil(profile.reasons.length / 2);
-      const reasonHeights = profile.reasons.map((reason) => {
-        const lines = pdf.splitTextToSize(reason, reasonColumnWidth - 14) as string[];
-        return lines.length * 4.5 + 14;
-      });
-      const reasonRowHeights = Array.from({ length: reasonRows }, (_, rowIndex) =>
-        Math.max(...reasonHeights.slice(rowIndex * 2, rowIndex * 2 + 2)),
-      );
-      ensureSpace(reasonRowHeights.reduce((total, height) => total + height, 0) + (reasonRows - 1) * 4);
-      profile.reasons.forEach((reason, index) => {
-        const columnIndex = index % 2;
-        const rowIndex = Math.floor(index / 2);
-        const cardX = margin + columnIndex * (reasonColumnWidth + 6);
-        const cardY = y + reasonRowHeights.slice(0, rowIndex).reduce((total, height) => total + height + 4, 0);
-        const lines = pdf.splitTextToSize(reason, reasonColumnWidth - 14) as string[];
-
-        pdf.setFillColor(249, 250, 251);
-        pdf.setDrawColor(229, 231, 235);
-        pdf.roundedRect(cardX, cardY, reasonColumnWidth, reasonHeights[rowIndex], 3, 3, "FD");
-        pdf.setFillColor(17, 24, 39);
-        pdf.circle(cardX + 7, cardY + 8, 1.2, "F");
-        pdf.setTextColor(55, 65, 81);
+      const getCardMetrics = (item: GeneratedSection["items"][number], cardWidth: number) => {
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(11.5);
+        const titleLines = pdf.splitTextToSize(item.name, cardWidth - cardPadding * 2) as string[];
         pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(9);
-        pdf.text(lines, cardX + 12, cardY + 8);
+        pdf.setFontSize(9.5);
+        const descriptionLines = pdf.splitTextToSize(item.description, cardWidth - cardPadding * 2) as string[];
+
+        return {
+          titleLines,
+          descriptionLines,
+          height: cardPadding * 2
+            + imageAreaHeight
+            + cardGap
+            + titleLines.length * titleLineHeight
+            + cardGap
+            + descriptionLines.length * descriptionLineHeight,
+        };
+      };
+
+      const sectionsById = new Map(profile.sections.map((section) => [section.id, section]));
+      const renderedSectionIds = new Set<string>();
+      const renderBlocks: {
+        section: GeneratedSection;
+        items: GeneratedSection["items"];
+        feature: boolean;
+      }[] = [];
+
+      layoutPlan.blocks.forEach((block) => {
+        if (block.type === "header" || !block.sectionId || renderedSectionIds.has(block.sectionId)) {
+          return;
+        }
+
+        const section = sectionsById.get(block.sectionId);
+        if (!section) {
+          return;
+        }
+
+        const isProjectBlock = block.type === "projectGrid" || block.type === "projectFeature";
+        const items = isProjectBlock && block.projectNames
+          ? section.items.filter((item) => block.projectNames?.includes(item.name))
+          : section.items;
+
+        renderedSectionIds.add(section.id);
+        renderBlocks.push({
+          section,
+          items,
+          feature: block.type === "projectFeature",
+        });
       });
-      y += reasonRowHeights.reduce((total, height) => total + height, 0) + (reasonRows - 1) * 4;
+
+      profile.sections.forEach((section) => {
+        if (!renderedSectionIds.has(section.id)) {
+          renderBlocks.push({
+            section,
+            items: section.items,
+            feature: false,
+          });
+        }
+      });
+
+      for (const renderBlock of renderBlocks) {
+        const { section } = renderBlock;
+        const loadedItems = await Promise.all(
+          renderBlock.items.map(async (item) => ({
+            item,
+            image: item.imageUrl ? await loadPdfImage(item.imageUrl) : null,
+          })),
+        );
+
+        const firstItem = loadedItems[0];
+        const firstItemWidth = renderBlock.feature || loadedItems.length === 1
+          ? contentWidth
+          : projectColumnWidth;
+        const firstItemHeight = firstItem
+          ? getCardMetrics(firstItem.item, firstItemWidth).height
+          : 12;
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(11.5);
+        const firstContentHeight = section.content
+          ? (pdf.splitTextToSize(section.content, contentWidth) as string[]).length * 7.2 + 4
+          : firstItemHeight;
+
+        addSectionHeading(
+          section.title,
+          section.content && firstItem
+            ? firstContentHeight + firstItemHeight
+            : firstContentHeight,
+          section.content ? firstContentHeight : firstItemHeight,
+        );
+
+        if (section.content) {
+          addBodyText(section.content, 11.5, 7.2);
+        }
+
+        if (!loadedItems.length) {
+          continue;
+        }
+
+        const columnCount = renderBlock.feature ? 1 : 2;
+        for (let index = 0; index < loadedItems.length; index += columnCount) {
+          const rowItems = loadedItems.slice(index, index + columnCount);
+          const isSingleItemRow = renderBlock.feature || rowItems.length === 1;
+          const cardWidth = isSingleItemRow ? contentWidth : projectColumnWidth;
+          const cardHeights = rowItems.map(({ item }) => {
+            return getCardMetrics(item, cardWidth).height;
+          });
+          const rowHeight = Math.max(...cardHeights);
+
+          ensureSpace(rowHeight);
+          const actualRowY = y;
+          rowItems.forEach(({ item, image }, columnIndex) => {
+            const cardX = isSingleItemRow ? margin : margin + columnIndex * (projectColumnWidth + 6);
+            const cardMetrics = getCardMetrics(item, cardWidth);
+            const { titleLines, descriptionLines } = cardMetrics;
+            const cardHeight = isSingleItemRow ? cardMetrics.height : rowHeight;
+
+            pdf.setFillColor(249, 250, 251);
+            pdf.setDrawColor(229, 231, 235);
+            pdf.roundedRect(cardX, actualRowY, cardWidth, cardHeight, 3, 3, "FD");
+
+            if (image) {
+              const imageSource = getPdfImageSource(image);
+              const imageRatio = image.naturalWidth / image.naturalHeight;
+              const imageWidth = cardWidth - cardPadding * 2;
+              const renderedWidth = Math.min(imageWidth, imageAreaHeight * imageRatio);
+              const renderedHeight = renderedWidth / imageRatio;
+
+              pdf.addImage(
+                imageSource,
+                cardX + cardPadding + (imageWidth - renderedWidth) / 2,
+                actualRowY + cardPadding + (imageAreaHeight - renderedHeight) / 2,
+                renderedWidth,
+                renderedHeight,
+              );
+            }
+
+            pdf.setTextColor(17, 24, 39);
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(11.5);
+            pdf.text(titleLines, cardX + cardPadding, actualRowY + cardPadding + imageAreaHeight + cardGap + titleLineHeight);
+            pdf.setTextColor(55, 65, 81);
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(9.5);
+            pdf.text(
+              descriptionLines,
+              cardX + cardPadding,
+              actualRowY + cardPadding + imageAreaHeight + cardGap + titleLines.length * titleLineHeight + cardGap + descriptionLineHeight,
+            );
+          });
+          y = actualRowY + rowHeight + rowGap;
+        }
+      }
 
       const totalPages = pdf.getNumberOfPages();
       for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
@@ -573,6 +741,24 @@ setProfile({
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6 sm:py-14">
+      {loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/30 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-xl">
+            <span
+              aria-hidden="true"
+              className="mx-auto block h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-900"
+            />
+            <h2 className="mt-5 text-xl font-semibold text-gray-900">
+              {profileStructure || profile
+                ? "Generating Company Profile"
+                : "Analyzing Company Information"}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              Analyzing your company information and projects...
+            </p>
+          </div>
+        </div>
+      )}
       <div className="mx-auto max-w-5xl">
         <h1 className="text-4xl font-bold tracking-tight text-gray-900">
           Generate Company Profile
@@ -591,24 +777,32 @@ setProfile({
             Your company information and projects will be used to create a
             professional profile.
           </p>
-<button
+          {!profile && !profileStructure && (
+            <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4">
+              <p className="font-semibold text-green-900">
+                ✓ Company information saved successfully
+              </p>
+              <p className="mt-1 text-sm text-green-800">
+                Your saved company data is ready to be analyzed.
+              </p>
+            </div>
+          )}
+{!profile && !profileStructure && (
+          <button
   type="button"
   onClick={handleAnalyze}
   disabled={loading}
-  className="mt-8 mr-3 rounded-lg border border-gray-300 bg-white px-6 py-3 font-medium text-gray-900 transition hover:border-gray-900 disabled:cursor-wait disabled:opacity-60"
+  className="mt-8 rounded-lg bg-black px-6 py-3 font-medium text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60"
 >
-  {loading ? "Analyzing..." : "Analyze Company"}
+  {loading ? "Analyzing..." : "Analyze Saved Company"}
 </button>
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={loading}
-            className="mt-8 rounded-lg bg-black px-6 py-3 font-medium text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60"
-          >
-            {loading ? "Generating..." : "Generate Profile"}
-          </button>
-{profileStructure && (
-  <div className="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
+)}
+{!profile && profileStructure && (
+  <div
+    className={`mt-8 rounded-xl border border-gray-200 bg-gray-50 p-5 transition-opacity ${
+      loading ? "pointer-events-none opacity-50" : ""
+    }`}
+  >
     <p className="text-sm font-semibold uppercase tracking-wide text-gray-500">
       We’ve tailored your profile structure
     </p>
@@ -622,38 +816,169 @@ setProfile({
   const isSelected = selectedSectionIds.includes(section.id);
 
   return (
-    <label
-      key={section.id}
-      className="flex cursor-pointer gap-3 rounded-lg border border-gray-200 bg-white p-4 transition hover:border-gray-400"
-    >
-      <input
-        type="checkbox"
-        checked={isSelected}
-        onChange={() => {
-          setSelectedSectionIds((current) =>
-            current.includes(section.id)
-              ? current.filter((id) => id !== section.id)
-              : [...current, section.id],
-          );
-        }}
-        className="mt-1 h-4 w-4"
-      />
+    <div
+  key={section.id}
+  className="rounded-lg border border-gray-200 bg-white p-4 transition hover:border-gray-400"
+>
+  <div className="flex gap-3">
+    <input
+      type="checkbox"
+      checked={isSelected}
+      disabled={loading}
+      onChange={() => {
+        setSelectedSectionIds((current) =>
+          current.includes(section.id)
+            ? current.filter((id) => id !== section.id)
+            : [...current, section.id],
+        );
+        setStructureConfirmed(false);
+      }}
+      className="mt-1 h-4 w-4"
+    />
 
-      <div>
-        <p className="font-medium text-gray-900">
-          {section.displayTitle}
-        </p>
+    <div className="min-w-0 flex-1">
+      {editingSectionId === section.id ? (
+        <div>
+          <input
+            type="text"
+            value={editingSectionTitle}
+            disabled={loading}
+            onChange={(event) =>
+              setEditingSectionTitle(event.target.value)
+            }
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-black"
+            autoFocus
+          />
 
-        <p className="mt-1 text-sm leading-6 text-gray-600">
-          {section.description}
-        </p>
-      </div>
-    </label>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                const newTitle = editingSectionTitle.trim();
+
+                if (!newTitle) {
+                  return;
+                }
+
+                setProfileStructure((current) => {
+                  if (!current) {
+                    return current;
+                  }
+
+                  return {
+                    ...current,
+                    recommendedSections: current.recommendedSections.map(
+                      (currentSection) =>
+                        currentSection.id === section.id
+                          ? {
+                              ...currentSection,
+                              displayTitle: newTitle,
+                            }
+                          : currentSection,
+                    ),
+                  };
+                });
+
+                setEditingSectionId(null);
+                setEditingSectionTitle("");
+                setStructureConfirmed(false);
+              }}
+              className="rounded-md bg-black px-3 py-1.5 text-xs font-medium text-white"
+            >
+              Save
+            </button>
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                setEditingSectionId(null);
+                setEditingSectionTitle("");
+              }}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-900"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-medium text-gray-900">
+              {section.displayTitle}
+            </p>
+
+            <p className="mt-1 text-sm leading-6 text-gray-600">
+              {section.description}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => {
+              setEditingSectionId(section.id);
+              setEditingSectionTitle(section.displayTitle);
+              setStructureConfirmed(false);
+            }}
+            className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 hover:border-gray-900"
+          >
+            Edit
+          </button>
+        </div>
+      )}
+    </div>
+  </div>
+</div>
   );
 })}
-<div className="mt-5 flex justify-end">
+<div className="mt-5 flex flex-wrap items-center justify-between gap-3">
   <button
     type="button"
+    disabled={loading}
+    onClick={() => {
+      const title = window.prompt("Enter the new section name:");
+
+      if (!title?.trim()) {
+        return;
+      }
+
+      const newSection: ProfileSection = {
+        id: `custom-${Date.now()}`,
+        displayTitle: title.trim(),
+        description: "Custom section added by you.",
+      };
+
+      setProfileStructure((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          recommendedSections: [
+            ...current.recommendedSections,
+            newSection,
+          ],
+        };
+      });
+
+      setSelectedSectionIds((current) => [
+        ...current,
+        newSection.id,
+      ]);
+
+      setStructureConfirmed(false);
+    }}
+    className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-900 transition hover:border-gray-900 hover:bg-gray-50"
+  >
+    + Add Another Section
+  </button>
+
+  <button
+    type="button"
+    disabled={loading}
     onClick={() => {
       setErrorMessage("");
       setStructureConfirmed(true);
@@ -664,6 +989,23 @@ setProfile({
       ? "✓ Structure Confirmed"
       : "✓ This Looks Good"}
   </button>
+
+  {structureConfirmed && (
+    <button
+      type="button"
+      onClick={handleGenerate}
+      disabled={loading}
+      className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60"
+    >
+      {loading && (
+        <span
+          aria-hidden="true"
+          className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent align-[-2px]"
+        />
+      )}
+      {loading ? "Generating..." : "Generate Profile"}
+    </button>
+  )}
 </div>
 
     </div>
@@ -778,6 +1120,20 @@ setProfile({
                 <Link href="/projects" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-900 hover:bg-gray-50">
                   Edit Projects
                 </Link>
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={loading}
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-900 hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {loading && (
+                    <span
+                      aria-hidden="true"
+                      className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-gray-900 border-t-transparent align-[-2px]"
+                    />
+                  )}
+                  {loading ? "Regenerating..." : "Regenerate Profile"}
+                </button>
               </div>
             </div>
           )}

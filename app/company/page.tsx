@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 type CompanyData = {
   name: string;
@@ -8,6 +9,14 @@ type CompanyData = {
   about: string;
   activities: string;
   experience: string;
+};
+
+type Project = {
+  id: string;
+  name: string;
+  category?: string;
+  description: string;
+  imageUrl: string;
 };
 
 const emptyCompanyData: CompanyData = {
@@ -18,8 +27,27 @@ const emptyCompanyData: CompanyData = {
   experience: '',
 };
 
+const readImageFile = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Could not read image file'));
+    reader.readAsDataURL(file);
+  });
+
 export default function CompanyPage() {
+  const router = useRouter();
   const [companyData, setCompanyData] = useState<CompanyData>(emptyCompanyData);
+  const [projectName, setProjectName] = useState('');
+  const [category, setCategory] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imagePreview, setImagePreview] = useState('');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [isAddingProject, setIsAddingProject] = useState(true);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -38,6 +66,29 @@ export default function CompanyPage() {
     };
 
     const loadTimeout = window.setTimeout(loadCompanyData, 0);
+
+    return () => window.clearTimeout(loadTimeout);
+  }, []);
+
+  useEffect(() => {
+    const loadProjects = () => {
+      const savedProjects = localStorage.getItem('projectsData');
+
+      if (savedProjects) {
+        try {
+          const parsedProjects = JSON.parse(savedProjects);
+
+          if (Array.isArray(parsedProjects)) {
+            setProjects(parsedProjects);
+            setIsAddingProject(parsedProjects.length === 0);
+          }
+        } catch {
+          localStorage.removeItem('projectsData');
+        }
+      }
+    };
+
+    const loadTimeout = window.setTimeout(loadProjects, 0);
 
     return () => window.clearTimeout(loadTimeout);
   }, []);
@@ -68,6 +119,96 @@ export default function CompanyPage() {
     reader.readAsDataURL(file);
   };
 
+  const handleImageSelect = async (file: File | undefined) => {
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setErrorMessage('Please select an image file.');
+      setSuccessMessage('');
+      return;
+    }
+
+    try {
+      const imageData = await readImageFile(file);
+      setImageUrl(imageData);
+      setImagePreview(imageData);
+      setErrorMessage('');
+      setSuccessMessage('');
+    } catch {
+      setErrorMessage('We could not read that image. Please try another file.');
+      setSuccessMessage('');
+    }
+  };
+
+  const handleEditProject = (project: Project) => {
+    setEditingProjectId(project.id);
+    setProjectName(project.name);
+    setCategory(project.category ?? '');
+    setDescription(project.description);
+    setImageUrl(project.imageUrl);
+    setImagePreview(project.imageUrl);
+    setIsAddingProject(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+  };
+
+  const handleProjectSubmit = () => {
+    const trimmedProjectName = projectName.trim();
+    const trimmedDescription = description.trim();
+    const trimmedImageUrl = imageUrl.trim();
+
+    if (!trimmedProjectName || !trimmedDescription || !trimmedImageUrl) {
+      setErrorMessage('Please fill in the project name, description, and project image.');
+      setSuccessMessage('');
+      return;
+    }
+
+    const updatedProjects = editingProjectId
+      ? projects.map((project) =>
+          project.id === editingProjectId
+            ? {
+                ...project,
+                name: trimmedProjectName,
+                category: category.trim(),
+                description: trimmedDescription,
+                imageUrl: trimmedImageUrl,
+              }
+            : project,
+        )
+      : [
+          ...projects,
+          {
+            id: `${Date.now()}-${projectName}`,
+            name: trimmedProjectName,
+            category: category.trim(),
+            description: trimmedDescription,
+            imageUrl: trimmedImageUrl,
+          },
+        ];
+
+    setProjects(updatedProjects);
+    localStorage.setItem('projectsData', JSON.stringify(updatedProjects));
+    setEditingProjectId(null);
+    setProjectName('');
+    setCategory('');
+    setDescription('');
+    setImageUrl('');
+    setImagePreview('');
+    setIsAddingProject(false);
+    setErrorMessage('');
+    setSuccessMessage(editingProjectId ? 'Project updated successfully.' : 'Project saved successfully.');
+  };
+
+  const handleDeleteProject = (projectId: string) => {
+    const updatedProjects = projects.filter((project) => project.id !== projectId);
+
+    setProjects(updatedProjects);
+    localStorage.setItem('projectsData', JSON.stringify(updatedProjects));
+    setIsAddingProject(updatedProjects.length === 0);
+  };
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -83,6 +224,12 @@ export default function CompanyPage() {
     }
 
     localStorage.setItem('companyData', JSON.stringify(companyData));
+    localStorage.setItem('projectsData', JSON.stringify(projects));
+
+setTimeout(() => {
+  router.push('/generate');
+}, 500);
+
     setErrorMessage('');
     setSuccessMessage('Company information saved successfully.');
   };
@@ -119,6 +266,7 @@ export default function CompanyPage() {
             </label>
 
             <input
+              ref={logoInputRef}
               type="file"
               accept="image/png,image/jpeg,image/svg+xml"
               onChange={(event) => handleLogoSelect(event.target.files?.[0])}
@@ -126,11 +274,20 @@ export default function CompanyPage() {
             />
 
             {companyData.logoUrl && (
-              <img
-                src={companyData.logoUrl}
-                alt="Company logo preview"
-                className="mt-4 h-24 w-40 rounded-lg border border-gray-200 bg-white object-contain p-2"
-              />
+              <div className="mt-4 flex flex-wrap items-end gap-3">
+                <img
+                  src={companyData.logoUrl}
+                  alt="Company logo preview"
+                  className="h-24 w-40 rounded-lg border border-gray-200 bg-white object-contain p-2"
+                />
+                <button
+                  type="button"
+                  onClick={() => logoInputRef.current?.click()}
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-900 hover:bg-gray-50"
+                >
+                  Replace Logo
+                </button>
+              </div>
             )}
           </div>
 
@@ -175,6 +332,158 @@ export default function CompanyPage() {
               className="mt-2 w-full rounded-lg border border-gray-300 p-3"
             />
           </div>
+
+          <section className="flex flex-col border-t border-gray-200 pt-6">
+            <div>
+              <h2 className="text-2xl font-semibold text-gray-900">Projects</h2>
+              <p className="mt-2 text-sm text-gray-600">
+                Add projects and project photos if you want to include them in your profile.
+              </p>
+            </div>
+
+            {isAddingProject && (
+            <div className="order-2 mt-5 rounded-xl bg-gray-50 p-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {editingProjectId ? 'Edit Project' : `Project #${projects.length + 1}`}
+              </h3>
+
+              <label className="mt-4 block text-sm font-medium text-gray-900">
+                Project Name
+              </label>
+              <input
+                type="text"
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+                placeholder="e.g. New Cairo Marble Project"
+                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-black"
+              />
+
+              <label className="mt-4 block text-sm font-medium text-gray-900">
+                Project Type / Category <span className="font-normal text-gray-500">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                placeholder="e.g. Residential, Commercial"
+                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-black"
+              />
+
+              <label className="mt-4 block text-sm font-medium text-gray-900">
+                Project Description
+              </label>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Describe the project..."
+                rows={4}
+                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-black"
+              />
+
+              <label className="mt-4 block text-sm font-medium text-gray-900">
+                Project Photo <span className="font-normal text-gray-500">(required)</span>
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => handleImageSelect(event.target.files?.[0])}
+                className="mt-2 block w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:font-medium file:text-gray-900"
+              />
+
+              {imagePreview && (
+                <img
+                  src={imagePreview}
+                  alt="Project preview"
+                  className="mt-4 h-48 w-full rounded-lg object-contain"
+                />
+              )}
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleProjectSubmit}
+                  className="rounded-lg bg-black px-5 py-2.5 font-medium text-white"
+                >
+                  {editingProjectId
+                    ? 'Update Project'
+                    : 'Save Project'}
+                </button>
+                {editingProjectId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingProjectId(null);
+                      setProjectName('');
+                      setCategory('');
+                      setDescription('');
+                      setImageUrl('');
+                      setImagePreview('');
+                    }}
+                    className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 font-medium text-gray-900"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
+            </div>
+            )}
+
+            {projects.length > 0 && (
+              <div className="order-1 mt-5 space-y-4">
+                {projects.map((project) => (
+                  <article key={project.id} className="rounded-xl border border-gray-200 bg-white p-4">
+                    {project.imageUrl && (
+                      <img
+                        src={project.imageUrl}
+                        alt={project.name}
+                        className="h-40 w-full rounded-lg object-contain"
+                      />
+                    )}
+                    <h3 className="mt-3 font-semibold text-gray-900">{project.name}</h3>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-600">
+                      {project.description}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEditProject(project)}
+                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteProject(project.id)}
+                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+
+            {!isAddingProject && projects.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingProjectId(null);
+                  setProjectName('');
+                  setCategory('');
+                  setDescription('');
+                  setImageUrl('');
+                  setImagePreview('');
+                  setErrorMessage('');
+                  setSuccessMessage('');
+                  setIsAddingProject(true);
+                }}
+                className="order-3 mt-5 self-start rounded-lg border border-gray-300 bg-white px-5 py-2.5 font-medium text-gray-900 transition hover:border-gray-900 hover:bg-gray-50"
+              >
+                Add Another Project
+              </button>
+            )}
+          </section>
 
           <button type="submit" className="rounded-lg bg-black px-6 py-3 font-medium text-white">
             Save Company
