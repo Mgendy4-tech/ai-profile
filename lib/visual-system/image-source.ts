@@ -1,0 +1,64 @@
+export type PexelsImageCandidate = {
+  candidateId: string;
+  url: string;
+  source: "pexels";
+  photographer: string;
+  width: number;
+  height: number;
+};
+
+type PexelsPhoto = {
+  id: number;
+  width: number;
+  height: number;
+  photographer: string;
+  src: {
+    original: string;
+    large2x?: string;
+    large?: string;
+  };
+};
+
+type PexelsSearchResponse = {
+  photos: PexelsPhoto[];
+};
+
+export const searchPexelsImages = async (
+  query: string,
+  perPage = 10
+): Promise<PexelsImageCandidate[]> => {
+  const apiKey = process.env.PEXELS_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("Missing PEXELS_API_KEY.");
+  }
+
+  const url = new URL("https://api.pexels.com/v1/search");
+
+  url.searchParams.set("query", query);
+  url.searchParams.set("per_page", String(perPage));
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: apiKey,
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Pexels request failed with status ${response.status}.`
+    );
+  }
+
+  const data = (await response.json()) as PexelsSearchResponse;
+
+  return data.photos.map((photo) => ({
+    candidateId: `pexels-${photo.id}`,
+    url: photo.src.original,
+    source: "pexels",
+    photographer: photo.photographer,
+    width: photo.width,
+    height: photo.height,
+  }));
+};
