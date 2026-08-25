@@ -26,10 +26,12 @@ import {
   drawNarrativePage,
   getNarrativePageActivation,
   prepareNarrativePage,
+  type NarrativeCompositionVariant,
 } from "@/lib/visual-system/pdf-narrative-composition";
 import {
   createPDFDesignTokens,
   resolvePagePalette,
+  type PDFPageMode,
 } from "@/lib/visual-system/pdf-design-tokens";
 import {
   calculateAspectFillCrop,
@@ -694,11 +696,15 @@ setProfile({
       const aboutImageWidth = 68;
       const aboutImageHeight = 55;
       const resolvedCoverLayout = coverActivation
-        ? createCoverEditorialLayout(coverActivation.page, true)
+        ? createCoverEditorialLayout(
+            coverActivation.page,
+            Boolean(coverActivation.heroVisual),
+            coverActivation.heroVisual
+          )
         : null;
       const resolvedCoverHero = coverActivation?.heroVisual ?? null;
       const v2HeroImageSource =
-        resolvedCoverLayout && resolvedCoverHero?.imageUrl
+        resolvedCoverLayout?.heroArea && resolvedCoverHero?.imageUrl
           ? await loadContextualPdfImage(
               resolvedCoverHero.imageUrl,
               resolvedCoverLayout.heroArea.width,
@@ -794,6 +800,9 @@ setProfile({
 
       let renderedV2Cover = false;
       const renderedV2SectionIds = new Set<string>();
+      let previousV2PageMode: PDFPageMode | null = null;
+      let previousNarrativeVariant: NarrativeCompositionVariant | null = null;
+      const renderedV2PageModes = new Map<number, PDFPageMode>();
 
       if (coverActivation) {
         try {
@@ -815,6 +824,7 @@ setProfile({
           if (coverResult.renderedVisual) {
             renderedContextualVisuals.push(coverResult.renderedVisual);
           }
+          previousV2PageMode = coverResult.pageMode;
 
           renderedV2Cover = true;
           pdf.addPage();
@@ -835,16 +845,23 @@ setProfile({
       if (renderedV2Cover && resolvedPageComposition) {
         const narrativePages = resolvedPageComposition.pages.slice(1);
 
-        for (const resolvedPage of narrativePages) {
+        for (const [narrativeIndex, resolvedPage] of narrativePages.entries()) {
           const activation = getNarrativePageActivation(resolvedPage);
 
           if (!activation) {
             continue;
           }
 
-          const imageLayout = createNarrativePageLayout(activation, true);
+          const pageIndex = narrativeIndex + 1;
+          const imageLayout = createNarrativePageLayout(
+            activation,
+            Boolean(activation.visual),
+            pageIndex,
+            previousNarrativeVariant,
+            previousV2PageMode
+          );
           const narrativeImageSource =
-            imageLayout && activation.visual?.imageUrl
+            imageLayout?.mediaArea && activation.visual?.imageUrl
               ? await loadContextualPdfImage(
                   activation.visual.imageUrl,
                   imageLayout.mediaArea.width,
@@ -864,7 +881,10 @@ setProfile({
               })),
             })),
             Boolean(narrativeImageSource),
-            pdfDesignTokens
+            pdfDesignTokens,
+            pageIndex,
+            previousNarrativeVariant,
+            previousV2PageMode
           );
 
           if (!prepared) {
@@ -888,6 +908,12 @@ setProfile({
             if (result.renderedVisual) {
               renderedContextualVisuals.push(result.renderedVisual);
             }
+            previousNarrativeVariant = prepared.layout.variant;
+            previousV2PageMode = prepared.layout.pageMode;
+            renderedV2PageModes.set(
+              narrativePageNumber,
+              prepared.layout.pageMode
+            );
 
             pdf.addPage();
             y = topContent;
@@ -1185,9 +1211,21 @@ setProfile({
         }
 
         pdf.setPage(pageNumber);
-        pdf.setDrawColor(209, 213, 219);
+        const footerPalette = resolvePagePalette(
+          pdfDesignTokens,
+          renderedV2PageModes.get(pageNumber) ?? "light"
+        );
+        pdf.setDrawColor(
+          footerPalette.divider[0],
+          footerPalette.divider[1],
+          footerPalette.divider[2]
+        );
         pdf.line(margin, pageHeight - 14, pageWidth - margin, pageHeight - 14);
-        pdf.setTextColor(107, 114, 128);
+        pdf.setTextColor(
+          footerPalette.secondaryText[0],
+          footerPalette.secondaryText[1],
+          footerPalette.secondaryText[2]
+        );
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(8);
         pdf.text(profile.companyName, margin, pageHeight - 8);

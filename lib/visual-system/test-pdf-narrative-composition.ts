@@ -145,10 +145,29 @@ assert(
 
 const imageLayout = createNarrativePageLayout(splitActivation!, true);
 const imageFreeLayout = createNarrativePageLayout(stackActivation!, false);
-assert(imageLayout?.mode === "image", "Resolved media should use image mode.");
 assert(
-  imageFreeLayout?.mode === "image_free",
-  "Missing media should use deterministic image-free mode."
+  imageLayout?.mode === "image" && imageLayout.variant === "media_left",
+  "Resolved split media should use its deterministic left variant."
+);
+assert(
+  imageFreeLayout?.mode === "image_free" &&
+    imageFreeLayout.variant === "text_dual_column_or_stacked" &&
+    imageFreeLayout.mediaArea === null &&
+    imageFreeLayout.usesPlaceholderPanel === false,
+  "Missing stack media should use an intentional text composition."
+);
+const splitRight = createNarrativePageLayout(
+  splitActivation!,
+  true,
+  2,
+  "media_left",
+  "light"
+);
+assert(
+  splitRight?.variant === "media_right" &&
+    Boolean(splitRight.mediaArea) &&
+    splitRight.textArea.x < splitRight.mediaArea!.x,
+  "Consecutive split pages should alternate media from left to right."
 );
 
 const isWithinA4 = (area: ResolvedArea) =>
@@ -161,7 +180,12 @@ const isWithinA4 = (area: ResolvedArea) =>
 [imageLayout, imageFreeLayout].forEach((layout) => {
   assert(Boolean(layout), "Resolved narrative layout should be valid.");
   if (!layout) return;
-  [layout.pageArea, layout.contentArea, layout.mediaArea, layout.textArea].forEach(
+  [
+    layout.pageArea,
+    layout.contentArea,
+    ...(layout.mediaArea ? [layout.mediaArea] : []),
+    layout.textArea,
+  ].forEach(
     (area) => assert(isWithinA4(area), "Narrative geometry must stay within A4.")
   );
 });

@@ -75,12 +75,19 @@ assert(
   "Only the resolved contextual-stock hero should be selected."
 );
 
-const imageLayout = createCoverEditorialLayout(activation!.page, true);
+const imageLayout = createCoverEditorialLayout(activation!.page, true, hero);
 const imageFreeLayout = createCoverEditorialLayout(activation!.page, false);
 assert(imageLayout?.mode === "image", "Usable hero should choose image mode.");
 assert(
-  imageFreeLayout?.mode === "image_free",
-  "Missing image data should choose the deterministic image-free mode."
+  imageLayout?.variant === "full_bleed_overlay",
+  "Wide selected hero should deterministically use full-bleed overlay."
+);
+assert(
+  imageFreeLayout?.mode === "image_free" &&
+    imageFreeLayout.variant === "typographic_hero" &&
+    imageFreeLayout.heroArea === null &&
+    imageFreeLayout.usesPlaceholderPanel === false,
+  "Missing image data should choose an intentional typographic cover."
 );
 assert(
   imageLayout?.sectionsConsumed.length === 0 &&
@@ -101,13 +108,26 @@ const isWithinPage = (area: ResolvedArea) =>
   if (!layout) return;
   [
     layout.pageArea,
-    layout.heroArea,
+    ...(layout.heroArea ? [layout.heroArea] : []),
     layout.panelArea,
     layout.accentArea,
     layout.logoArea,
     layout.titleArea,
   ].forEach((area) => assert(isWithinPage(area), "Cover area must stay in A4 bounds."));
 });
+
+const portraitHero: SelectedContextualVisual = {
+  ...hero,
+  briefId: "portrait-hero",
+  aspectRatio: "1:1",
+  width: 1200,
+  height: 1400,
+};
+assert(
+  createCoverEditorialLayout(activation!.page, true, portraitHero)?.variant ===
+    "asymmetric_split",
+  "Non-wide selected imagery should use the asymmetric split variant."
+);
 
 const withoutImage = resolve([]);
 assert(withoutImage.ok, "Missing optional hero should still resolve safely.");

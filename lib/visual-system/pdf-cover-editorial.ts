@@ -9,20 +9,29 @@ import {
   resolvePagePalette,
   resolveTypographyForDensity,
   type PDFDesignTokens,
+  type PDFPageMode,
 } from "./pdf-design-tokens";
+import { resolvePDFPageMode } from "./pdf-page-pacing";
 
 export type CoverEditorialMode = "image" | "image_free";
+export type CoverEditorialVariant =
+  | "full_bleed_overlay"
+  | "asymmetric_split"
+  | "typographic_hero";
 
 export type CoverEditorialLayout = {
   mode: CoverEditorialMode;
+  variant: CoverEditorialVariant;
+  pageMode: PDFPageMode;
   pageArea: ResolvedArea;
-  heroArea: ResolvedArea;
+  heroArea: ResolvedArea | null;
   panelArea: ResolvedArea;
   accentArea: ResolvedArea;
   logoArea: ResolvedArea;
   eyebrowPosition: { x: number; y: number };
   titleArea: ResolvedArea;
   sectionsConsumed: [];
+  usesPlaceholderPanel: false;
 };
 
 export type CoverEditorialActivation = {
@@ -83,33 +92,62 @@ export const getCoverEditorialActivation = (
 
 export const createCoverEditorialLayout = (
   page: ResolvedCompositionPage,
-  hasHeroImage: boolean
+  hasHeroImage: boolean,
+  heroVisual: SelectedContextualVisual | null = null
 ): CoverEditorialLayout | null => {
   if (page.pageRole !== "cover" || page.archetype !== "cover_editorial") {
     return null;
   }
 
   const pageArea = copyArea(page.pageArea);
-  const heroArea = copyArea(page.contentArea);
-  const panelWidth = page.sectionArea.width;
-  const panelArea: ResolvedArea = {
-    x: page.contentArea.x,
-    y: page.contentArea.y,
-    width: panelWidth,
-    height: page.contentArea.height,
-  };
-  const accentArea: ResolvedArea = hasHeroImage
+  const variant = selectCoverEditorialVariant(hasHeroImage, heroVisual);
+  const pageMode = resolvePDFPageMode({
+    pageIndex: 0,
+    pageRole: "cover",
+    density: page.density,
+    hasImage: variant !== "typographic_hero",
+    previousMode: null,
+  });
+  const heroArea: ResolvedArea | null = variant === "full_bleed_overlay"
     ? {
-        x: panelArea.x + panelArea.width - 1.5,
-        y: panelArea.y,
-        width: 1.5,
-        height: panelArea.height,
+        x: page.pageArea.x,
+        y: page.pageArea.y,
+        width: page.pageArea.width,
+        height: page.pageArea.height * 0.69,
+      }
+    : variant === "asymmetric_split"
+    ? {
+        x: page.contentArea.x + page.contentArea.width * 0.45,
+        y: page.contentArea.y,
+        width: page.contentArea.width * 0.55,
+        height: page.contentArea.height,
+      }
+    : null;
+  const panelArea: ResolvedArea = variant === "full_bleed_overlay"
+    ? {
+        x: page.contentArea.x,
+        y: page.contentArea.y + page.contentArea.height * 0.5,
+        width: page.contentArea.width * 0.56,
+        height: page.contentArea.height * 0.44,
       }
     : {
-        x: page.contentArea.x + page.contentArea.width * 0.62,
+        x: page.contentArea.x,
         y: page.contentArea.y,
-        width: page.contentArea.width * 0.38,
+        width: page.contentArea.width * 0.48,
         height: page.contentArea.height,
+      };
+  const accentArea: ResolvedArea = variant === "typographic_hero"
+    ? {
+        x: page.contentArea.x + page.contentArea.width - 2,
+        y: page.contentArea.y,
+        width: 2,
+        height: page.contentArea.height,
+      }
+    : {
+        x: panelArea.x,
+        y: panelArea.y,
+        width: panelArea.width,
+        height: panelArea.height,
       };
   const logoArea: ResolvedArea = {
     x: panelArea.x + 10,
@@ -125,7 +163,7 @@ export const createCoverEditorialLayout = (
   };
 
   const areas = [
-    heroArea,
+    ...(heroArea ? [heroArea] : []),
     panelArea,
     accentArea,
     logoArea,
@@ -137,7 +175,9 @@ export const createCoverEditorialLayout = (
   }
 
   return {
-    mode: hasHeroImage ? "image" : "image_free",
+    mode: variant === "typographic_hero" ? "image_free" : "image",
+    variant,
+    pageMode,
     pageArea,
     heroArea,
     panelArea,
@@ -149,7 +189,27 @@ export const createCoverEditorialLayout = (
     },
     titleArea,
     sectionsConsumed: [],
+    usesPlaceholderPanel: false,
   };
+};
+
+export const selectCoverEditorialVariant = (
+  hasHeroImage: boolean,
+  heroVisual: SelectedContextualVisual | null
+): CoverEditorialVariant => {
+  if (!hasHeroImage || !heroVisual) {
+    return "typographic_hero";
+  }
+
+  const ratio = heroVisual.width && heroVisual.height
+    ? heroVisual.width / heroVisual.height
+    : heroVisual.aspectRatio === "16:9"
+    ? 16 / 9
+    : heroVisual.aspectRatio === "4:3"
+    ? 4 / 3
+    : 1;
+
+  return ratio >= 1.5 ? "full_bleed_overlay" : "asymmetric_split";
 };
 
 export const drawCoverEditorial = ({
@@ -159,7 +219,11 @@ export const drawCoverEditorial = ({
   designTokens,
   heroImageSource,
   logo,
-}: DrawCoverEditorialInput): { renderedVisual: SelectedContextualVisual | null } => {
+}: DrawCoverEditorialInput): {
+  renderedVisual: SelectedContextualVisual | null;
+  variant: CoverEditorialVariant;
+  pageMode: PDFPageMode;
+} => {
   if (!companyName.trim()) {
     throw new Error("A company name is required for the editorial cover.");
   }
@@ -170,20 +234,28 @@ export const drawCoverEditorial = ({
     pageSize: { width: 210, height: 297 },
     pages: [page],
   });
-  const layout = createCoverEditorialLayout(page, Boolean(heroImageSource));
+  const layout = createCoverEditorialLayout(
+    page,
+    Boolean(heroImageSource),
+    activation?.heroVisual ?? null
+  );
 
   if (!activation || !layout) {
     throw new Error("The resolved page cannot be rendered as an editorial cover.");
   }
 
   const lightPalette = resolvePagePalette(designTokens, "light");
+  const coverPalette = resolvePagePalette(designTokens, layout.pageMode);
   const accentPalette = resolvePagePalette(designTokens, "accent");
   const typography = resolveTypographyForDensity(designTokens, page.density);
 
+  const basePalette = layout.variant === "typographic_hero"
+    ? coverPalette
+    : lightPalette;
   pdf.setFillColor(
-    lightPalette.background[0],
-    lightPalette.background[1],
-    lightPalette.background[2]
+    basePalette.background[0],
+    basePalette.background[1],
+    basePalette.background[2]
   );
   pdf.rect(
     layout.pageArea.x,
@@ -193,7 +265,7 @@ export const drawCoverEditorial = ({
     "F"
   );
 
-  if (heroImageSource) {
+  if (heroImageSource && layout.heroArea) {
     pdf.addImage(
       heroImageSource,
       "JPEG",
@@ -210,7 +282,7 @@ export const drawCoverEditorial = ({
     accentPalette.background[2]
   );
 
-  if (layout.mode === "image") {
+  if (layout.variant !== "typographic_hero") {
     pdf.rect(
       layout.panelArea.x,
       layout.panelArea.y,
@@ -219,18 +291,23 @@ export const drawCoverEditorial = ({
       "F"
     );
   } else {
+    pdf.setDrawColor(
+      coverPalette.primaryText[0],
+      coverPalette.primaryText[1],
+      coverPalette.primaryText[2]
+    );
+    pdf.setLineWidth(designTokens.rules.hairlineWidth);
     pdf.rect(
-      layout.accentArea.x,
-      layout.accentArea.y,
-      layout.accentArea.width,
-      layout.accentArea.height,
-      "F"
+      page.contentArea.x,
+      page.contentArea.y,
+      page.contentArea.width,
+      page.contentArea.height
     );
   }
 
-  const textColor = layout.mode === "image"
-    ? accentPalette.primaryText
-    : lightPalette.primaryText;
+  const textColor = layout.variant === "typographic_hero"
+    ? coverPalette.primaryText
+    : accentPalette.primaryText;
   pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
   pdf.setFont("helvetica", typography.overline.fontStyle);
   pdf.setFontSize(typography.overline.fontSize);
@@ -279,5 +356,7 @@ export const drawCoverEditorial = ({
 
   return {
     renderedVisual: heroImageSource ? activation.heroVisual : null,
+    variant: layout.variant,
+    pageMode: layout.pageMode,
   };
 };

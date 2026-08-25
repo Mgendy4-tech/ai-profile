@@ -10,7 +10,16 @@ import {
   resolveSpacingForDensity,
   resolveTypographyForDensity,
   type PDFDesignTokens,
+  type PDFPageMode,
 } from "./pdf-design-tokens";
+import { resolvePDFPageMode } from "./pdf-page-pacing";
+
+export type NarrativeCompositionVariant =
+  | "media_left"
+  | "media_right"
+  | "top_media"
+  | "text_dual_column_or_stacked"
+  | "text_forward_no_media";
 
 export type NarrativeContentSection = {
   id: string;
@@ -39,9 +48,13 @@ export type NarrativePageActivation = {
 export type NarrativePageLayout = {
   pageArea: ResolvedArea;
   contentArea: ResolvedArea;
-  mediaArea: ResolvedArea;
+  mediaArea: ResolvedArea | null;
   textArea: ResolvedArea;
   mode: "image" | "image_free";
+  variant: NarrativeCompositionVariant;
+  pageMode: PDFPageMode;
+  textColumns: 1 | 2;
+  usesPlaceholderPanel: false;
 };
 
 export type PreparedNarrativeSection = {
@@ -129,42 +142,83 @@ export const getNarrativePageActivation = (
 
 export const createNarrativePageLayout = (
   activation: NarrativePageActivation,
-  hasImage: boolean
+  hasImage: boolean,
+  pageIndex = 1,
+  previousVariant: NarrativeCompositionVariant | null = null,
+  previousMode: PDFPageMode | null = null
 ): NarrativePageLayout | null => {
   const { page } = activation;
   const gap = page.densityParameters.sectionGap;
+  const variant = selectNarrativeCompositionVariant(
+    activation,
+    hasImage,
+    pageIndex,
+    previousVariant
+  );
+  const pageMode = resolvePDFPageMode({
+    pageIndex,
+    pageRole: page.pageRole,
+    density: page.density,
+    hasImage,
+    previousMode,
+  });
   const mediaRatioScale = resolveDensityAdjustments(
     page.density
   ).mediaRatioScale;
   const baseMediaWidth = page.sectionArea.x - gap - page.contentArea.x;
   const baseMediaHeight = page.sectionArea.y - gap - page.contentArea.y;
-  const mediaArea: ResolvedArea = page.archetype === "narrative_split"
+  const splitMediaWidth = baseMediaWidth * mediaRatioScale;
+  const stackMediaHeight = baseMediaHeight * mediaRatioScale;
+  const mediaArea: ResolvedArea | null = variant === "media_left"
     ? {
         x: page.contentArea.x,
         y: page.contentArea.y,
-        width: baseMediaWidth * mediaRatioScale,
+        width: splitMediaWidth,
         height: page.contentArea.height,
       }
-    : {
+    : variant === "media_right"
+    ? {
+        x: page.contentArea.x + page.contentArea.width - splitMediaWidth,
+        y: page.contentArea.y,
+        width: splitMediaWidth,
+        height: page.contentArea.height,
+      }
+    : variant === "top_media"
+    ? {
         x: page.contentArea.x,
         y: page.contentArea.y,
         width: page.contentArea.width,
-        height: baseMediaHeight * mediaRatioScale,
-      };
-  const textArea: ResolvedArea = page.archetype === "narrative_split"
+        height: stackMediaHeight,
+      }
+    : null;
+  const textArea: ResolvedArea = variant === "media_left" && mediaArea
     ? {
         x: mediaArea.x + mediaArea.width + gap,
         y: page.contentArea.y,
         width: page.contentArea.width - mediaArea.width - gap,
         height: page.contentArea.height,
       }
-    : {
+    : variant === "media_right" && mediaArea
+    ? {
+        x: page.contentArea.x,
+        y: page.contentArea.y,
+        width: page.contentArea.width - mediaArea.width - gap,
+        height: page.contentArea.height,
+      }
+    : variant === "top_media" && mediaArea
+    ? {
         x: page.contentArea.x,
         y: mediaArea.y + mediaArea.height + gap,
         width: page.contentArea.width,
         height: page.contentArea.height - mediaArea.height - gap,
-      };
-  const areas = [page.pageArea, page.contentArea, mediaArea, textArea];
+      }
+    : { ...page.contentArea };
+  const areas = [
+    page.pageArea,
+    page.contentArea,
+    ...(mediaArea ? [mediaArea] : []),
+    textArea,
+  ];
 
   if (!areas.every((area) => isWithinPage(area, page.pageArea))) {
     return null;
@@ -175,8 +229,40 @@ export const createNarrativePageLayout = (
     contentArea: { ...page.contentArea },
     mediaArea,
     textArea,
-    mode: hasImage ? "image" : "image_free",
+    mode: hasImage && mediaArea ? "image" : "image_free",
+    variant,
+    pageMode,
+    textColumns:
+      variant === "text_dual_column_or_stacked" && page.sections.length > 1
+        ? 2
+        : 1,
+    usesPlaceholderPanel: false,
   };
+};
+
+export const selectNarrativeCompositionVariant = (
+  activation: NarrativePageActivation,
+  hasImage: boolean,
+  pageIndex: number,
+  previousVariant: NarrativeCompositionVariant | null
+): NarrativeCompositionVariant => {
+  if (!hasImage || !activation.visual) {
+    return activation.page.archetype === "narrative_stack" &&
+      activation.page.sections.length > 1
+      ? "text_dual_column_or_stacked"
+      : "text_forward_no_media";
+  }
+
+  if (activation.page.archetype === "narrative_stack") {
+    return "top_media";
+  }
+
+  const preferred = pageIndex % 2 === 0 ? "media_right" : "media_left";
+  return preferred === previousVariant
+    ? preferred === "media_left"
+      ? "media_right"
+      : "media_left"
+    : preferred;
 };
 
 export const prepareNarrativePage = (
@@ -184,9 +270,18 @@ export const prepareNarrativePage = (
   activation: NarrativePageActivation,
   availableSections: readonly NarrativeContentSection[],
   hasImage: boolean,
-  designTokens: PDFDesignTokens
+  designTokens: PDFDesignTokens,
+  pageIndex = 1,
+  previousVariant: NarrativeCompositionVariant | null = null,
+  previousMode: PDFPageMode | null = null
 ): PreparedNarrativePage | null => {
-  const layout = createNarrativePageLayout(activation, hasImage);
+  const layout = createNarrativePageLayout(
+    activation,
+    hasImage,
+    pageIndex,
+    previousVariant,
+    previousMode
+  );
 
   if (!layout) {
     return null;
@@ -205,13 +300,18 @@ export const prepareNarrativePage = (
   );
   const spacing = spacingTokens.sectionGap;
   const rightInset = spacingTokens.xs;
-  const textWidth = layout.textArea.width - rightInset;
+  const columnGap = layout.textColumns === 2 ? spacingTokens.lg : 0;
+  const textWidth =
+    (layout.textArea.width - columnGap) / layout.textColumns - rightInset;
   const bottomLimit =
     layout.textArea.y + layout.textArea.height - spacingTokens.sm;
-  let cursorY = layout.textArea.y + spacingTokens.xl;
+  const cursorYs = Array.from(
+    { length: layout.textColumns },
+    () => layout.textArea.y + spacingTokens.xl
+  );
   const preparedSections: PreparedNarrativeSection[] = [];
 
-  for (const reference of activation.page.sections) {
+  for (const [sectionIndex, reference] of activation.page.sections.entries()) {
     if (
       reference.treatment === "project_grid" ||
       reference.treatment === "project_feature"
@@ -233,6 +333,9 @@ export const prepareNarrativePage = (
     const titleLineHeight = headingRole.lineHeight;
     const contentFontSize = typography.body.fontSize;
     const contentLineHeight = typography.body.lineHeight;
+    const columnIndex = layout.textColumns === 2 ? sectionIndex % 2 : 0;
+    const sectionX =
+      layout.textArea.x + columnIndex * (textWidth + rightInset + columnGap);
 
     pdf.setFont("helvetica", headingRole.fontStyle);
     pdf.setFontSize(titleFontSize);
@@ -245,7 +348,7 @@ export const prepareNarrativePage = (
     const contentLines = section.content.trim()
       ? (pdf.splitTextToSize(section.content.trim(), textWidth) as string[])
       : [];
-    const titleY = cursorY;
+    const titleY = cursorYs[columnIndex];
     const contentY =
       titleY + titleLines.length * titleLineHeight + spacingTokens.sm;
     let bottom = contentY + contentLines.length * contentLineHeight;
@@ -295,7 +398,7 @@ export const prepareNarrativePage = (
       emphasized,
       titleLines,
       contentLines,
-      x: layout.textArea.x,
+      x: sectionX,
       titleY,
       contentY,
       titleFontSize,
@@ -305,7 +408,7 @@ export const prepareNarrativePage = (
       items: preparedItems,
       bottom,
     });
-    cursorY = bottom + spacing;
+    cursorYs[columnIndex] = bottom + spacing;
   }
 
   return {
@@ -331,7 +434,7 @@ export const drawNarrativePage = ({
   }
 
   const { layout, activation } = prepared;
-  const palette = resolvePagePalette(designTokens, "light");
+  const palette = resolvePagePalette(designTokens, layout.pageMode);
   const typography = resolveTypographyForDensity(
     designTokens,
     activation.page.density
@@ -353,7 +456,7 @@ export const drawNarrativePage = ({
     "F"
   );
 
-  if (imageSource && activation.visual) {
+  if (imageSource && activation.visual && layout.mediaArea) {
     pdf.addImage(
       imageSource,
       "JPEG",
@@ -362,19 +465,7 @@ export const drawNarrativePage = ({
       layout.mediaArea.width,
       layout.mediaArea.height
     );
-  } else {
-    pdf.setFillColor(
-      palette.neutralPanel[0],
-      palette.neutralPanel[1],
-      palette.neutralPanel[2]
-    );
-    pdf.rect(
-      layout.mediaArea.x,
-      layout.mediaArea.y,
-      layout.mediaArea.width,
-      layout.mediaArea.height,
-      "F"
-    );
+  } else if (layout.mediaArea) {
     pdf.setDrawColor(
       palette.accent[0],
       palette.accent[1],
@@ -396,6 +487,25 @@ export const drawNarrativePage = ({
         layout.mediaArea.y + layout.mediaArea.height - spacing.lg
       );
     }
+  } else {
+    pdf.setDrawColor(
+      palette.accent[0],
+      palette.accent[1],
+      palette.accent[2]
+    );
+    pdf.setLineWidth(designTokens.rules.hairlineWidth);
+    pdf.line(
+      layout.contentArea.x,
+      layout.contentArea.y,
+      layout.contentArea.x + designTokens.rules.shortRuleWidth,
+      layout.contentArea.y
+    );
+    pdf.line(
+      layout.contentArea.x + layout.contentArea.width,
+      layout.contentArea.y,
+      layout.contentArea.x + layout.contentArea.width,
+      layout.contentArea.y + layout.contentArea.height
+    );
   }
 
   pdf.setTextColor(
@@ -475,6 +585,6 @@ export const drawNarrativePage = ({
 
   return {
     consumedSectionIds: [...prepared.consumedSectionIds],
-    renderedVisual: imageSource ? activation.visual : null,
+    renderedVisual: imageSource && layout.mediaArea ? activation.visual : null,
   };
 };
