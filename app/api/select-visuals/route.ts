@@ -68,37 +68,52 @@ export async function POST(request: Request) {
       );
     }
 
-    const visuals: SelectedContextualVisual[] = [];
+    const visuals = new Array<SelectedContextualVisual>(imageBriefs.length);
+    let nextBriefIndex = 0;
 
-    // Keep selection sequential so Pexels and Vision requests remain bounded.
-    for (const brief of imageBriefs) {
-      try {
-        const result = await selectVisualImage(brief);
-        const image = result.selectedImage;
+    const processNextBrief = async (): Promise<void> => {
+      while (nextBriefIndex < imageBriefs.length) {
+        const briefIndex = nextBriefIndex;
+        nextBriefIndex += 1;
+        const brief = imageBriefs[briefIndex];
 
-        visuals.push({
-          role: "contextual_stock",
-          provenance: "pexels",
-          briefId: brief.id,
-          purpose: brief.purpose,
-          placement: brief.placement,
-          aspectRatio: brief.aspectRatio,
-          status: result.status,
-          source: image?.source ?? null,
-          photographer: image?.photographer ?? null,
-          imageUrl: image?.url ?? null,
-          width: image?.width ?? null,
-          height: image?.height ?? null,
-          overallScore: image?.overallScore ?? null,
-          fallbackReason: result.fallbackReason,
-        });
-      } catch (error) {
-        console.error(`Visual selection failed for brief ${brief.id}:`, error);
-        visuals.push(
-          createFallbackVisual(brief, "Visual selection failed for this brief.")
-        );
+        try {
+          const result = await selectVisualImage(brief);
+          const image = result.selectedImage;
+
+          visuals[briefIndex] = {
+            role: "contextual_stock",
+            provenance: "pexels",
+            briefId: brief.id,
+            purpose: brief.purpose,
+            placement: brief.placement,
+            aspectRatio: brief.aspectRatio,
+            status: result.status,
+            source: image?.source ?? null,
+            photographer: image?.photographer ?? null,
+            imageUrl: image?.url ?? null,
+            width: image?.width ?? null,
+            height: image?.height ?? null,
+            overallScore: image?.overallScore ?? null,
+            fallbackReason: result.fallbackReason,
+          };
+        } catch (error) {
+          console.error(`Visual selection failed for brief ${brief.id}:`, error);
+          visuals[briefIndex] = createFallbackVisual(
+            brief,
+            "Visual selection failed for this brief."
+          );
+        }
       }
-    }
+    };
+
+    const workerCount = Math.min(2, imageBriefs.length);
+    const workers = Array.from(
+      { length: workerCount },
+      () => processNextBrief()
+    );
+
+    await Promise.all(workers);
 
     const response: SelectVisualsResponse = { visuals };
     return NextResponse.json(response);

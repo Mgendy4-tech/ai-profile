@@ -46,6 +46,7 @@ type SelectVisualImageOptions = {
 };
 
 const DEFAULT_CANDIDATE_COUNT = 3;
+const MAX_VISION_CONCURRENCY = 2;
 
 const SEARCH_STOP_WORDS = new Set([
   "a",
@@ -95,40 +96,64 @@ const scoreCandidates = async (
   sourcedImages: PexelsImageCandidate[],
   brief: VisualImageBrief
 ) => {
-  const candidates: ImageCandidate[] = [];
+  const scoredCandidates = new Array<ImageCandidate | undefined>(
+    sourcedImages.length
+  );
+  let nextCandidateIndex = 0;
 
-  for (const image of sourcedImages) {
-    try {
-      const vision = await scoreImageWithVision({
-        imageUrl: image.url,
-        brief: {
-          subject: brief.subject,
-          purpose: brief.purpose,
-          placement: brief.placement,
-          aspectRatio: brief.aspectRatio,
-          moodKeywords: brief.moodKeywords,
-        },
-      });
+  const processNextCandidate = async (): Promise<void> => {
+    while (nextCandidateIndex < sourcedImages.length) {
+      const candidateIndex = nextCandidateIndex;
+      nextCandidateIndex += 1;
+      const image = sourcedImages[candidateIndex];
 
-      candidates.push({
-        candidateId: image.candidateId,
-        url: image.url,
-        source: image.source,
-        photographer: image.photographer,
-        width: image.width,
-        height: image.height,
-        targetAspectRatio: brief.aspectRatio,
-        relevanceScore: vision.relevance,
-        compositionScore: vision.composition,
-        textSafetyScore: vision.textSafety,
-      });
-    } catch (error) {
-      console.error(
-        `Vision scoring failed for ${image.candidateId}:`,
-        error
-      );
+      try {
+        const vision = await scoreImageWithVision({
+          imageUrl: image.url,
+          brief: {
+            subject: brief.subject,
+            purpose: brief.purpose,
+            placement: brief.placement,
+            aspectRatio: brief.aspectRatio,
+            moodKeywords: brief.moodKeywords,
+          },
+        });
+
+        scoredCandidates[candidateIndex] = {
+          candidateId: image.candidateId,
+          url: image.url,
+          source: image.source,
+          photographer: image.photographer,
+          width: image.width,
+          height: image.height,
+          targetAspectRatio: brief.aspectRatio,
+          relevanceScore: vision.relevance,
+          compositionScore: vision.composition,
+          textSafetyScore: vision.textSafety,
+        };
+      } catch (error) {
+        console.error(
+          `Vision scoring failed for ${image.candidateId}:`,
+          error
+        );
+      }
     }
-  }
+  };
+
+  const workerCount = Math.min(
+    MAX_VISION_CONCURRENCY,
+    sourcedImages.length
+  );
+  const workers = Array.from(
+    { length: workerCount },
+    () => processNextCandidate()
+  );
+
+  await Promise.all(workers);
+
+  const candidates = scoredCandidates.filter(
+    (candidate): candidate is ImageCandidate => candidate !== undefined
+  );
 
   return rankImageCandidates(candidates);
 };

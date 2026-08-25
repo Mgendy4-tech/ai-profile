@@ -583,7 +583,7 @@ setProfile({
         const brandAnalysis = await postJsonWithTimeout<BrandAnalysis>(
           "/api/analyze-brand",
           { company: visualCompany },
-          8000
+          30000
         );
         pdfBrandAnalysis = brandAnalysis;
 
@@ -591,7 +591,7 @@ setProfile({
           const visualDirection = await postJsonWithTimeout<VisualDirection>(
             "/api/visual-direction",
             { company: visualCompany, brandAnalysis },
-            8000
+            30000
           );
 
           try {
@@ -620,7 +620,7 @@ setProfile({
             projects: profile.projects,
             contextualVisuals: selectedContextualVisuals,
           },
-          8000
+          30000
         );
 
         if (!isPdfLayoutPlan(plannerData)) {
