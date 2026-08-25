@@ -9,6 +9,12 @@ import type {
   SelectVisualsResponse,
   VisualDirection,
 } from "@/lib/visual-system/types";
+import {
+  calculateAspectFillCrop,
+  canUseContextualVisualInBlock,
+  isCompanyIntroductionSection,
+  selectContextualVisual,
+} from "@/lib/visual-system/pdf-visual-helpers";
 
 type CompanyData = {
   name: string;
@@ -170,6 +176,98 @@ const getPdfImageSource = (image: HTMLImageElement) => {
   canvas.height = image.naturalHeight;
   canvas.getContext("2d")?.drawImage(image, 0, 0);
   return canvas.toDataURL("image/png");
+};
+
+const loadContextualPdfImage = async (
+  src: string,
+  frameWidth: number,
+  frameHeight: number
+): Promise<string | null> => {
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      const timeout = window.setTimeout(
+        () => reject(new Error("Contextual image timed out")),
+        10000
+      );
+
+      element.crossOrigin = "anonymous";
+      element.onload = () => {
+        window.clearTimeout(timeout);
+        resolve(element);
+      };
+      element.onerror = () => {
+        window.clearTimeout(timeout);
+        reject(new Error("Could not load contextual image"));
+      };
+      element.src = src;
+    });
+
+    const crop = calculateAspectFillCrop(
+      image.naturalWidth,
+      image.naturalHeight,
+      frameWidth,
+      frameHeight
+    );
+
+    if (!crop) {
+      return null;
+    }
+
+    const canvas = document.createElement("canvas");
+    const outputWidth = Math.min(1800, Math.max(1, image.naturalWidth));
+    const outputHeight = Math.max(
+      1,
+      Math.round(outputWidth * (frameHeight / frameWidth))
+    );
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return null;
+    }
+
+    context.drawImage(
+      image,
+      crop.sourceX,
+      crop.sourceY,
+      crop.sourceWidth,
+      crop.sourceHeight,
+      0,
+      0,
+      outputWidth,
+      outputHeight
+    );
+
+    return canvas.toDataURL("image/jpeg", 0.88);
+  } catch {
+    return null;
+  }
+};
+
+const getBrandColor = (brandAnalysis: BrandAnalysis | null) => {
+  const color = brandAnalysis?.logoColors.find((value) =>
+    /^#[0-9a-f]{6}$/i.test(value)
+  );
+
+  if (!color) {
+    return { rgb: [17, 24, 39] as const, text: [255, 255, 255] as const };
+  }
+
+  const rgb = [
+    Number.parseInt(color.slice(1, 3), 16),
+    Number.parseInt(color.slice(3, 5), 16),
+    Number.parseInt(color.slice(5, 7), 16),
+  ] as const;
+  const luminance = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
+
+  return {
+    rgb,
+    text: luminance > 160
+      ? ([17, 24, 39] as const)
+      : ([255, 255, 255] as const),
+  };
 };
 
 const postJsonWithTimeout = async <T,>(
@@ -455,6 +553,7 @@ setProfile({
       const fallbackLayoutPlan = createFallbackPdfLayoutPlan(profile);
       let layoutPlan = fallbackLayoutPlan;
       let selectedContextualVisuals: SelectedContextualVisual[] = [];
+      let pdfBrandAnalysis: BrandAnalysis | null = null;
 
       let companyData: Partial<CompanyData> = {
         name: profile.companyName,
@@ -486,6 +585,7 @@ setProfile({
           { company: visualCompany },
           8000
         );
+        pdfBrandAnalysis = brandAnalysis;
 
         try {
           const visualDirection = await postJsonWithTimeout<VisualDirection>(
@@ -544,6 +644,32 @@ setProfile({
       const logoSource = logo && profile.logoUrl
         ? await getPdfImageSource(logo)
         : null;
+      const heroVisual = selectContextualVisual(
+        selectedContextualVisuals,
+        "hero"
+      );
+      const aboutVisual = selectContextualVisual(
+        selectedContextualVisuals,
+        "contextual"
+      );
+      const heroFrameHeight = 105;
+      const aboutImageWidth = 68;
+      const aboutImageHeight = 55;
+      const heroImageSource = heroVisual?.imageUrl
+        ? await loadContextualPdfImage(
+            heroVisual.imageUrl,
+            contentWidth,
+            heroFrameHeight
+          )
+        : null;
+      const aboutImageSource = aboutVisual?.imageUrl
+        ? await loadContextualPdfImage(
+            aboutVisual.imageUrl,
+            aboutImageWidth,
+            aboutImageHeight
+          )
+        : null;
+      const renderedContextualVisuals: SelectedContextualVisual[] = [];
 
       const addHeader = () => {
         pdf.setTextColor(17, 24, 39);
@@ -617,11 +743,50 @@ setProfile({
       };
 
       addHeader();
-      pdf.setTextColor(17, 24, 39);
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(25);
-      pdf.text(profile.companyName, margin, y + 8);
-      y += 21;
+
+      if (heroVisual && heroImageSource) {
+        const frameY = y;
+        const panelWidth = contentWidth * 0.44;
+        const brandColor = getBrandColor(pdfBrandAnalysis);
+
+        pdf.addImage(
+          heroImageSource,
+          "JPEG",
+          margin,
+          frameY,
+          contentWidth,
+          heroFrameHeight
+        );
+        pdf.setFillColor(
+          brandColor.rgb[0],
+          brandColor.rgb[1],
+          brandColor.rgb[2]
+        );
+        pdf.rect(margin, frameY, panelWidth, heroFrameHeight, "F");
+        pdf.setTextColor(
+          brandColor.text[0],
+          brandColor.text[1],
+          brandColor.text[2]
+        );
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8.5);
+        pdf.text("COMPANY PROFILE", margin + 8, frameY + 16);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(22);
+        const coverNameLines = pdf.splitTextToSize(
+          profile.companyName,
+          panelWidth - 16
+        ) as string[];
+        pdf.text(coverNameLines, margin + 8, frameY + 32);
+        y = frameY + heroFrameHeight + 14;
+        renderedContextualVisuals.push(heroVisual);
+      } else {
+        pdf.setTextColor(17, 24, 39);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(25);
+        pdf.text(profile.companyName, margin, y + 8);
+        y += 21;
+      }
 
       const projectColumnWidth = (contentWidth - 6) / 2;
       const cardPadding = 6;
@@ -657,6 +822,7 @@ setProfile({
         section: GeneratedSection;
         items: GeneratedSection["items"];
         feature: boolean;
+        blockType: PdfLayoutBlock["type"];
       }[] = [];
 
       layoutPlan.blocks.forEach((block) => {
@@ -679,6 +845,7 @@ setProfile({
           section,
           items,
           feature: block.type === "projectFeature",
+          blockType: block.type,
         });
       });
 
@@ -688,6 +855,7 @@ setProfile({
             section,
             items: section.items,
             feature: false,
+            blockType: "fullWidthSection",
           });
         }
       });
@@ -710,8 +878,26 @@ setProfile({
           : 12;
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(11.5);
+        const aboutTextWidth = contentWidth - aboutImageWidth - 8;
+        const aboutTextLines = section.content
+          ? (pdf.splitTextToSize(section.content, aboutTextWidth) as string[])
+          : [];
+        const aboutCompositionHeight = Math.max(
+          aboutImageHeight,
+          aboutTextLines.length * 7.2
+        ) + 4;
+        const useAboutVisual = Boolean(
+          aboutVisual &&
+          aboutImageSource &&
+          section.content &&
+          canUseContextualVisualInBlock(renderBlock.blockType) &&
+          isCompanyIntroductionSection(section.id, section.title) &&
+          aboutCompositionHeight <= pageHeight - bottomMargin - topContent - 11
+        );
         const firstContentHeight = section.content
-          ? (pdf.splitTextToSize(section.content, contentWidth) as string[]).length * 7.2 + 4
+          ? useAboutVisual
+            ? aboutCompositionHeight
+            : (pdf.splitTextToSize(section.content, contentWidth) as string[]).length * 7.2 + 4
           : firstItemHeight;
 
         addSectionHeading(
@@ -723,7 +909,24 @@ setProfile({
         );
 
         if (section.content) {
-          addBodyText(section.content, 11.5, 7.2);
+          if (useAboutVisual && aboutVisual && aboutImageSource) {
+            pdf.addImage(
+              aboutImageSource,
+              "JPEG",
+              margin,
+              y,
+              aboutImageWidth,
+              aboutImageHeight
+            );
+            pdf.setTextColor(55, 65, 81);
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(11.5);
+            pdf.text(aboutTextLines, margin + aboutImageWidth + 8, y);
+            y += aboutCompositionHeight;
+            renderedContextualVisuals.push(aboutVisual);
+          } else {
+            addBodyText(section.content, 11.5, 7.2);
+          }
         }
 
         if (!loadedItems.length) {
@@ -783,6 +986,32 @@ setProfile({
           });
           y = actualRowY + rowHeight + rowGap;
         }
+      }
+
+      const creditedVisuals = renderedContextualVisuals.filter(
+        (visual, index, visuals) =>
+          visuals.findIndex((candidate) => candidate.briefId === visual.briefId) === index
+      );
+
+      if (creditedVisuals.length > 0) {
+        startNewPage();
+        pdf.setTextColor(107, 114, 128);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        pdf.text("IMAGE CREDITS", margin, y);
+        y += 8;
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+
+        creditedVisuals.forEach((visual) => {
+          const photographer = visual.photographer || "Pexels contributor";
+          pdf.text(
+            `${visual.purpose}: Photo by ${photographer} — Pexels`,
+            margin,
+            y
+          );
+          y += 5;
+        });
       }
 
       const totalPages = pdf.getNumberOfPages();
