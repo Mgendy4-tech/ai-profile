@@ -411,6 +411,38 @@ export const prepareNarrativePage = (
     cursorYs[columnIndex] = bottom + spacing;
   }
 
+  if (!layout.mediaArea && preparedSections.length > 0) {
+    const columnXs = [...new Set(preparedSections.map((section) => section.x))];
+
+    columnXs.forEach((columnX, columnIndex) => {
+      const columnSections = preparedSections.filter(
+        (section) => section.x === columnX
+      );
+      const first = columnSections[0];
+      const last = columnSections[columnSections.length - 1];
+      const blockHeight = last.bottom - first.titleY;
+      const utilizationRatio = layout.textColumns === 2
+        ? 0.3 + columnIndex * 0.1
+        : 0.38;
+      const preferredTop =
+        layout.textArea.y +
+        Math.max(spacingTokens.xl, (layout.textArea.height - blockHeight) * utilizationRatio);
+      const latestTop = bottomLimit - blockHeight;
+      const offset = Math.max(0, Math.min(preferredTop, latestTop) - first.titleY);
+
+      columnSections.forEach((section) => {
+        section.titleY += offset;
+        section.contentY += offset;
+        section.bottom += offset;
+        section.items.forEach((item) => {
+          item.titleY += offset;
+          item.descriptionY += offset;
+          item.bottom += offset;
+        });
+      });
+    });
+  }
+
   return {
     activation,
     layout,

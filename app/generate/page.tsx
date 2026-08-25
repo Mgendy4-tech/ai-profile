@@ -34,6 +34,12 @@ import {
   type PDFPageMode,
 } from "@/lib/visual-system/pdf-design-tokens";
 import {
+  drawProjectPage,
+  getProjectPageActivation,
+  prepareProjectPage,
+  type ProjectPortfolioItem,
+} from "@/lib/visual-system/pdf-project-composition";
+import {
   calculateAspectFillCrop,
   canUseContextualVisualInBlock,
   isCompanyIntroductionSection,
@@ -849,6 +855,92 @@ setProfile({
           const activation = getNarrativePageActivation(resolvedPage);
 
           if (!activation) {
+            const projectActivation = getProjectPageActivation(resolvedPage);
+
+            if (!projectActivation) {
+              continue;
+            }
+
+            const projectSection = profile.sections.find(
+              (section) => section.id === projectActivation.sectionId
+            );
+
+            if (!projectSection) {
+              break;
+            }
+
+            const availableProjects: ProjectPortfolioItem[] = await Promise.all(
+              projectSection.items.map(async (item) => {
+                if (!item.imageUrl) {
+                  return {
+                    name: item.name,
+                    description: item.description,
+                    image: null,
+                  };
+                }
+
+                try {
+                  const image = await loadPdfImage(item.imageUrl);
+                  return {
+                    name: item.name,
+                    description: item.description,
+                    image: {
+                      role: "project_image" as const,
+                      provenance: "user_upload" as const,
+                      source: getPdfImageSource(image),
+                      width: image.naturalWidth,
+                      height: image.naturalHeight,
+                    },
+                  };
+                } catch {
+                  return {
+                    name: item.name,
+                    description: item.description,
+                    image: null,
+                  };
+                }
+              })
+            );
+            const projectPageIndex = narrativeIndex + 1;
+            const preparedProject = prepareProjectPage(
+              pdf,
+              projectActivation,
+              availableProjects,
+              pdfDesignTokens,
+              projectPageIndex,
+              previousV2PageMode
+            );
+
+            if (!preparedProject) {
+              break;
+            }
+
+            const projectPageNumber = pdf.getNumberOfPages();
+
+            try {
+              const projectResult = drawProjectPage(
+                pdf,
+                preparedProject,
+                profile.companyName,
+                pdfDesignTokens
+              );
+              projectResult.consumedSectionIds.forEach((sectionId) => {
+                renderedV2SectionIds.add(sectionId);
+              });
+              previousV2PageMode = preparedProject.pageMode;
+              renderedV2PageModes.set(
+                projectPageNumber,
+                preparedProject.pageMode
+              );
+              pdf.addPage();
+              y = topContent;
+            } catch {
+              pdf.deletePage(projectPageNumber);
+              pdf.addPage();
+              y = topContent;
+              break;
+            }
+
             continue;
           }
 

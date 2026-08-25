@@ -126,6 +126,13 @@ const preparedStack = prepareNarrativePage(
   false,
   designTokens
 );
+const preparedSparse = prepareNarrativePage(
+  new jsPDF({ unit: "mm", format: "a4" }),
+  splitActivation!,
+  content,
+  false,
+  designTokens
+);
 assert(Boolean(preparedSplit), "narrative_split should preflight successfully.");
 assert(Boolean(preparedStack), "narrative_stack should preflight successfully.");
 assert(
@@ -141,6 +148,23 @@ assert(
 assert(
   preparedStack?.sections[0].items.length === 1,
   "Structured narrative items must be preserved before a section is consumed."
+);
+assert(
+  Boolean(preparedSparse) &&
+    preparedSparse!.layout.mediaArea === null &&
+    preparedSparse!.sections[0].titleY >
+      preparedSparse!.layout.textArea.y + 45,
+  "Sparse one-section fallback should occupy an intentional vertical editorial zone."
+);
+assert(
+  Boolean(preparedStack) &&
+    preparedStack!.sections[0].titleY > preparedStack!.layout.textArea.y + 30 &&
+    preparedStack!.sections[1].titleY > preparedStack!.sections[0].titleY,
+  "Two-section fallback should establish a deliberate staggered relationship."
+);
+assert(
+  preparedSparse?.sections[0].contentLines.join(" ") === content[0].content,
+  "Narrative utilization must preserve every word without invention."
 );
 
 const imageLayout = createNarrativePageLayout(splitActivation!, true);
