@@ -1,6 +1,12 @@
 import { selectVisualImage } from "./select-visual-image";
 
 const run = async () => {
+  const searchAttempts: {
+    attempt: number;
+    query: string;
+    orientation: string;
+  }[] = [];
+
   const result = await selectVisualImage(
     {
       id: "cover_hero",
@@ -19,8 +25,14 @@ const run = async () => {
     },
     {
       candidateCount: 3,
+      onSearchAttempt: (attempt) => {
+        searchAttempts.push(attempt);
+      },
     }
   );
+
+  console.log("\nPexels search attempts:");
+  console.table(searchAttempts);
 
   console.log("\nProduction visual selection result:");
   console.dir(result, {

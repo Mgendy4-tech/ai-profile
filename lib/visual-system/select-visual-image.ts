@@ -1,4 +1,8 @@
-import { searchPexelsImages } from "./image-source";
+import {
+  searchPexelsImages,
+  type PexelsImageCandidate,
+  type PexelsOrientation,
+} from "./image-source";
 import { scoreImageWithVision } from "./vision-score";
 import {
   rankImageCandidates,
@@ -34,39 +38,63 @@ export type SelectedVisualImage = {
 
 type SelectVisualImageOptions = {
   candidateCount?: number;
+  onSearchAttempt?: (attempt: {
+    attempt: 1 | 2;
+    query: string;
+    orientation: PexelsOrientation;
+  }) => void;
 };
 
 const DEFAULT_CANDIDATE_COUNT = 3;
 
-const buildSearchQuery = (brief: VisualImageBrief) => {
-  const mood = brief.moodKeywords.slice(0, 3).join(" ");
+const SEARCH_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "featuring",
+  "for",
+  "in",
+  "of",
+  "or",
+  "the",
+  "with",
+]);
 
-  return `${brief.subject} ${mood}`.trim();
+const getSearchTerms = (value: string) => {
+  const terms = value
+    .toLowerCase()
+    .match(/[a-z0-9]+/g)
+    ?.filter((term) => !SEARCH_STOP_WORDS.has(term)) ?? [];
+
+  return [...new Set(terms)];
 };
 
-export const selectVisualImage = async (
-  brief: VisualImageBrief,
-  options: SelectVisualImageOptions = {}
-): Promise<SelectedVisualImage> => {
-  const candidateCount =
-    options.candidateCount ?? DEFAULT_CANDIDATE_COUNT;
+const buildSearchQuery = (brief: VisualImageBrief) => {
+  const subjectTerms = getSearchTerms(brief.subject).slice(0, 6);
+  const subjectTermSet = new Set(subjectTerms);
+  const moodTerms = getSearchTerms(
+    brief.moodKeywords.join(" ")
+  )
+    .filter((term) => !subjectTermSet.has(term))
+    .slice(0, 3);
 
-  const searchQuery = buildSearchQuery(brief);
+  return [...subjectTerms, ...moodTerms].join(" ");
+};
 
-  const sourcedImages = await searchPexelsImages(
-    searchQuery,
-    candidateCount
-  );
+const buildBroaderSearchQuery = (brief: VisualImageBrief) => {
+  return getSearchTerms(brief.subject).slice(0, 3).join(" ");
+};
 
-  if (sourcedImages.length === 0) {
-    return {
-      briefId: brief.id,
-      status: "fallback",
-      selectedImage: null,
-      fallbackReason: "No image candidates returned by Pexels.",
-    };
-  }
+const getPreferredOrientation = (
+  aspectRatio: VisualImageBrief["aspectRatio"]
+): PexelsOrientation => {
+  return aspectRatio === "1:1" ? "square" : "landscape";
+};
 
+const scoreCandidates = async (
+  sourcedImages: PexelsImageCandidate[],
+  brief: VisualImageBrief
+) => {
   const candidates: ImageCandidate[] = [];
 
   for (const image of sourcedImages) {
@@ -89,6 +117,7 @@ export const selectVisualImage = async (
         photographer: image.photographer,
         width: image.width,
         height: image.height,
+        targetAspectRatio: brief.aspectRatio,
         relevanceScore: vision.relevance,
         compositionScore: vision.composition,
         textSafetyScore: vision.textSafety,
@@ -101,28 +130,61 @@ export const selectVisualImage = async (
     }
   }
 
-  if (candidates.length === 0) {
-    return {
-      briefId: brief.id,
-      status: "fallback",
-      selectedImage: null,
-      fallbackReason: "All candidate images failed vision scoring.",
-    };
+  return rankImageCandidates(candidates);
+};
+
+export const selectVisualImage = async (
+  brief: VisualImageBrief,
+  options: SelectVisualImageOptions = {}
+): Promise<SelectedVisualImage> => {
+  const candidateCount =
+    options.candidateCount ?? DEFAULT_CANDIDATE_COUNT;
+
+  const orientation = getPreferredOrientation(brief.aspectRatio);
+  const searchQueries = [
+    buildSearchQuery(brief),
+    buildBroaderSearchQuery(brief),
+  ];
+
+  let sourcedImages: PexelsImageCandidate[] = [];
+  let bestAccepted: ReturnType<typeof rankImageCandidates>[number] | undefined;
+  let finalAttemptHadScoredCandidates = false;
+
+  for (const [index, query] of searchQueries.entries()) {
+    const attempt = (index + 1) as 1 | 2;
+
+    options.onSearchAttempt?.({ attempt, query, orientation });
+
+    sourcedImages = await searchPexelsImages(
+      query,
+      candidateCount,
+      orientation
+    );
+
+    const ranked = await scoreCandidates(sourcedImages, brief);
+    finalAttemptHadScoredCandidates = ranked.length > 0;
+    bestAccepted = ranked.find(
+      (image) => image.recommendation === "accept"
+    );
+
+    if (bestAccepted) {
+      break;
+    }
   }
 
-  const ranked = rankImageCandidates(candidates);
-
-  const bestAccepted = ranked.find(
-    (image) => image.recommendation === "accept"
-  );
-
   if (!bestAccepted) {
+    const fallbackReason =
+      sourcedImages.length === 0
+        ? "No image candidates returned by Pexels."
+        : !finalAttemptHadScoredCandidates
+        ? "All candidate images failed vision scoring."
+        : "No candidate passed the visual quality threshold.";
+
     return {
       briefId: brief.id,
       status: "fallback",
       selectedImage: null,
-      fallbackReason:
-        "No candidate passed the visual quality threshold.",
+      fallbackReason,
     };
   }
 

@@ -10,6 +10,8 @@ export type ImageCandidate = {
   width: number;
   height: number;
 
+  targetAspectRatio?: "16:9" | "4:3" | "1:1";
+
   relevanceScore: number;
   compositionScore: number;
   textSafetyScore: number;
@@ -28,10 +30,11 @@ const DEFAULT_OPTIONS: Required<RankingOptions> = {
 };
 
 const WEIGHTS = {
-  relevance: 0.4,
-  composition: 0.35,
+  relevance: 0.35,
+  composition: 0.3,
   textSafety: 0.15,
   resolution: 0.1,
+  orientationFit: 0.1,
 };
 
 const clamp01 = (value: number) => {
@@ -57,6 +60,41 @@ const getResolutionScore = (
   return 0;
 };
 
+const getOrientationFitScore = (
+  width: number,
+  height: number,
+  targetAspectRatio?: "16:9" | "4:3" | "1:1"
+) => {
+  if (!targetAspectRatio || !width || !height) {
+    return 1;
+  }
+
+  const actualRatio = width / height;
+
+  const targetRatio =
+    targetAspectRatio === "16:9"
+      ? 16 / 9
+      : targetAspectRatio === "4:3"
+      ? 4 / 3
+      : 1;
+
+  const difference = Math.abs(actualRatio - targetRatio);
+
+  if (difference <= 0.15) {
+    return 1;
+  }
+
+  if (difference <= 0.4) {
+    return 0.75;
+  }
+
+  if (difference <= 0.8) {
+    return 0.4;
+  }
+
+  return 0;
+};
+
 export const rankImageCandidate = (
   candidate: ImageCandidate,
   options: RankingOptions = {}
@@ -75,15 +113,23 @@ export const rankImageCandidate = (
     config.minimumWidth
   );
 
+  const orientationFit = getOrientationFitScore(
+    candidate.width,
+    candidate.height,
+    candidate.targetAspectRatio
+  );
+
   const failsHardConstraint =
     candidate.width < config.minimumWidth ||
-    textSafety < config.minimumTextSafety;
+    textSafety < config.minimumTextSafety ||
+    orientationFit === 0;
 
   const overallScore =
     relevance * WEIGHTS.relevance +
     composition * WEIGHTS.composition +
     textSafety * WEIGHTS.textSafety +
-    resolution * WEIGHTS.resolution;
+    resolution * WEIGHTS.resolution +
+    orientationFit * WEIGHTS.orientationFit;
 
   let recommendation: RankedImage["recommendation"];
 
@@ -106,6 +152,7 @@ export const rankImageCandidate = (
       composition,
       textSafety,
       resolution,
+      orientationFit,
     },
 
     overallScore,

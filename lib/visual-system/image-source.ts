@@ -23,9 +23,15 @@ type PexelsSearchResponse = {
   photos: PexelsPhoto[];
 };
 
+export type PexelsOrientation =
+  | "landscape"
+  | "portrait"
+  | "square";
+
 export const searchPexelsImages = async (
   query: string,
-  perPage = 10
+  perPage = 10,
+  orientation?: PexelsOrientation
 ): Promise<PexelsImageCandidate[]> => {
   const apiKey = process.env.PEXELS_API_KEY;
 
@@ -37,6 +43,10 @@ export const searchPexelsImages = async (
 
   url.searchParams.set("query", query);
   url.searchParams.set("per_page", String(perPage));
+
+  if (orientation) {
+    url.searchParams.set("orientation", orientation);
+  }
 
   const response = await fetch(url, {
     headers: {

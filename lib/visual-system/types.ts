@@ -72,11 +72,12 @@ export type RankedImage = {
   photographer: string;
 
   scores: {
-    relevance: number;
-    composition: number;
-    textSafety: number;
-    resolution: number;
-  };
+  relevance: number;
+  composition: number;
+  textSafety: number;
+  resolution: number;
+  orientationFit: number;
+};
 
   overallScore: number;
 
