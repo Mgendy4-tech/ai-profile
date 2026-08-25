@@ -5,6 +5,11 @@ import type {
   ResolvedPageComposition,
 } from "./composition-resolver";
 import type { SelectedContextualVisual } from "./types";
+import {
+  resolvePagePalette,
+  resolveTypographyForDensity,
+  type PDFDesignTokens,
+} from "./pdf-design-tokens";
 
 export type CoverEditorialMode = "image" | "image_free";
 
@@ -25,16 +30,11 @@ export type CoverEditorialActivation = {
   heroVisual: SelectedContextualVisual | null;
 };
 
-export type CoverEditorialBrandColor = {
-  rgb: readonly [number, number, number];
-  text: readonly [number, number, number];
-};
-
 export type DrawCoverEditorialInput = {
   pdf: jsPDF;
   page: ResolvedCompositionPage;
   companyName: string;
-  brandColor: CoverEditorialBrandColor;
+  designTokens: PDFDesignTokens;
   heroImageSource: string | null;
   logo?: {
     source: string;
@@ -156,7 +156,7 @@ export const drawCoverEditorial = ({
   pdf,
   page,
   companyName,
-  brandColor,
+  designTokens,
   heroImageSource,
   logo,
 }: DrawCoverEditorialInput): { renderedVisual: SelectedContextualVisual | null } => {
@@ -176,7 +176,15 @@ export const drawCoverEditorial = ({
     throw new Error("The resolved page cannot be rendered as an editorial cover.");
   }
 
-  pdf.setFillColor(247, 245, 240);
+  const lightPalette = resolvePagePalette(designTokens, "light");
+  const accentPalette = resolvePagePalette(designTokens, "accent");
+  const typography = resolveTypographyForDensity(designTokens, page.density);
+
+  pdf.setFillColor(
+    lightPalette.background[0],
+    lightPalette.background[1],
+    lightPalette.background[2]
+  );
   pdf.rect(
     layout.pageArea.x,
     layout.pageArea.y,
@@ -197,9 +205,9 @@ export const drawCoverEditorial = ({
   }
 
   pdf.setFillColor(
-    brandColor.rgb[0],
-    brandColor.rgb[1],
-    brandColor.rgb[2]
+    accentPalette.background[0],
+    accentPalette.background[1],
+    accentPalette.background[2]
   );
 
   if (layout.mode === "image") {
@@ -221,11 +229,11 @@ export const drawCoverEditorial = ({
   }
 
   const textColor = layout.mode === "image"
-    ? brandColor.text
-    : ([17, 24, 39] as const);
+    ? accentPalette.primaryText
+    : lightPalette.primaryText;
   pdf.setTextColor(textColor[0], textColor[1], textColor[2]);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8.5);
+  pdf.setFont("helvetica", typography.overline.fontStyle);
+  pdf.setFontSize(typography.overline.fontSize);
   pdf.text(
     "COMPANY PROFILE",
     layout.eyebrowPosition.x,
@@ -233,21 +241,28 @@ export const drawCoverEditorial = ({
   );
 
   pdf.setDrawColor(textColor[0], textColor[1], textColor[2]);
-  pdf.setLineWidth(0.6);
+  pdf.setLineWidth(designTokens.rules.hairlineWidth);
   pdf.line(
     layout.titleArea.x,
-    layout.titleArea.y + 7,
-    layout.titleArea.x + Math.min(22, layout.titleArea.width),
-    layout.titleArea.y + 7
+    layout.titleArea.y + designTokens.spacing.md,
+    layout.titleArea.x + Math.min(
+      designTokens.rules.shortRuleWidth,
+      layout.titleArea.width
+    ),
+    layout.titleArea.y + designTokens.spacing.md
   );
 
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(25);
+  pdf.setFont("helvetica", typography.display.fontStyle);
+  pdf.setFontSize(typography.display.fontSize);
   const titleLines = pdf.splitTextToSize(
     companyName.trim(),
     layout.titleArea.width
   ) as string[];
-  pdf.text(titleLines.slice(0, 5), layout.titleArea.x, layout.titleArea.y + 22);
+  pdf.text(
+    titleLines.slice(0, 5),
+    layout.titleArea.x,
+    layout.titleArea.y + designTokens.spacing.xl + designTokens.spacing.xs
+  );
 
   if (logo?.source && logo.width > 0 && logo.height > 0) {
     const ratio = logo.width / logo.height;

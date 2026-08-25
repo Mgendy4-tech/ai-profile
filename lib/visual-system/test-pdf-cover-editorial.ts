@@ -6,6 +6,7 @@ import {
 import { resolvePageComposition, type ResolvedArea } from "./composition-resolver";
 import type { PageCompositionPlan, SelectedContextualVisual } from "./types";
 import jsPDF from "jspdf";
+import { createPDFDesignTokens } from "./pdf-design-tokens";
 
 const assert = (condition: boolean, message: string) => {
   if (!condition) {
@@ -133,14 +134,12 @@ assert(
 );
 
 const pdf = new jsPDF({ unit: "mm", format: "a4" });
+const designTokens = createPDFDesignTokens(null);
 const imageFreeResult = drawCoverEditorial({
   pdf,
   page: activation!.page,
   companyName: "Aurelia Interior Studio",
-  brandColor: {
-    rgb: [36, 48, 61],
-    text: [255, 255, 255],
-  },
+  designTokens,
   heroImageSource: null,
 });
 assert(
@@ -156,10 +155,7 @@ try {
     pdf: new jsPDF({ unit: "mm", format: "a4" }),
     page: activation!.page,
     companyName: " ",
-    brandColor: {
-      rgb: [36, 48, 61],
-      text: [255, 255, 255],
-    },
+    designTokens,
     heroImageSource: null,
   });
 } catch {

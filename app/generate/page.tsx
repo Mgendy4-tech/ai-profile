@@ -28,6 +28,10 @@ import {
   prepareNarrativePage,
 } from "@/lib/visual-system/pdf-narrative-composition";
 import {
+  createPDFDesignTokens,
+  resolvePagePalette,
+} from "@/lib/visual-system/pdf-design-tokens";
+import {
   calculateAspectFillCrop,
   canUseContextualVisualInBlock,
   isCompanyIntroductionSection,
@@ -271,30 +275,6 @@ const loadContextualPdfImage = async (
   } catch {
     return null;
   }
-};
-
-const getBrandColor = (brandAnalysis: BrandAnalysis | null) => {
-  const color = brandAnalysis?.logoColors.find((value) =>
-    /^#[0-9a-f]{6}$/i.test(value)
-  );
-
-  if (!color) {
-    return { rgb: [17, 24, 39] as const, text: [255, 255, 255] as const };
-  }
-
-  const rgb = [
-    Number.parseInt(color.slice(1, 3), 16),
-    Number.parseInt(color.slice(3, 5), 16),
-    Number.parseInt(color.slice(5, 7), 16),
-  ] as const;
-  const luminance = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
-
-  return {
-    rgb,
-    text: luminance > 160
-      ? ([17, 24, 39] as const)
-      : ([255, 255, 255] as const),
-  };
 };
 
 const postJsonWithTimeout = async <T,>(
@@ -687,6 +667,7 @@ setProfile({
       const contentWidth = pageWidth - margin * 2;
       const bottomMargin = 16;
       const topContent = 22;
+      const pdfDesignTokens = createPDFDesignTokens(pdfBrandAnalysis);
       let y = topContent;
       let logo: HTMLImageElement | null = null;
       let logoSource: string | null = null;
@@ -820,7 +801,7 @@ setProfile({
             pdf,
             page: coverActivation.page,
             companyName: profile.companyName,
-            brandColor: getBrandColor(pdfBrandAnalysis),
+            designTokens: pdfDesignTokens,
             heroImageSource: v2HeroImageSource,
             logo: logo && logoSource
               ? {
@@ -882,7 +863,8 @@ setProfile({
                 description: item.description,
               })),
             })),
-            Boolean(narrativeImageSource)
+            Boolean(narrativeImageSource),
+            pdfDesignTokens
           );
 
           if (!prepared) {
@@ -896,7 +878,7 @@ setProfile({
               pdf,
               prepared,
               companyName: profile.companyName,
-              brandColor: getBrandColor(pdfBrandAnalysis),
+              designTokens: pdfDesignTokens,
               imageSource: narrativeImageSource,
             });
 
@@ -925,7 +907,7 @@ setProfile({
       if (!renderedV2Cover && heroVisual && heroImageSource) {
         const frameY = y;
         const panelWidth = contentWidth * 0.44;
-        const brandColor = getBrandColor(pdfBrandAnalysis);
+        const brandPalette = resolvePagePalette(pdfDesignTokens, "accent");
 
         pdf.addImage(
           heroImageSource,
@@ -936,15 +918,15 @@ setProfile({
           heroFrameHeight
         );
         pdf.setFillColor(
-          brandColor.rgb[0],
-          brandColor.rgb[1],
-          brandColor.rgb[2]
+          brandPalette.background[0],
+          brandPalette.background[1],
+          brandPalette.background[2]
         );
         pdf.rect(margin, frameY, panelWidth, heroFrameHeight, "F");
         pdf.setTextColor(
-          brandColor.text[0],
-          brandColor.text[1],
-          brandColor.text[2]
+          brandPalette.primaryText[0],
+          brandPalette.primaryText[1],
+          brandPalette.primaryText[2]
         );
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(8.5);

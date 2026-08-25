@@ -8,6 +8,7 @@ import {
   type NarrativeContentSection,
 } from "./pdf-narrative-composition";
 import type { PageCompositionPlan, SelectedContextualVisual } from "./types";
+import { createPDFDesignTokens } from "./pdf-design-tokens";
 
 const assert = (condition: boolean, message: string) => {
   if (!condition) throw new Error(message);
@@ -110,8 +111,21 @@ const content: NarrativeContentSection[] = [
   },
 ];
 const pdf = new jsPDF({ unit: "mm", format: "a4" });
-const preparedSplit = prepareNarrativePage(pdf, splitActivation!, content, true);
-const preparedStack = prepareNarrativePage(pdf, stackActivation!, content, false);
+const designTokens = createPDFDesignTokens(null);
+const preparedSplit = prepareNarrativePage(
+  pdf,
+  splitActivation!,
+  content,
+  true,
+  designTokens
+);
+const preparedStack = prepareNarrativePage(
+  pdf,
+  stackActivation!,
+  content,
+  false,
+  designTokens
+);
 assert(Boolean(preparedSplit), "narrative_split should preflight successfully.");
 assert(Boolean(preparedStack), "narrative_stack should preflight successfully.");
 assert(
@@ -157,7 +171,7 @@ const drawResult = drawNarrativePage({
   pdf: drawPdf,
   prepared: preparedStack!,
   companyName: "Aurelia Interior Studio",
-  brandColor: { rgb: [36, 48, 61], text: [255, 255, 255] },
+  designTokens,
   imageSource: null,
 });
 assert(
@@ -184,7 +198,8 @@ const overflowing = prepareNarrativePage(
     content: "Long editorial copy ".repeat(1200),
     items: [],
   }],
-  false
+  false,
+  designTokens
 );
 assert(
   overflowing === null,

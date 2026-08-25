@@ -4,7 +4,13 @@ import type {
   ResolvedCompositionPage,
 } from "./composition-resolver";
 import type { SelectedContextualVisual } from "./types";
-import type { CoverEditorialBrandColor } from "./pdf-cover-editorial";
+import {
+  resolveDensityAdjustments,
+  resolvePagePalette,
+  resolveSpacingForDensity,
+  resolveTypographyForDensity,
+  type PDFDesignTokens,
+} from "./pdf-design-tokens";
 
 export type NarrativeContentSection = {
   id: string;
@@ -66,7 +72,7 @@ export type DrawNarrativePageInput = {
   pdf: jsPDF;
   prepared: PreparedNarrativePage;
   companyName: string;
-  brandColor: CoverEditorialBrandColor;
+  designTokens: PDFDesignTokens;
   imageSource: string | null;
 };
 
@@ -127,20 +133,37 @@ export const createNarrativePageLayout = (
 ): NarrativePageLayout | null => {
   const { page } = activation;
   const gap = page.densityParameters.sectionGap;
+  const mediaRatioScale = resolveDensityAdjustments(
+    page.density
+  ).mediaRatioScale;
+  const baseMediaWidth = page.sectionArea.x - gap - page.contentArea.x;
+  const baseMediaHeight = page.sectionArea.y - gap - page.contentArea.y;
   const mediaArea: ResolvedArea = page.archetype === "narrative_split"
     ? {
         x: page.contentArea.x,
         y: page.contentArea.y,
-        width: page.sectionArea.x - gap - page.contentArea.x,
+        width: baseMediaWidth * mediaRatioScale,
         height: page.contentArea.height,
       }
     : {
         x: page.contentArea.x,
         y: page.contentArea.y,
         width: page.contentArea.width,
-        height: page.sectionArea.y - gap - page.contentArea.y,
+        height: baseMediaHeight * mediaRatioScale,
       };
-  const textArea = { ...page.sectionArea };
+  const textArea: ResolvedArea = page.archetype === "narrative_split"
+    ? {
+        x: mediaArea.x + mediaArea.width + gap,
+        y: page.contentArea.y,
+        width: page.contentArea.width - mediaArea.width - gap,
+        height: page.contentArea.height,
+      }
+    : {
+        x: page.contentArea.x,
+        y: mediaArea.y + mediaArea.height + gap,
+        width: page.contentArea.width,
+        height: page.contentArea.height - mediaArea.height - gap,
+      };
   const areas = [page.pageArea, page.contentArea, mediaArea, textArea];
 
   if (!areas.every((area) => isWithinPage(area, page.pageArea))) {
@@ -160,7 +183,8 @@ export const prepareNarrativePage = (
   pdf: jsPDF,
   activation: NarrativePageActivation,
   availableSections: readonly NarrativeContentSection[],
-  hasImage: boolean
+  hasImage: boolean,
+  designTokens: PDFDesignTokens
 ): PreparedNarrativePage | null => {
   const layout = createNarrativePageLayout(activation, hasImage);
 
@@ -171,13 +195,20 @@ export const prepareNarrativePage = (
   const sectionsById = new Map(
     availableSections.map((section) => [section.id, section])
   );
-  const spacing =
-    activation.page.densityParameters.sectionGap *
-    activation.page.densityParameters.spacingMultiplier;
-  const rightInset = 3;
+  const spacingTokens = resolveSpacingForDensity(
+    designTokens,
+    activation.page.density
+  );
+  const typography = resolveTypographyForDensity(
+    designTokens,
+    activation.page.density
+  );
+  const spacing = spacingTokens.sectionGap;
+  const rightInset = spacingTokens.xs;
   const textWidth = layout.textArea.width - rightInset;
-  const bottomLimit = layout.textArea.y + layout.textArea.height - 6;
-  let cursorY = layout.textArea.y + 18;
+  const bottomLimit =
+    layout.textArea.y + layout.textArea.height - spacingTokens.sm;
+  let cursorY = layout.textArea.y + spacingTokens.xl;
   const preparedSections: PreparedNarrativeSection[] = [];
 
   for (const reference of activation.page.sections) {
@@ -197,24 +228,26 @@ export const prepareNarrativePage = (
     const emphasized =
       reference.treatment === "lead" ||
       activation.page.hierarchy.primarySectionId === reference.sectionId;
-    const titleFontSize = emphasized ? 21 : 14;
-    const titleLineHeight = emphasized ? 8.2 : 6.2;
-    const contentFontSize = emphasized ? 11.2 : 10;
-    const contentLineHeight = emphasized ? 6.2 : 5.5;
+    const headingRole = emphasized ? typography.h1 : typography.h2;
+    const titleFontSize = headingRole.fontSize;
+    const titleLineHeight = headingRole.lineHeight;
+    const contentFontSize = typography.body.fontSize;
+    const contentLineHeight = typography.body.lineHeight;
 
-    pdf.setFont("helvetica", "bold");
+    pdf.setFont("helvetica", headingRole.fontStyle);
     pdf.setFontSize(titleFontSize);
     const titleLines = pdf.splitTextToSize(
       section.title.trim(),
       textWidth
     ) as string[];
-    pdf.setFont("helvetica", "normal");
+    pdf.setFont("helvetica", typography.body.fontStyle);
     pdf.setFontSize(contentFontSize);
     const contentLines = section.content.trim()
       ? (pdf.splitTextToSize(section.content.trim(), textWidth) as string[])
       : [];
     const titleY = cursorY;
-    const contentY = titleY + titleLines.length * titleLineHeight + 5;
+    const contentY =
+      titleY + titleLines.length * titleLineHeight + spacingTokens.sm;
     let bottom = contentY + contentLines.length * contentLineHeight;
     const preparedItems: PreparedNarrativeItem[] = [];
 
@@ -223,21 +256,24 @@ export const prepareNarrativePage = (
         return null;
       }
 
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(10.5);
+      pdf.setFont("helvetica", typography.h3.fontStyle);
+      pdf.setFontSize(typography.h3.fontSize);
       const itemTitleLines = pdf.splitTextToSize(
         item.name.trim(),
         textWidth
       ) as string[];
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(9.3);
+      pdf.setFont("helvetica", typography.caption.fontStyle);
+      pdf.setFontSize(typography.caption.fontSize);
       const itemDescriptionLines = item.description.trim()
         ? (pdf.splitTextToSize(item.description.trim(), textWidth) as string[])
         : [];
-      const itemTitleY = bottom + 5;
-      const itemDescriptionY = itemTitleY + itemTitleLines.length * 5 + 2;
+      const itemTitleY = bottom + spacingTokens.sm;
+      const itemDescriptionY =
+        itemTitleY + itemTitleLines.length * typography.h3.lineHeight +
+        spacingTokens.xs;
       const itemBottom =
-        itemDescriptionY + itemDescriptionLines.length * 4.8;
+        itemDescriptionY +
+        itemDescriptionLines.length * typography.caption.lineHeight;
 
       preparedItems.push({
         titleLines: itemTitleLines,
@@ -284,7 +320,7 @@ export const drawNarrativePage = ({
   pdf,
   prepared,
   companyName,
-  brandColor,
+  designTokens,
   imageSource,
 }: DrawNarrativePageInput): {
   consumedSectionIds: string[];
@@ -295,7 +331,20 @@ export const drawNarrativePage = ({
   }
 
   const { layout, activation } = prepared;
-  pdf.setFillColor(250, 249, 246);
+  const palette = resolvePagePalette(designTokens, "light");
+  const typography = resolveTypographyForDensity(
+    designTokens,
+    activation.page.density
+  );
+  const spacing = resolveSpacingForDensity(
+    designTokens,
+    activation.page.density
+  );
+  pdf.setFillColor(
+    palette.background[0],
+    palette.background[1],
+    palette.background[2]
+  );
   pdf.rect(
     layout.pageArea.x,
     layout.pageArea.y,
@@ -314,7 +363,11 @@ export const drawNarrativePage = ({
       layout.mediaArea.height
     );
   } else {
-    pdf.setFillColor(235, 232, 224);
+    pdf.setFillColor(
+      palette.neutralPanel[0],
+      palette.neutralPanel[1],
+      palette.neutralPanel[2]
+    );
     pdf.rect(
       layout.mediaArea.x,
       layout.mediaArea.y,
@@ -323,75 +376,98 @@ export const drawNarrativePage = ({
       "F"
     );
     pdf.setDrawColor(
-      brandColor.rgb[0],
-      brandColor.rgb[1],
-      brandColor.rgb[2]
+      palette.accent[0],
+      palette.accent[1],
+      palette.accent[2]
     );
-    pdf.setLineWidth(1.1);
+    pdf.setLineWidth(designTokens.rules.hairlineWidth * 2.5);
     if (activation.page.archetype === "narrative_split") {
       pdf.line(
-        layout.mediaArea.x + 10,
-        layout.mediaArea.y + 16,
-        layout.mediaArea.x + 10,
-        layout.mediaArea.y + layout.mediaArea.height - 16
+        layout.mediaArea.x + spacing.lg,
+        layout.mediaArea.y + spacing.xl,
+        layout.mediaArea.x + spacing.lg,
+        layout.mediaArea.y + layout.mediaArea.height - spacing.xl
       );
     } else {
       pdf.line(
-        layout.mediaArea.x + 12,
-        layout.mediaArea.y + layout.mediaArea.height - 12,
-        layout.mediaArea.x + layout.mediaArea.width - 12,
-        layout.mediaArea.y + layout.mediaArea.height - 12
+        layout.mediaArea.x + spacing.lg,
+        layout.mediaArea.y + layout.mediaArea.height - spacing.lg,
+        layout.mediaArea.x + layout.mediaArea.width - spacing.lg,
+        layout.mediaArea.y + layout.mediaArea.height - spacing.lg
       );
     }
   }
 
-  pdf.setTextColor(107, 114, 128);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8);
+  pdf.setTextColor(
+    palette.secondaryText[0],
+    palette.secondaryText[1],
+    palette.secondaryText[2]
+  );
+  pdf.setFont("helvetica", typography.overline.fontStyle);
+  pdf.setFontSize(typography.overline.fontSize);
   pdf.text(
     activation.page.pageRole.toUpperCase(),
     layout.textArea.x,
-    layout.textArea.y + 4
+    layout.textArea.y + typography.overline.lineHeight
   );
 
   prepared.sections.forEach((section) => {
-    pdf.setTextColor(17, 24, 39);
+    pdf.setTextColor(
+      palette.primaryText[0],
+      palette.primaryText[1],
+      palette.primaryText[2]
+    );
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(section.titleFontSize);
     pdf.text(section.titleLines, section.x, section.titleY);
 
     if (section.emphasized) {
       pdf.setDrawColor(
-        brandColor.rgb[0],
-        brandColor.rgb[1],
-        brandColor.rgb[2]
+        palette.accent[0],
+        palette.accent[1],
+        palette.accent[2]
       );
-      pdf.setLineWidth(0.8);
+      pdf.setLineWidth(designTokens.rules.hairlineWidth * 2);
       pdf.line(
         section.x,
-        section.contentY - 2.5,
-        section.x + Math.min(24, layout.textArea.width),
-        section.contentY - 2.5
+        section.contentY - spacing.xs,
+        section.x + Math.min(
+          designTokens.rules.shortRuleWidth,
+          layout.textArea.width
+        ),
+        section.contentY - spacing.xs
       );
     }
 
     if (section.contentLines.length > 0) {
-      pdf.setTextColor(55, 65, 81);
-      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(
+        palette.secondaryText[0],
+        palette.secondaryText[1],
+        palette.secondaryText[2]
+      );
+      pdf.setFont("helvetica", typography.body.fontStyle);
       pdf.setFontSize(section.contentFontSize);
       pdf.text(section.contentLines, section.x, section.contentY);
     }
 
     section.items.forEach((item) => {
-      pdf.setTextColor(17, 24, 39);
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(10.5);
+      pdf.setTextColor(
+        palette.primaryText[0],
+        palette.primaryText[1],
+        palette.primaryText[2]
+      );
+      pdf.setFont("helvetica", typography.h3.fontStyle);
+      pdf.setFontSize(typography.h3.fontSize);
       pdf.text(item.titleLines, section.x, item.titleY);
 
       if (item.descriptionLines.length > 0) {
-        pdf.setTextColor(75, 85, 99);
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(9.3);
+        pdf.setTextColor(
+          palette.secondaryText[0],
+          palette.secondaryText[1],
+          palette.secondaryText[2]
+        );
+        pdf.setFont("helvetica", typography.caption.fontStyle);
+        pdf.setFontSize(typography.caption.fontSize);
         pdf.text(item.descriptionLines, section.x, item.descriptionY);
       }
     });
