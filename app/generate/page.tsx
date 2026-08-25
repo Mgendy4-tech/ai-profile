@@ -5,10 +5,19 @@ import jsPDF from "jspdf";
 import { useState } from "react";
 import type {
   BrandAnalysis,
+  PageCompositionPlan,
   SelectedContextualVisual,
   SelectVisualsResponse,
   VisualDirection,
 } from "@/lib/visual-system/types";
+import { pageCompositionPlanSchema } from "@/lib/visual-system/page-composition-plan";
+import { resolvePageComposition } from "@/lib/visual-system/composition-resolver";
+import {
+  createCoverEditorialLayout,
+  drawCoverEditorial,
+  getCoverEditorialActivation,
+  type CoverEditorialActivation,
+} from "@/lib/visual-system/pdf-cover-editorial";
 import {
   calculateAspectFillCrop,
   canUseContextualVisualInBlock,
@@ -82,6 +91,7 @@ type PdfLayoutBlock = {
 type PdfLayoutPlan = {
   version: 1;
   blocks: PdfLayoutBlock[];
+  pageCompositionPlan?: PageCompositionPlan;
 };
 
 const isPdfLayoutPlan = (value: unknown): value is PdfLayoutPlan => {
@@ -89,7 +99,11 @@ const isPdfLayoutPlan = (value: unknown): value is PdfLayoutPlan => {
     return false;
   }
 
-  const plan = value as { version?: unknown; blocks?: unknown };
+  const plan = value as {
+    version?: unknown;
+    blocks?: unknown;
+    pageCompositionPlan?: unknown;
+  };
   return plan.version === 1
     && Array.isArray(plan.blocks)
     && plan.blocks.every((block) => {
@@ -107,7 +121,11 @@ const isPdfLayoutPlan = (value: unknown): value is PdfLayoutPlan => {
         "projectFeature",
       ].includes(candidate.type)
         && (candidate.type === "header" || typeof candidate.sectionId === "string");
-    });
+    })
+    && (
+      plan.pageCompositionPlan === undefined ||
+      pageCompositionPlanSchema.safeParse(plan.pageCompositionPlan).success
+    );
 };
 
 const createFallbackPdfLayoutPlan = (profile: GeneratedProfile): PdfLayoutPlan => ({
@@ -632,7 +650,26 @@ setProfile({
         layoutPlan = fallbackLayoutPlan;
       }
 
-      const pdf = new jsPDF({ unit: "mm", format: "a4" });
+      let coverActivation: CoverEditorialActivation | null = null;
+
+      if (layoutPlan.pageCompositionPlan) {
+        const resolvedComposition = resolvePageComposition(
+          layoutPlan.pageCompositionPlan,
+          {
+            sectionIds: profile.sections.map((section) => section.id),
+            projectNames: profile.projects.map((project) => project.name),
+            contextualVisuals: selectedContextualVisuals,
+          }
+        );
+
+        if (resolvedComposition.ok) {
+          coverActivation = getCoverEditorialActivation(
+            resolvedComposition.composition
+          );
+        }
+      }
+
+      let pdf = new jsPDF({ unit: "mm", format: "a4" });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
@@ -640,10 +677,19 @@ setProfile({
       const bottomMargin = 16;
       const topContent = 22;
       let y = topContent;
-      const logo = profile.logoUrl ? await loadPdfImage(profile.logoUrl) : null;
-      const logoSource = logo && profile.logoUrl
-        ? await getPdfImageSource(logo)
-        : null;
+      let logo: HTMLImageElement | null = null;
+      let logoSource: string | null = null;
+
+      if (profile.logoUrl) {
+        try {
+          logo = await loadPdfImage(profile.logoUrl);
+          logoSource = getPdfImageSource(logo);
+        } catch {
+          logo = null;
+          logoSource = null;
+        }
+      }
+
       const heroVisual = selectContextualVisual(
         selectedContextualVisuals,
         "hero"
@@ -655,7 +701,19 @@ setProfile({
       const heroFrameHeight = 105;
       const aboutImageWidth = 68;
       const aboutImageHeight = 55;
-      const heroImageSource = heroVisual?.imageUrl
+      const resolvedCoverLayout = coverActivation
+        ? createCoverEditorialLayout(coverActivation.page, true)
+        : null;
+      const resolvedCoverHero = coverActivation?.heroVisual ?? null;
+      const v2HeroImageSource =
+        resolvedCoverLayout && resolvedCoverHero?.imageUrl
+          ? await loadContextualPdfImage(
+              resolvedCoverHero.imageUrl,
+              resolvedCoverLayout.heroArea.width,
+              resolvedCoverLayout.heroArea.height
+            )
+          : null;
+      let heroImageSource = !coverActivation && heroVisual?.imageUrl
         ? await loadContextualPdfImage(
             heroVisual.imageUrl,
             contentWidth,
@@ -742,9 +800,49 @@ setProfile({
         }
       };
 
-      addHeader();
+      let renderedV2Cover = false;
 
-      if (heroVisual && heroImageSource) {
+      if (coverActivation) {
+        try {
+          const coverResult = drawCoverEditorial({
+            pdf,
+            page: coverActivation.page,
+            companyName: profile.companyName,
+            brandColor: getBrandColor(pdfBrandAnalysis),
+            heroImageSource: v2HeroImageSource,
+            logo: logo && logoSource
+              ? {
+                  source: logoSource,
+                  width: logo.naturalWidth,
+                  height: logo.naturalHeight,
+                }
+              : null,
+          });
+
+          if (coverResult.renderedVisual) {
+            renderedContextualVisuals.push(coverResult.renderedVisual);
+          }
+
+          renderedV2Cover = true;
+          startNewPage();
+        } catch {
+          pdf = new jsPDF({ unit: "mm", format: "a4" });
+          coverActivation = null;
+          heroImageSource = heroVisual?.imageUrl
+            ? await loadContextualPdfImage(
+                heroVisual.imageUrl,
+                contentWidth,
+                heroFrameHeight
+              )
+            : null;
+        }
+      }
+
+      if (!renderedV2Cover) {
+        addHeader();
+      }
+
+      if (!renderedV2Cover && heroVisual && heroImageSource) {
         const frameY = y;
         const panelWidth = contentWidth * 0.44;
         const brandColor = getBrandColor(pdfBrandAnalysis);
@@ -780,7 +878,7 @@ setProfile({
         pdf.text(coverNameLines, margin + 8, frameY + 32);
         y = frameY + heroFrameHeight + 14;
         renderedContextualVisuals.push(heroVisual);
-      } else {
+      } else if (!renderedV2Cover) {
         pdf.setTextColor(17, 24, 39);
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(25);
@@ -1016,6 +1114,10 @@ setProfile({
 
       const totalPages = pdf.getNumberOfPages();
       for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+        if (renderedV2Cover && pageNumber === 1) {
+          continue;
+        }
+
         pdf.setPage(pageNumber);
         pdf.setDrawColor(209, 213, 219);
         pdf.line(margin, pageHeight - 14, pageWidth - margin, pageHeight - 14);
