@@ -61,6 +61,48 @@ export type VisualDirection = {
 
   animationAllowed: false;
 };
+
+export type ContextualVisualPurpose =
+  VisualDirection["imageBriefs"][number]["purpose"];
+
+export type ContextualVisualPlacement =
+  VisualDirection["imageBriefs"][number]["placement"];
+
+export type ContextualVisualAspectRatio =
+  VisualDirection["imageBriefs"][number]["aspectRatio"];
+
+export type SelectedContextualVisual = {
+  role: "contextual_stock";
+  provenance: "pexels";
+  briefId: string;
+  purpose: ContextualVisualPurpose;
+  placement: ContextualVisualPlacement;
+  aspectRatio: ContextualVisualAspectRatio;
+  status: "selected" | "fallback";
+  source: "pexels" | null;
+  photographer: string | null;
+  imageUrl: string | null;
+  width: number | null;
+  height: number | null;
+  overallScore: number | null;
+  fallbackReason: string | null;
+};
+
+export type UserUploadedProjectVisual = {
+  role: "project_image";
+  provenance: "user_upload";
+  projectId: string;
+  imageUrl: string;
+};
+
+export type PdfVisualAsset =
+  | SelectedContextualVisual
+  | UserUploadedProjectVisual;
+
+export type SelectVisualsResponse = {
+  visuals: SelectedContextualVisual[];
+};
+
 export type RankedImage = {
   candidateId: string;
   url: string;

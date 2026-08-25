@@ -3,6 +3,12 @@
 import Link from "next/link";
 import jsPDF from "jspdf";
 import { useState } from "react";
+import type {
+  BrandAnalysis,
+  SelectedContextualVisual,
+  SelectVisualsResponse,
+  VisualDirection,
+} from "@/lib/visual-system/types";
 
 type CompanyData = {
   name: string;
@@ -164,6 +170,33 @@ const getPdfImageSource = (image: HTMLImageElement) => {
   canvas.height = image.naturalHeight;
   canvas.getContext("2d")?.drawImage(image, 0, 0);
   return canvas.toDataURL("image/png");
+};
+
+const postJsonWithTimeout = async <T,>(
+  url: string,
+  body: unknown,
+  timeoutMs: number
+): Promise<T> => {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(`Request to ${url} failed.`);
+    }
+
+    return data as T;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 };
 
 export default function GeneratePage() {
@@ -421,48 +454,82 @@ setProfile({
     try {
       const fallbackLayoutPlan = createFallbackPdfLayoutPlan(profile);
       let layoutPlan = fallbackLayoutPlan;
-      const plannerController = new AbortController();
-      const plannerTimeout = window.setTimeout(() => plannerController.abort(), 8000);
+      let selectedContextualVisuals: SelectedContextualVisual[] = [];
+
+      let companyData: Partial<CompanyData> = {
+        name: profile.companyName,
+        logoUrl: profile.logoUrl,
+      };
+      const savedCompanyData = localStorage.getItem("companyData");
+
+      if (savedCompanyData) {
+        try {
+          const parsedCompanyData = JSON.parse(savedCompanyData);
+          if (parsedCompanyData && typeof parsedCompanyData === "object") {
+            companyData = parsedCompanyData;
+          }
+        } catch {
+          companyData = { name: profile.companyName, logoUrl: profile.logoUrl };
+        }
+      }
+
+      const visualCompany = {
+        name: companyData.name,
+        about: companyData.about,
+        activities: companyData.activities,
+        yearsOfExperience: companyData.experience,
+      };
 
       try {
-        let companyData: Partial<CompanyData> = {
-          name: profile.companyName,
-          logoUrl: profile.logoUrl,
-        };
-        const savedCompanyData = localStorage.getItem("companyData");
+        const brandAnalysis = await postJsonWithTimeout<BrandAnalysis>(
+          "/api/analyze-brand",
+          { company: visualCompany },
+          8000
+        );
 
-        if (savedCompanyData) {
+        try {
+          const visualDirection = await postJsonWithTimeout<VisualDirection>(
+            "/api/visual-direction",
+            { company: visualCompany, brandAnalysis },
+            8000
+          );
+
           try {
-            const parsedCompanyData = JSON.parse(savedCompanyData);
-            if (parsedCompanyData && typeof parsedCompanyData === "object") {
-              companyData = parsedCompanyData;
-            }
+            const selection = await postJsonWithTimeout<SelectVisualsResponse>(
+              "/api/select-visuals",
+              { visualDirection },
+              60000
+            );
+            selectedContextualVisuals = selection.visuals;
           } catch {
-            companyData = { name: profile.companyName, logoUrl: profile.logoUrl };
+            selectedContextualVisuals = [];
           }
+        } catch {
+          selectedContextualVisuals = [];
         }
+      } catch {
+        selectedContextualVisuals = [];
+      }
 
-        const plannerResponse = await fetch("/api/plan-pdf-layout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: plannerController.signal,
-          body: JSON.stringify({
+      try {
+        const plannerData = await postJsonWithTimeout<unknown>(
+          "/api/plan-pdf-layout",
+          {
             company: companyData,
             profile,
             projects: profile.projects,
-          }),
-        });
-        const plannerData: unknown = await plannerResponse.json();
+            contextualVisuals: selectedContextualVisuals,
+          },
+          8000
+        );
 
-        if (!plannerResponse.ok || !isPdfLayoutPlan(plannerData)) {
+        if (!isPdfLayoutPlan(plannerData)) {
           throw new Error("Invalid PDF layout plan");
         }
 
         layoutPlan = plannerData;
       } catch {
         layoutPlan = fallbackLayoutPlan;
-      } finally {
-        window.clearTimeout(plannerTimeout);
       }
 
       const pdf = new jsPDF({ unit: "mm", format: "a4" });
