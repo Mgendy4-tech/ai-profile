@@ -11,13 +11,22 @@ import type {
   VisualDirection,
 } from "@/lib/visual-system/types";
 import { pageCompositionPlanSchema } from "@/lib/visual-system/page-composition-plan";
-import { resolvePageComposition } from "@/lib/visual-system/composition-resolver";
+import {
+  resolvePageComposition,
+  type ResolvedPageComposition,
+} from "@/lib/visual-system/composition-resolver";
 import {
   createCoverEditorialLayout,
   drawCoverEditorial,
   getCoverEditorialActivation,
   type CoverEditorialActivation,
 } from "@/lib/visual-system/pdf-cover-editorial";
+import {
+  createNarrativePageLayout,
+  drawNarrativePage,
+  getNarrativePageActivation,
+  prepareNarrativePage,
+} from "@/lib/visual-system/pdf-narrative-composition";
 import {
   calculateAspectFillCrop,
   canUseContextualVisualInBlock,
@@ -651,6 +660,7 @@ setProfile({
       }
 
       let coverActivation: CoverEditorialActivation | null = null;
+      let resolvedPageComposition: ResolvedPageComposition | null = null;
 
       if (layoutPlan.pageCompositionPlan) {
         const resolvedComposition = resolvePageComposition(
@@ -663,6 +673,7 @@ setProfile({
         );
 
         if (resolvedComposition.ok) {
+          resolvedPageComposition = resolvedComposition.composition;
           coverActivation = getCoverEditorialActivation(
             resolvedComposition.composition
           );
@@ -801,6 +812,7 @@ setProfile({
       };
 
       let renderedV2Cover = false;
+      const renderedV2SectionIds = new Set<string>();
 
       if (coverActivation) {
         try {
@@ -824,7 +836,8 @@ setProfile({
           }
 
           renderedV2Cover = true;
-          startNewPage();
+          pdf.addPage();
+          y = topContent;
         } catch {
           pdf = new jsPDF({ unit: "mm", format: "a4" });
           coverActivation = null;
@@ -838,7 +851,74 @@ setProfile({
         }
       }
 
-      if (!renderedV2Cover) {
+      if (renderedV2Cover && resolvedPageComposition) {
+        const narrativePages = resolvedPageComposition.pages.slice(1);
+
+        for (const resolvedPage of narrativePages) {
+          const activation = getNarrativePageActivation(resolvedPage);
+
+          if (!activation) {
+            continue;
+          }
+
+          const imageLayout = createNarrativePageLayout(activation, true);
+          const narrativeImageSource =
+            imageLayout && activation.visual?.imageUrl
+              ? await loadContextualPdfImage(
+                  activation.visual.imageUrl,
+                  imageLayout.mediaArea.width,
+                  imageLayout.mediaArea.height
+                )
+              : null;
+          const prepared = prepareNarrativePage(
+            pdf,
+            activation,
+            profile.sections.map((section) => ({
+              id: section.id,
+              title: section.title,
+              content: section.content,
+              items: section.items.map((item) => ({
+                name: item.name,
+                description: item.description,
+              })),
+            })),
+            Boolean(narrativeImageSource)
+          );
+
+          if (!prepared) {
+            break;
+          }
+
+          const narrativePageNumber = pdf.getNumberOfPages();
+
+          try {
+            const result = drawNarrativePage({
+              pdf,
+              prepared,
+              companyName: profile.companyName,
+              brandColor: getBrandColor(pdfBrandAnalysis),
+              imageSource: narrativeImageSource,
+            });
+
+            result.consumedSectionIds.forEach((sectionId) => {
+              renderedV2SectionIds.add(sectionId);
+            });
+            if (result.renderedVisual) {
+              renderedContextualVisuals.push(result.renderedVisual);
+            }
+
+            pdf.addPage();
+            y = topContent;
+          } catch {
+            pdf.deletePage(narrativePageNumber);
+            pdf.addPage();
+            y = topContent;
+            break;
+          }
+        }
+
+        addHeader();
+      } else {
         addHeader();
       }
 
@@ -915,7 +995,7 @@ setProfile({
       };
 
       const sectionsById = new Map(profile.sections.map((section) => [section.id, section]));
-      const renderedSectionIds = new Set<string>();
+      const renderedSectionIds = new Set(renderedV2SectionIds);
       const renderBlocks: {
         section: GeneratedSection;
         items: GeneratedSection["items"];
@@ -957,6 +1037,10 @@ setProfile({
           });
         }
       });
+
+      if (renderedV2Cover && renderBlocks.length === 0) {
+        pdf.deletePage(pdf.getNumberOfPages());
+      }
 
       for (const renderBlock of renderBlocks) {
         const { section } = renderBlock;
