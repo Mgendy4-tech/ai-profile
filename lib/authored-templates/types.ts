@@ -61,6 +61,7 @@ export type ContractIssueCode =
   | "required_slot_missing"
   | "invalid_slot_type"
   | "text_line_limit_exceeded"
+  | "text_word_width_exceeded"
   | "collection_below_minimum"
   | "collection_above_maximum"
   | "image_role_not_allowed"
@@ -149,7 +150,11 @@ export type TemplateFamily =
   | "editorial_project_feature"
   | "corporate_cover"
   | "corporate_narrative"
-  | "corporate_services";
+  | "corporate_services"
+  | "product_cover"
+  | "product_overview"
+  | "product_features"
+  | "product_use_cases";
 
 export type TemplateRenderAudit = {
   templateId: string;

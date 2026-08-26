@@ -1,4 +1,4 @@
-export type ProductionSectionRole = "narrative" | "services" | "projects";
+export type ProductionSectionRole = "narrative" | "services" | "projects" | "features" | "use_cases";
 
 export type ProductionSectionForNormalization = {
   id: string;
@@ -29,12 +29,21 @@ const ROLE_TOKENS: Readonly<Record<ProductionSectionRole, readonly string[]>> = 
   narrative: ["about", "overview", "companyprofile", "ourstory"],
   services: ["services", "capabilities", "expertise", "mainactivities", "activities"],
   projects: ["projects", "portfolio", "featuredprojects", "casestudies"],
+  features: ["features", "productfeatures", "platformfeatures", "functionality"],
+  use_cases: ["usecases", "applications", "productapplications"],
+};
+
+const PRODUCT_TECH_TYPE_TOKENS = ["saas", "software", "technology", "techcompany", "platform", "aicompany", "artificialintelligence", "digitalproduct", "productcompany"] as const;
+export const isProductTechCompanyType = (companyType: string) => {
+  const normalized = normalizeId(companyType);
+  return PRODUCT_TECH_TYPE_TOKENS.some((token) => normalized.includes(token));
 };
 
 const normalizeId = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
 export const normalizeProductionSectionRoles = (
   sections: readonly ProductionSectionForNormalization[],
+  options: { productTech?: boolean } = {},
 ): SectionRoleNormalizationResult => {
   const normalized: { section: ProductionSectionForNormalization; role: ProductionSectionRole }[] = [];
   const diagnostics: SectionRoleDiagnostic[] = [];
@@ -53,7 +62,7 @@ export const normalizeProductionSectionRoles = (
       diagnostics.push({ code: "ambiguous_semantic_role", path: `sections.${index}.id`, sectionId: section.id, role: null });
       return;
     }
-    const role = matches[0];
+    const role = options.productTech && matches[0] === "services" ? "features" : matches[0];
     if (roleOwners.has(role)) {
       diagnostics.push({ code: "duplicate_role_candidate", path: `sections.${index}.id`, sectionId: section.id, role });
       return;

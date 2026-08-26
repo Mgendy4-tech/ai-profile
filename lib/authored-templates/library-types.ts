@@ -6,7 +6,9 @@ export type NormalizedContentKind =
   | "company_identity"
   | "narrative_section"
   | "service_capability"
-  | "project";
+  | "project"
+  | "product_feature"
+  | "use_case";
 
 export type ContentCoveragePolicy = "required" | "optional";
 
@@ -21,12 +23,17 @@ export type NormalizedContentUnit =
   | (NormalizedContentUnitBase & { kind: "company_identity" })
   | (NormalizedContentUnitBase & { kind: "narrative_section"; characterCount: number })
   | (NormalizedContentUnitBase & { kind: "service_capability" })
-  | (NormalizedContentUnitBase & { kind: "project"; hasAuthenticImage: boolean });
+  | (NormalizedContentUnitBase & { kind: "project"; hasAuthenticImage: boolean })
+  | (NormalizedContentUnitBase & { kind: "product_feature" })
+  | (NormalizedContentUnitBase & { kind: "use_case" });
 
 export type DeterministicContentFacts = {
   narrativeSectionCount: number;
   narrativeCharacterCount: number;
   serviceCount: number;
+  productFeatureCount: number;
+  useCaseCount: number;
+  productTechSignal: boolean;
   projectCount: number;
   authenticProjectImageCount: number;
   authenticProjectImageCoverage: number;

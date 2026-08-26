@@ -1,8 +1,9 @@
 import { editorialInteriorsV1Pack } from "./packs/editorial-interiors-v1";
 import { corporateServicesV1Pack } from "./packs/corporate-services-v1";
+import { productTechV1Pack } from "./packs/product-tech-v1";
 import type { AuthoredTemplateFamily } from "./library-types";
 
-export const authoredTemplatePacks = [editorialInteriorsV1Pack, corporateServicesV1Pack] as const;
+export const authoredTemplatePacks = [editorialInteriorsV1Pack, corporateServicesV1Pack, productTechV1Pack] as const;
 
 export type AuthoredTemplatePackId = (typeof authoredTemplatePacks)[number]["id"];
 
@@ -46,7 +47,23 @@ export const corporateServicesFamily = {
   }),
 } as const satisfies AuthoredTemplateFamily;
 
-export const authoredTemplateFamilies = [visualPortfolioFamily, corporateServicesFamily] as const;
+export const productTechFamily = {
+  id: "product-tech",
+  label: "Product / Tech",
+  priority: 95,
+  packs: [productTechV1Pack],
+  evaluate: (shape) => ({
+    eligible: shape.facts.productTechSignal && shape.facts.narrativeSectionCount === 1 && shape.facts.productFeatureCount > 0 && shape.facts.projectCount === 0,
+    reasons: [
+      { code: "product_tech_company_type", contribution: shape.facts.productTechSignal ? 3 : -3, evidenceContentIds: [] },
+      { code: "product_features_available", contribution: shape.facts.productFeatureCount >= 4 ? 3 : shape.facts.productFeatureCount > 0 ? 2 : -3, evidenceContentIds: [] },
+      { code: "product_use_cases_available", contribution: shape.facts.useCaseCount > 0 ? 1 : 0, evidenceContentIds: [] },
+      { code: "project_free_product_profile", contribution: shape.facts.projectCount === 0 ? 1 : -2, evidenceContentIds: [] },
+    ],
+  }),
+} as const satisfies AuthoredTemplateFamily;
+
+export const authoredTemplateFamilies = [visualPortfolioFamily, corporateServicesFamily, productTechFamily] as const;
 
 export type RegisteredAuthoredTemplateFamilyId = (typeof authoredTemplateFamilies)[number]["id"];
 
