@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import jsPDF from "jspdf";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type {
   BrandAnalysis,
   PageCompositionPlan,
@@ -40,6 +40,15 @@ import {
   type ProjectPortfolioItem,
 } from "@/lib/visual-system/pdf-project-composition";
 import { routeEditorialInteriorsV1Export } from "@/lib/authored-templates/export-orchestrator";
+import {
+  createDevelopmentExportEventSink,
+  createExportAttemptGuard,
+  createExportReferenceId,
+  emitExportCompleted,
+  emitExportFailed,
+  emitExportStarted,
+  type ExportFallbackDiagnostic,
+} from "@/lib/export-beta-lifecycle";
 import {
   calculateAspectFillCrop,
   canUseContextualVisualInBlock,
@@ -115,6 +124,8 @@ type PdfLayoutPlan = {
   blocks: PdfLayoutBlock[];
   pageCompositionPlan?: PageCompositionPlan;
 };
+
+const exportEventSink = createDevelopmentExportEventSink();
 
 const isPdfLayoutPlan = (value: unknown): value is PdfLayoutPlan => {
   if (!value || typeof value !== "object") {
@@ -323,9 +334,11 @@ const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
 const [editingSectionTitle, setEditingSectionTitle] = useState("");
 const [loading, setLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const exportAttemptGuard = useRef(createExportAttemptGuard());
   const [errorMessage, setErrorMessage] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
   const [exportMessage, setExportMessage] = useState("");
+  const [exportMessageTone, setExportMessageTone] = useState<"status" | "success" | "error">("status");
 
 const handleAnalyze = async () => {
   setLoading(true);
@@ -558,12 +571,17 @@ setProfile({
   };
 
   const handleExportPdf = async () => {
-    if (!profile || isExporting) {
+    if (!profile || !exportAttemptGuard.current.tryStart()) {
       return;
     }
 
+    const exportEventId = createExportReferenceId();
+    const exportStartedAt = Date.now();
+    let fallbackDiagnostics: readonly ExportFallbackDiagnostic[] = [];
+    emitExportStarted(exportEventSink, exportEventId, exportStartedAt);
     setIsExporting(true);
-    setExportMessage("");
+    setExportMessageTone("status");
+    setExportMessage("Creating your company profile…");
 
     try {
       const fallbackLayoutPlan = createFallbackPdfLayoutPlan(profile);
@@ -651,9 +669,12 @@ setProfile({
       }
       if (authoredDecision.mode === "authored") {
         authoredDecision.pdf.save(`${profile.companyName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "company-profile"}.pdf`);
-        setExportMessage("PDF downloaded successfully.");
+        emitExportCompleted(exportEventSink, exportEventId, exportStartedAt, Date.now(), "authored_success", authoredDecision.familyId, authoredDecision.pdf.getNumberOfPages());
+        setExportMessageTone("success");
+        setExportMessage("Your company profile is ready.");
         return;
       }
+      fallbackDiagnostics = authoredDecision.reasons.map(({ stage, code, pageRole }) => ({ stage, code, pageRole }));
 
       const visualCompany = {
         name: companyData.name,
@@ -1393,10 +1414,15 @@ setProfile({
       }
 
       pdf.save(`${profile.companyName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "company-profile"}.pdf`);
-      setExportMessage("PDF downloaded successfully.");
+      emitExportCompleted(exportEventSink, exportEventId, exportStartedAt, Date.now(), "standard_success", null, pdf.getNumberOfPages(), fallbackDiagnostics);
+      setExportMessageTone("success");
+      setExportMessage("Your company profile is ready.");
     } catch {
-      setExportMessage("We could not create the PDF. Please check that all project images are still available and try again.");
+      emitExportFailed(exportEventSink, exportEventId, exportStartedAt, Date.now());
+      setExportMessageTone("error");
+      setExportMessage(`We couldn't create your PDF this time. Please try again. Reference: ${exportEventId}`);
     } finally {
+      exportAttemptGuard.current.finish();
       setIsExporting(false);
     }
   };
@@ -1773,7 +1799,7 @@ setProfile({
   <p className="px-5 py-3 text-sm text-green-600">
     {copyMessage}
   </p>
-)}              {exportMessage && <p className="px-5 pt-3 text-sm text-green-600 sm:px-7">{exportMessage}</p>}
+)}              {exportMessage && <p role={exportMessageTone === "error" ? "alert" : "status"} className={`px-5 pt-3 text-sm sm:px-7 ${exportMessageTone === "error" ? "text-red-600" : exportMessageTone === "success" ? "text-green-600" : "text-gray-600"}`}>{exportMessage}</p>}
 
               <div className="mt-8 flex flex-wrap gap-3 border-t border-gray-200 px-5 pb-7 pt-6 sm:px-7">
                 <Link href="/company" className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800">
