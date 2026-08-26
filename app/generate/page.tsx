@@ -39,6 +39,7 @@ import {
   prepareProjectPage,
   type ProjectPortfolioItem,
 } from "@/lib/visual-system/pdf-project-composition";
+import { routeEditorialInteriorsV1Export } from "@/lib/authored-templates/export-orchestrator";
 import {
   calculateAspectFillCrop,
   canUseContextualVisualInBlock,
@@ -585,6 +586,73 @@ setProfile({
         } catch {
           companyData = { name: profile.companyName, logoUrl: profile.logoUrl };
         }
+      }
+
+      const savedProjects = localStorage.getItem("projectsData");
+      let authoredProjects: Array<{
+        id: string;
+        name: string;
+        category?: string;
+        description: string;
+        imageUrl: string;
+      }> = [];
+      if (savedProjects) {
+        try {
+          const parsedProjects: unknown = JSON.parse(savedProjects);
+          if (Array.isArray(parsedProjects)) {
+            authoredProjects = parsedProjects.flatMap((project) => {
+              if (!project || typeof project !== "object") return [];
+              const candidate = project as Record<string, unknown>;
+              return typeof candidate.id === "string" &&
+                typeof candidate.name === "string" &&
+                typeof candidate.description === "string" &&
+                typeof candidate.imageUrl === "string"
+                ? [{
+                    id: candidate.id,
+                    name: candidate.name,
+                    category: typeof candidate.category === "string" ? candidate.category : undefined,
+                    description: candidate.description,
+                    imageUrl: candidate.imageUrl,
+                  }]
+                : [];
+            });
+          }
+        } catch {
+          authoredProjects = [];
+        }
+      }
+
+      const authoredDecision = await routeEditorialInteriorsV1Export({
+        company: {
+          name: typeof companyData.name === "string" ? companyData.name : profile.companyName,
+          logoUrl: typeof companyData.logoUrl === "string" ? companyData.logoUrl : profile.logoUrl,
+          about: typeof companyData.about === "string" ? companyData.about : profile.about,
+          activities: typeof companyData.activities === "string" ? companyData.activities : profile.expertise.join("\n"),
+          experience: typeof companyData.experience === "string" ? companyData.experience : profile.experience,
+        },
+        profile: {
+          companyName: profile.companyName,
+          companyType: profile.companyType,
+          sections: profile.sections,
+        },
+        projects: authoredProjects,
+      });
+      if (process.env.NODE_ENV !== "production") {
+        console.debug("[authored-export-decision]", {
+          mode: authoredDecision.mode,
+          packId: authoredDecision.packId,
+          reasons: authoredDecision.reasons.map((reason) => ({
+            stage: reason.stage,
+            code: reason.code,
+            path: reason.path,
+            pageRole: reason.pageRole,
+          })),
+        });
+      }
+      if (authoredDecision.mode === "authored") {
+        authoredDecision.pdf.save(`${profile.companyName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "company-profile"}.pdf`);
+        setExportMessage("PDF downloaded successfully.");
+        return;
       }
 
       const visualCompany = {
