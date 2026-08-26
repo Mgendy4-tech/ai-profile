@@ -34,9 +34,13 @@ const ROLE_TOKENS: Readonly<Record<ProductionSectionRole, readonly string[]>> = 
 };
 
 const PRODUCT_TECH_TYPE_TOKENS = ["saas", "software", "technology", "techcompany", "platform", "aicompany", "artificialintelligence", "digitalproduct", "productcompany"] as const;
+const SERVICE_BUSINESS_TYPE_TOKENS = ["consulting", "services", "advisory", "agency"] as const;
 export const isProductTechCompanyType = (companyType: string) => {
   const normalized = normalizeId(companyType);
-  return PRODUCT_TECH_TYPE_TOKENS.some((token) => normalized.includes(token));
+  if (PRODUCT_TECH_TYPE_TOKENS.some((token) => normalized.includes(token))) return true;
+  return normalized.includes("automation") &&
+    normalized.includes("product") &&
+    !SERVICE_BUSINESS_TYPE_TOKENS.some((token) => normalized.includes(token));
 };
 
 const normalizeId = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");

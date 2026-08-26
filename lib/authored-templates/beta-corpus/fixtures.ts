@@ -1,0 +1,33 @@
+import type { ProductionEnrichmentInput } from "../enrichment";
+
+export type CorpusExpectation = { acceptableModes: readonly ("authored" | "fallback")[]; preferredFamily?: "visual-portfolio" | "corporate-services" | "product-tech"; rationale: string };
+export type AuthoredCorpusRecord = { id: string; description: string; input: ProductionEnrichmentInput; expectation: CorpusExpectation };
+const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+const item = (prefix: string, index: number) => ({ name: `${prefix} ${String(index + 1).padStart(2, "0")}`, description: `Clearly synthetic beta-corpus ${prefix.toLowerCase()} description.` });
+const base = (name: string, companyType: string, sectionId: string, count: number): ProductionEnrichmentInput => ({ company: { name, about: "Clearly synthetic beta-corpus company narrative.", activities: "Clearly synthetic beta-corpus activities.", experience: "Clearly synthetic beta-corpus experience." }, profile: { companyName: name, companyType, sections: [{ id: "about", title: "Company overview", description: "Clearly synthetic beta-corpus positioning.", content: "Clearly synthetic beta-corpus narrative used for deterministic authored-template evaluation.", items: [] }, { id: sectionId, title: sectionId === "features" ? "Product features" : "Capabilities", description: "Clearly synthetic beta-corpus capability introduction.", content: "Clearly synthetic beta-corpus capability content.", items: Array.from({ length: count }, (_, index) => item(sectionId, index)) }] }, projects: [] });
+const visual = (id: string, name: string, companyType: string, count: number): AuthoredCorpusRecord => { const input = base(name, companyType, "services", 4); input.projects = Array.from({ length: count }, (_, index) => ({ id: `${id}:project:${index}`, name: `Project ${index + 1}`, description: "Clearly synthetic source project description.", imageUrl: PNG })); input.profile.sections = [...input.profile.sections, { id: "projects", title: "Projects", description: "Clearly synthetic portfolio introduction.", content: "Clearly synthetic portfolio content.", items: input.projects.map((project) => ({ name: project.name, description: project.description })) }]; return { id, description: `${companyType} with ${count} authentic test uploads`, input, expectation: { acceptableModes: ["authored"], preferredFamily: "visual-portfolio", rationale: "Complete authentic project coverage should select Visual / Portfolio." } }; };
+const corporate = (id: string, name: string, companyType: string, count: number): AuthoredCorpusRecord => ({ id, description: `${companyType} with ${count} services`, input: base(name, companyType, "services", count), expectation: { acceptableModes: ["authored"], preferredFamily: "corporate-services", rationale: "Project-free service-led shape should select Corporate / Services." } });
+const product = (id: string, name: string, companyType: string, sectionId: string, features: number, useCases = 0): AuthoredCorpusRecord => { const input = base(name, companyType, sectionId, features); if (useCases) input.profile.sections = [...input.profile.sections, { id: "useCases", title: "Use cases", description: "Clearly synthetic supplied use cases.", content: "Clearly synthetic use-case content.", items: Array.from({ length: useCases }, (_, index) => item("Use case", index)) }]; return { id, description: `${companyType} using ${sectionId}`, input, expectation: { acceptableModes: ["authored"], preferredFamily: "product-tech", rationale: "Explicit product classification and feature-led content should select Product / Tech." } }; };
+
+const ambiguousUnknown = base("Boundary Structure Fixture", "Professional services", "services", 2); ambiguousUnknown.profile.sections = [...ambiguousUnknown.profile.sections, { id: "about-services", title: "Ambiguous", description: "", content: "Required ambiguous content.", items: [] }, { id: "team", title: "Unknown", description: "", content: "Required unknown content.", items: [] }];
+const duplicateNarrative = base("Duplicate Narrative Fixture", "Professional services", "services", 2); duplicateNarrative.profile.sections = [...duplicateNarrative.profile.sections, { id: "overview", title: "Second overview", description: "", content: "Second required narrative.", items: [] }];
+const projectProduct = base("Project Bearing Product", "SaaS platform", "features", 4); projectProduct.projects = [{ id: "product-project", name: "Required project", description: "Required source project.", imageUrl: "" }];
+const missingVisual = visual("visual-missing-image", "Atlas Build", "Design build studio", 2); missingVisual.input.projects[1].imageUrl = "";
+
+export const AUTHORED_BETA_CORPUS: readonly AuthoredCorpusRecord[] = [
+  visual("visual-interior-one", "Aurelia Studio", "Interior design studio", 1),
+  visual("visual-creative-two", "Lumen Works", "Creative studio", 2),
+  visual("visual-build-five", "Form Build", "Construction design build", 5),
+  corporate("corporate-consulting-one", "North Advisory", "Management consulting", 1),
+  corporate("corporate-accounting-four", "Ledger Partners", "Accounting professional services", 4),
+  corporate("corporate-logistics-five", "Transit Operations", "Logistics services", 5),
+  corporate("corporate-agency-eight", "Signal Agency", "B2B marketing agency", 8),
+  product("product-saas-one", "Nodi", "SaaS platform", "features", 1),
+  product("product-software-four", "Relayform", "Software platform", "services", 4),
+  product("product-b2b-five", "Vectorline", "B2B technology product", "capabilities", 5),
+  product("product-automation-use-cases", "Flow Circuit", "Workflow automation product", "features", 6, 4),
+  { id: "fallback-ambiguous-unknown", description: "Ambiguous and unknown required sections", input: ambiguousUnknown, expectation: { acceptableModes: ["fallback"], rationale: "Every unsupported section must produce explicit normalization diagnostics." } },
+  { id: "fallback-duplicate-narrative", description: "Multiple independent narrative sections", input: duplicateNarrative, expectation: { acceptableModes: ["fallback"], rationale: "Duplicate narrative roles are unsupported and must not be dropped." } },
+  { id: "fallback-project-product", description: "Product company with a required project", input: projectProduct, expectation: { acceptableModes: ["fallback"], rationale: "Product V1 cannot consume project units." } },
+  { ...missingVisual, expectation: { acceptableModes: ["fallback"], rationale: "Incomplete authentic image coverage must reject Visual atomically." } },
+] as const;
