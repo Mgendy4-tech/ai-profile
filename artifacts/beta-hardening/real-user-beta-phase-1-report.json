@@ -1,0 +1,944 @@
+{
+  "generatedAt": "deterministic-test-run",
+  "verdict": "READY_FOR_CONTROLLED_EXTERNAL_BETA",
+  "summary": {
+    "total": 12,
+    "passAuthored": 9,
+    "passSafeFallback": 3,
+    "blockers": {
+      "MISROUTE": 0,
+      "CONTENT_LOSS": 0,
+      "RENDER_FAILURE": 0,
+      "NONDETERMINISTIC": 0
+    },
+    "familySelection": {
+      "visual-portfolio": 3,
+      "corporate-services": 3,
+      "product-tech": 3
+    }
+  },
+  "productionIntegration": {
+    "singleOrchestratorReachable": true,
+    "authoredReturnsBeforeLegacy": true,
+    "legacyFallbackReachable": true,
+    "familiesRegistered": [
+      "visual-portfolio",
+      "corporate-services",
+      "product-tech"
+    ]
+  },
+  "results": [
+    {
+      "scenarioId": "visual-one-project",
+      "expectedShape": "visual-portfolio",
+      "classification": "PASS_AUTHORED",
+      "normalizedRoles": [
+        {
+          "id": "about",
+          "role": "narrative"
+        },
+        {
+          "id": "services",
+          "role": "services"
+        },
+        {
+          "id": "projects",
+          "role": "projects"
+        }
+      ],
+      "normalizationDiagnostics": [],
+      "contentShape": {
+        "narrativeSectionCount": 1,
+        "narrativeCharacterCount": 136,
+        "serviceCount": 4,
+        "productFeatureCount": 0,
+        "useCaseCount": 0,
+        "productTechSignal": false,
+        "projectCount": 1,
+        "authenticProjectImageCount": 1,
+        "authenticProjectImageCoverage": 1,
+        "totalContentUnitCount": 7
+      },
+      "ranking": [
+        {
+          "familyId": "visual-portfolio",
+          "eligible": true,
+          "score": 5,
+          "priority": 100,
+          "reasons": [
+            {
+              "code": "authentic_project_images_available",
+              "contribution": 3,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "project_content_available",
+              "contribution": 2,
+              "evidenceContentIds": []
+            }
+          ]
+        }
+      ],
+      "selectedFamily": "visual-portfolio",
+      "pageOrder": [
+        "editorial-interiors-v1.cover",
+        "editorial-interiors-v1.narrative",
+        "editorial-interiors-v1.capabilities",
+        "editorial-interiors-v1.project-feature"
+      ],
+      "fallbackDiagnostics": [],
+      "pageCount": 4,
+      "coverage": "passed",
+      "preflight": "passed",
+      "deterministic": true,
+      "pdfGenerated": true,
+      "pdfByteSize": 10465,
+      "exactA4": true,
+      "noPartialMixing": true,
+      "sourceOrderingPreserved": true,
+      "duplicateConsumption": false,
+      "provenance": {
+        "allUserUploads": true,
+        "projectIdsMatch": true,
+        "allRenderedRastersNonBlack": true,
+        "projectCount": 1
+      }
+    },
+    {
+      "scenarioId": "visual-two-projects",
+      "expectedShape": "visual-portfolio",
+      "classification": "PASS_AUTHORED",
+      "normalizedRoles": [
+        {
+          "id": "about",
+          "role": "narrative"
+        },
+        {
+          "id": "services",
+          "role": "services"
+        },
+        {
+          "id": "projects",
+          "role": "projects"
+        }
+      ],
+      "normalizationDiagnostics": [],
+      "contentShape": {
+        "narrativeSectionCount": 1,
+        "narrativeCharacterCount": 136,
+        "serviceCount": 4,
+        "productFeatureCount": 0,
+        "useCaseCount": 0,
+        "productTechSignal": false,
+        "projectCount": 2,
+        "authenticProjectImageCount": 2,
+        "authenticProjectImageCoverage": 1,
+        "totalContentUnitCount": 8
+      },
+      "ranking": [
+        {
+          "familyId": "visual-portfolio",
+          "eligible": true,
+          "score": 5,
+          "priority": 100,
+          "reasons": [
+            {
+              "code": "authentic_project_images_available",
+              "contribution": 3,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "project_content_available",
+              "contribution": 2,
+              "evidenceContentIds": []
+            }
+          ]
+        }
+      ],
+      "selectedFamily": "visual-portfolio",
+      "pageOrder": [
+        "editorial-interiors-v1.cover",
+        "editorial-interiors-v1.narrative",
+        "editorial-interiors-v1.capabilities",
+        "editorial-interiors-v1.project-grid-2"
+      ],
+      "fallbackDiagnostics": [],
+      "pageCount": 4,
+      "coverage": "passed",
+      "preflight": "passed",
+      "deterministic": true,
+      "pdfGenerated": true,
+      "pdfByteSize": 12235,
+      "exactA4": true,
+      "noPartialMixing": true,
+      "sourceOrderingPreserved": true,
+      "duplicateConsumption": false,
+      "provenance": {
+        "allUserUploads": true,
+        "projectIdsMatch": true,
+        "allRenderedRastersNonBlack": true,
+        "projectCount": 2
+      }
+    },
+    {
+      "scenarioId": "visual-five-projects",
+      "expectedShape": "visual-portfolio",
+      "classification": "PASS_AUTHORED",
+      "normalizedRoles": [
+        {
+          "id": "about",
+          "role": "narrative"
+        },
+        {
+          "id": "services",
+          "role": "services"
+        },
+        {
+          "id": "projects",
+          "role": "projects"
+        }
+      ],
+      "normalizationDiagnostics": [],
+      "contentShape": {
+        "narrativeSectionCount": 1,
+        "narrativeCharacterCount": 136,
+        "serviceCount": 4,
+        "productFeatureCount": 0,
+        "useCaseCount": 0,
+        "productTechSignal": false,
+        "projectCount": 5,
+        "authenticProjectImageCount": 5,
+        "authenticProjectImageCoverage": 1,
+        "totalContentUnitCount": 11
+      },
+      "ranking": [
+        {
+          "familyId": "visual-portfolio",
+          "eligible": true,
+          "score": 5,
+          "priority": 100,
+          "reasons": [
+            {
+              "code": "authentic_project_images_available",
+              "contribution": 3,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "project_content_available",
+              "contribution": 2,
+              "evidenceContentIds": []
+            }
+          ]
+        }
+      ],
+      "selectedFamily": "visual-portfolio",
+      "pageOrder": [
+        "editorial-interiors-v1.cover",
+        "editorial-interiors-v1.narrative",
+        "editorial-interiors-v1.capabilities",
+        "editorial-interiors-v1.project-grid-4",
+        "editorial-interiors-v1.portfolio-continuation-1"
+      ],
+      "fallbackDiagnostics": [],
+      "pageCount": 5,
+      "coverage": "passed",
+      "preflight": "passed",
+      "deterministic": true,
+      "pdfGenerated": true,
+      "pdfByteSize": 18771,
+      "exactA4": true,
+      "noPartialMixing": true,
+      "sourceOrderingPreserved": true,
+      "duplicateConsumption": false,
+      "provenance": {
+        "allUserUploads": true,
+        "projectIdsMatch": true,
+        "allRenderedRastersNonBlack": true,
+        "projectCount": 5
+      }
+    },
+    {
+      "scenarioId": "corporate-sparse",
+      "expectedShape": "corporate-services",
+      "classification": "PASS_AUTHORED",
+      "normalizedRoles": [
+        {
+          "id": "about",
+          "role": "narrative"
+        },
+        {
+          "id": "services",
+          "role": "services"
+        }
+      ],
+      "normalizationDiagnostics": [],
+      "contentShape": {
+        "narrativeSectionCount": 1,
+        "narrativeCharacterCount": 136,
+        "serviceCount": 1,
+        "productFeatureCount": 0,
+        "useCaseCount": 0,
+        "productTechSignal": false,
+        "projectCount": 0,
+        "authenticProjectImageCount": 0,
+        "authenticProjectImageCoverage": 0,
+        "totalContentUnitCount": 3
+      },
+      "ranking": [
+        {
+          "familyId": "corporate-services",
+          "eligible": true,
+          "score": 6,
+          "priority": 90,
+          "reasons": [
+            {
+              "code": "service_content_available",
+              "contribution": 2,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "narrative_content_available",
+              "contribution": 2,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "project_free_business_profile",
+              "contribution": 2,
+              "evidenceContentIds": []
+            }
+          ]
+        }
+      ],
+      "selectedFamily": "corporate-services",
+      "pageOrder": [
+        "corporate-services-v1.cover",
+        "corporate-services-v1.narrative-standard",
+        "corporate-services-v1.services-1",
+        "corporate-services-v1.approach"
+      ],
+      "fallbackDiagnostics": [],
+      "pageCount": 4,
+      "coverage": "passed",
+      "preflight": "passed",
+      "deterministic": true,
+      "pdfGenerated": true,
+      "pdfByteSize": 8449,
+      "exactA4": true,
+      "noPartialMixing": true,
+      "sourceOrderingPreserved": true,
+      "duplicateConsumption": false,
+      "provenance": null
+    },
+    {
+      "scenarioId": "corporate-normal",
+      "expectedShape": "corporate-services",
+      "classification": "PASS_AUTHORED",
+      "normalizedRoles": [
+        {
+          "id": "about",
+          "role": "narrative"
+        },
+        {
+          "id": "services",
+          "role": "services"
+        }
+      ],
+      "normalizationDiagnostics": [],
+      "contentShape": {
+        "narrativeSectionCount": 1,
+        "narrativeCharacterCount": 136,
+        "serviceCount": 5,
+        "productFeatureCount": 0,
+        "useCaseCount": 0,
+        "productTechSignal": false,
+        "projectCount": 0,
+        "authenticProjectImageCount": 0,
+        "authenticProjectImageCoverage": 0,
+        "totalContentUnitCount": 7
+      },
+      "ranking": [
+        {
+          "familyId": "corporate-services",
+          "eligible": true,
+          "score": 7,
+          "priority": 90,
+          "reasons": [
+            {
+              "code": "service_content_available",
+              "contribution": 3,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "narrative_content_available",
+              "contribution": 2,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "project_free_business_profile",
+              "contribution": 2,
+              "evidenceContentIds": []
+            }
+          ]
+        }
+      ],
+      "selectedFamily": "corporate-services",
+      "pageOrder": [
+        "corporate-services-v1.cover",
+        "corporate-services-v1.narrative-standard",
+        "corporate-services-v1.services-4",
+        "corporate-services-v1.services-continuation-1",
+        "corporate-services-v1.approach"
+      ],
+      "fallbackDiagnostics": [],
+      "pageCount": 5,
+      "coverage": "passed",
+      "preflight": "passed",
+      "deterministic": true,
+      "pdfGenerated": true,
+      "pdfByteSize": 11476,
+      "exactA4": true,
+      "noPartialMixing": true,
+      "sourceOrderingPreserved": true,
+      "duplicateConsumption": false,
+      "provenance": null
+    },
+    {
+      "scenarioId": "corporate-dense",
+      "expectedShape": "corporate-services",
+      "classification": "PASS_AUTHORED",
+      "normalizedRoles": [
+        {
+          "id": "about",
+          "role": "narrative"
+        },
+        {
+          "id": "services",
+          "role": "services"
+        }
+      ],
+      "normalizationDiagnostics": [],
+      "contentShape": {
+        "narrativeSectionCount": 1,
+        "narrativeCharacterCount": 136,
+        "serviceCount": 8,
+        "productFeatureCount": 0,
+        "useCaseCount": 0,
+        "productTechSignal": false,
+        "projectCount": 0,
+        "authenticProjectImageCount": 0,
+        "authenticProjectImageCoverage": 0,
+        "totalContentUnitCount": 10
+      },
+      "ranking": [
+        {
+          "familyId": "corporate-services",
+          "eligible": true,
+          "score": 7,
+          "priority": 90,
+          "reasons": [
+            {
+              "code": "service_content_available",
+              "contribution": 3,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "narrative_content_available",
+              "contribution": 2,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "project_free_business_profile",
+              "contribution": 2,
+              "evidenceContentIds": []
+            }
+          ]
+        }
+      ],
+      "selectedFamily": "corporate-services",
+      "pageOrder": [
+        "corporate-services-v1.cover",
+        "corporate-services-v1.narrative-standard",
+        "corporate-services-v1.services-4",
+        "corporate-services-v1.services-continuation-4",
+        "corporate-services-v1.approach"
+      ],
+      "fallbackDiagnostics": [],
+      "pageCount": 5,
+      "coverage": "passed",
+      "preflight": "passed",
+      "deterministic": true,
+      "pdfGenerated": true,
+      "pdfByteSize": 13019,
+      "exactA4": true,
+      "noPartialMixing": true,
+      "sourceOrderingPreserved": true,
+      "duplicateConsumption": false,
+      "provenance": null
+    },
+    {
+      "scenarioId": "product-sparse",
+      "expectedShape": "product-tech",
+      "classification": "PASS_AUTHORED",
+      "normalizedRoles": [
+        {
+          "id": "about",
+          "role": "narrative"
+        },
+        {
+          "id": "features",
+          "role": "features"
+        }
+      ],
+      "normalizationDiagnostics": [],
+      "contentShape": {
+        "narrativeSectionCount": 1,
+        "narrativeCharacterCount": 136,
+        "serviceCount": 0,
+        "productFeatureCount": 1,
+        "useCaseCount": 0,
+        "productTechSignal": true,
+        "projectCount": 0,
+        "authenticProjectImageCount": 0,
+        "authenticProjectImageCoverage": 0,
+        "totalContentUnitCount": 3
+      },
+      "ranking": [
+        {
+          "familyId": "product-tech",
+          "eligible": true,
+          "score": 6,
+          "priority": 95,
+          "reasons": [
+            {
+              "code": "product_tech_company_type",
+              "contribution": 3,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "product_features_available",
+              "contribution": 2,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "product_use_cases_available",
+              "contribution": 0,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "project_free_product_profile",
+              "contribution": 1,
+              "evidenceContentIds": []
+            }
+          ]
+        }
+      ],
+      "selectedFamily": "product-tech",
+      "pageOrder": [
+        "product-tech-v1.cover",
+        "product-tech-v1.overview",
+        "product-tech-v1.features-1"
+      ],
+      "fallbackDiagnostics": [],
+      "pageCount": 3,
+      "coverage": "passed",
+      "preflight": "passed",
+      "deterministic": true,
+      "pdfGenerated": true,
+      "pdfByteSize": 7867,
+      "exactA4": true,
+      "noPartialMixing": true,
+      "sourceOrderingPreserved": true,
+      "duplicateConsumption": false,
+      "provenance": null
+    },
+    {
+      "scenarioId": "product-normal",
+      "expectedShape": "product-tech",
+      "classification": "PASS_AUTHORED",
+      "normalizedRoles": [
+        {
+          "id": "about",
+          "role": "narrative"
+        },
+        {
+          "id": "features",
+          "role": "features"
+        },
+        {
+          "id": "useCases",
+          "role": "use_cases"
+        }
+      ],
+      "normalizationDiagnostics": [],
+      "contentShape": {
+        "narrativeSectionCount": 1,
+        "narrativeCharacterCount": 136,
+        "serviceCount": 0,
+        "productFeatureCount": 6,
+        "useCaseCount": 3,
+        "productTechSignal": true,
+        "projectCount": 0,
+        "authenticProjectImageCount": 0,
+        "authenticProjectImageCoverage": 0,
+        "totalContentUnitCount": 11
+      },
+      "ranking": [
+        {
+          "familyId": "product-tech",
+          "eligible": true,
+          "score": 8,
+          "priority": 95,
+          "reasons": [
+            {
+              "code": "product_tech_company_type",
+              "contribution": 3,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "product_features_available",
+              "contribution": 3,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "product_use_cases_available",
+              "contribution": 1,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "project_free_product_profile",
+              "contribution": 1,
+              "evidenceContentIds": []
+            }
+          ]
+        }
+      ],
+      "selectedFamily": "product-tech",
+      "pageOrder": [
+        "product-tech-v1.cover",
+        "product-tech-v1.overview",
+        "product-tech-v1.features-4",
+        "product-tech-v1.features-continuation-2",
+        "product-tech-v1.use-cases-3"
+      ],
+      "fallbackDiagnostics": [],
+      "pageCount": 5,
+      "coverage": "passed",
+      "preflight": "passed",
+      "deterministic": true,
+      "pdfGenerated": true,
+      "pdfByteSize": 13222,
+      "exactA4": true,
+      "noPartialMixing": true,
+      "sourceOrderingPreserved": true,
+      "duplicateConsumption": false,
+      "provenance": null
+    },
+    {
+      "scenarioId": "product-dense",
+      "expectedShape": "product-tech",
+      "classification": "PASS_AUTHORED",
+      "normalizedRoles": [
+        {
+          "id": "about",
+          "role": "narrative"
+        },
+        {
+          "id": "features",
+          "role": "features"
+        },
+        {
+          "id": "useCases",
+          "role": "use_cases"
+        }
+      ],
+      "normalizationDiagnostics": [],
+      "contentShape": {
+        "narrativeSectionCount": 1,
+        "narrativeCharacterCount": 136,
+        "serviceCount": 0,
+        "productFeatureCount": 10,
+        "useCaseCount": 5,
+        "productTechSignal": true,
+        "projectCount": 0,
+        "authenticProjectImageCount": 0,
+        "authenticProjectImageCoverage": 0,
+        "totalContentUnitCount": 17
+      },
+      "ranking": [
+        {
+          "familyId": "product-tech",
+          "eligible": true,
+          "score": 8,
+          "priority": 95,
+          "reasons": [
+            {
+              "code": "product_tech_company_type",
+              "contribution": 3,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "product_features_available",
+              "contribution": 3,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "product_use_cases_available",
+              "contribution": 1,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "project_free_product_profile",
+              "contribution": 1,
+              "evidenceContentIds": []
+            }
+          ]
+        }
+      ],
+      "selectedFamily": "product-tech",
+      "pageOrder": [
+        "product-tech-v1.cover",
+        "product-tech-v1.overview",
+        "product-tech-v1.features-4",
+        "product-tech-v1.features-continuation-4",
+        "product-tech-v1.features-continuation-2",
+        "product-tech-v1.use-cases-3",
+        "product-tech-v1.use-cases-continuation-2"
+      ],
+      "fallbackDiagnostics": [],
+      "pageCount": 7,
+      "coverage": "passed",
+      "preflight": "passed",
+      "deterministic": true,
+      "pdfGenerated": true,
+      "pdfByteSize": 17797,
+      "exactA4": true,
+      "noPartialMixing": true,
+      "sourceOrderingPreserved": true,
+      "duplicateConsumption": false,
+      "provenance": null
+    },
+    {
+      "scenarioId": "edge-unknown-section",
+      "expectedShape": "unsupported",
+      "classification": "PASS_SAFE_FALLBACK",
+      "normalizedRoles": [
+        {
+          "id": "about",
+          "role": "narrative"
+        },
+        {
+          "id": "services",
+          "role": "services"
+        }
+      ],
+      "normalizationDiagnostics": [
+        {
+          "code": "unknown_semantic_role",
+          "path": "sections.2.id",
+          "sectionId": "team",
+          "role": null
+        }
+      ],
+      "contentShape": {
+        "narrativeSectionCount": 1,
+        "narrativeCharacterCount": 136,
+        "serviceCount": 2,
+        "productFeatureCount": 0,
+        "useCaseCount": 0,
+        "productTechSignal": false,
+        "projectCount": 0,
+        "authenticProjectImageCount": 0,
+        "authenticProjectImageCoverage": 0,
+        "totalContentUnitCount": 4
+      },
+      "ranking": [
+        {
+          "familyId": "corporate-services",
+          "eligible": true,
+          "score": 6,
+          "priority": 90,
+          "reasons": [
+            {
+              "code": "service_content_available",
+              "contribution": 2,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "narrative_content_available",
+              "contribution": 2,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "project_free_business_profile",
+              "contribution": 2,
+              "evidenceContentIds": []
+            }
+          ]
+        }
+      ],
+      "selectedFamily": null,
+      "pageOrder": null,
+      "fallbackDiagnostics": [
+        {
+          "stage": "normalization",
+          "code": "unknown_semantic_role",
+          "path": "sections.2.id",
+          "pageRole": null
+        }
+      ],
+      "pageCount": 0,
+      "coverage": "not_reached",
+      "preflight": "not_reached",
+      "deterministic": true,
+      "pdfGenerated": false,
+      "pdfByteSize": 0,
+      "exactA4": true,
+      "noPartialMixing": true,
+      "sourceOrderingPreserved": true,
+      "duplicateConsumption": false,
+      "provenance": null
+    },
+    {
+      "scenarioId": "edge-project-bearing-product",
+      "expectedShape": "unsupported",
+      "classification": "PASS_SAFE_FALLBACK",
+      "normalizedRoles": [
+        {
+          "id": "about",
+          "role": "narrative"
+        },
+        {
+          "id": "features",
+          "role": "features"
+        }
+      ],
+      "normalizationDiagnostics": [],
+      "contentShape": {
+        "narrativeSectionCount": 1,
+        "narrativeCharacterCount": 136,
+        "serviceCount": 0,
+        "productFeatureCount": 3,
+        "useCaseCount": 0,
+        "productTechSignal": true,
+        "projectCount": 1,
+        "authenticProjectImageCount": 1,
+        "authenticProjectImageCoverage": 1,
+        "totalContentUnitCount": 6
+      },
+      "ranking": [
+        {
+          "familyId": "visual-portfolio",
+          "eligible": true,
+          "score": 5,
+          "priority": 100,
+          "reasons": [
+            {
+              "code": "authentic_project_images_available",
+              "contribution": 3,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "project_content_available",
+              "contribution": 2,
+              "evidenceContentIds": []
+            }
+          ]
+        }
+      ],
+      "selectedFamily": null,
+      "pageOrder": null,
+      "fallbackDiagnostics": [
+        {
+          "stage": "planning",
+          "code": "source_content_not_covered",
+          "path": "profile.sections",
+          "pageRole": "capabilities"
+        }
+      ],
+      "pageCount": 0,
+      "coverage": "not_reached",
+      "preflight": "not_reached",
+      "deterministic": true,
+      "pdfGenerated": false,
+      "pdfByteSize": 0,
+      "exactA4": true,
+      "noPartialMixing": true,
+      "sourceOrderingPreserved": true,
+      "duplicateConsumption": false,
+      "provenance": null
+    },
+    {
+      "scenarioId": "edge-incomplete-image-coverage",
+      "expectedShape": "unsupported",
+      "classification": "PASS_SAFE_FALLBACK",
+      "normalizedRoles": [
+        {
+          "id": "about",
+          "role": "narrative"
+        },
+        {
+          "id": "services",
+          "role": "services"
+        },
+        {
+          "id": "projects",
+          "role": "projects"
+        }
+      ],
+      "normalizationDiagnostics": [],
+      "contentShape": {
+        "narrativeSectionCount": 1,
+        "narrativeCharacterCount": 136,
+        "serviceCount": 4,
+        "productFeatureCount": 0,
+        "useCaseCount": 0,
+        "productTechSignal": false,
+        "projectCount": 2,
+        "authenticProjectImageCount": 1,
+        "authenticProjectImageCoverage": 0.5,
+        "totalContentUnitCount": 8
+      },
+      "ranking": [
+        {
+          "familyId": "visual-portfolio",
+          "eligible": true,
+          "score": 3,
+          "priority": 100,
+          "reasons": [
+            {
+              "code": "authentic_project_images_available",
+              "contribution": 1,
+              "evidenceContentIds": []
+            },
+            {
+              "code": "project_content_available",
+              "contribution": 2,
+              "evidenceContentIds": []
+            }
+          ]
+        }
+      ],
+      "selectedFamily": null,
+      "pageOrder": null,
+      "fallbackDiagnostics": [
+        {
+          "stage": "enrichment",
+          "code": "authentic_project_image_metadata_missing",
+          "path": "projects.1.imageUrl",
+          "pageRole": "project_grid"
+        }
+      ],
+      "pageCount": 0,
+      "coverage": "not_reached",
+      "preflight": "not_reached",
+      "deterministic": true,
+      "pdfGenerated": false,
+      "pdfByteSize": 0,
+      "exactA4": true,
+      "noPartialMixing": true,
+      "sourceOrderingPreserved": true,
+      "duplicateConsumption": false,
+      "provenance": null
+    }
+  ]
+}
