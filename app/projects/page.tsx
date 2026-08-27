@@ -199,7 +199,7 @@ setSuccessMessage(
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 px-6 py-12">
+    <main className="min-h-screen bg-gray-50 px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto max-w-4xl">
         <h1 className="text-4xl font-bold text-gray-900">
           Projects
@@ -209,7 +209,7 @@ setSuccessMessage(
           Add your projects and project photos.
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-8 rounded-2xl bg-white p-8 shadow-sm">
+        <form onSubmit={handleSubmit} className="mt-8 rounded-2xl bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-8 border-b border-gray-200 pb-5">
             <h2 className="text-2xl font-semibold text-gray-900">
               Add New Project
@@ -234,7 +234,7 @@ setSuccessMessage(
                 setSuccessMessage("");
               }}
               placeholder="e.g. New Cairo Marble Project"
-              className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-black"
+              className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-950 placeholder:text-gray-400 outline-none focus:border-black"
             />
           </div>
 
@@ -249,7 +249,7 @@ setSuccessMessage(
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               placeholder="e.g. Residential, Commercial"
-              className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-black"
+              className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-950 placeholder:text-gray-400 outline-none focus:border-black"
             />
           </div>
 
@@ -272,7 +272,7 @@ setSuccessMessage(
               }}
               placeholder="Describe the project..."
               rows={5}
-              className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-black"
+              className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-950 placeholder:text-gray-400 outline-none focus:border-black"
             />
           </div>
 

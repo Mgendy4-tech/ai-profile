@@ -2,6 +2,7 @@ import { validateGeneratedProfileSections, type GeneratedProfileSection } from "
 import { addApprovedServiceItem, addApprovedStructuredItem, deleteApprovedServiceItem, editApprovedSection, editApprovedServiceItem, moveApprovedServiceItem, validateApprovedStructure, type EditableProfileStructure } from "./profile-structure-editor";
 import { isolateNewCompanyState } from "./profile-state-isolation";
 import { validateAnalyzedProfileStructure } from "./profile-structure-boundary";
+import { normalizeCompanyData } from "./company-data";
 
 const assert: (condition: unknown, message?: string) => asserts condition = (condition, message = "Assertion failed") => { if (!condition) throw new Error(message); };
 let structure: EditableProfileStructure = { companyType: "Business Consulting & Advisory Services", recommendedSections: [
@@ -43,6 +44,19 @@ const isolated = isolateNewCompanyState({ name: "Previous Company", logoUrl: "da
 assert(isolated.companyChanged && isolated.projects.length === 0 && isolated.companyData.logoUrl === "" && isolated.clearKeys.includes("profileStructure"), "A new company must not inherit logo, projects, generated profile, or structure state.");
 const retained = isolateNewCompanyState({ name: "Previous Company", logoUrl: "data:old-logo" }, { name: "Northbridge Advisory", logoUrl: "data:new-logo" }, [], true);
 assert(retained.companyData.logoUrl === "data:new-logo", "An explicitly selected new logo must be retained.");
+const legacyCompany = normalizeCompanyData({ name: "Legacy Company", logoUrl: "data:legacy-logo", about: "Legacy about", activities: "Legacy activity", experience: "9" });
+assert(legacyCompany.logoUrl === "data:legacy-logo" && legacyCompany.companyType === "" && legacyCompany.industry === "" && legacyCompany.customerType === "" && legacyCompany.servicesProducts === "", "Older companyData must load with empty new fields without losing legacy values or logo.");
+const switched = isolateNewCompanyState(
+  { name: "Previous Company", logoUrl: "data:old-logo" },
+  { name: "New Company", logoUrl: "data:old-logo", companyType: "Old type", industry: "New industry", customerType: "Old customers", servicesProducts: "New services" },
+  [{ id: "old-project" }],
+  false,
+  new Set(["industry", "servicesProducts"]),
+);
+assert(switched.companyData.companyType === "" && switched.companyData.customerType === "" && switched.companyData.industry === "New industry" && switched.companyData.servicesProducts === "New services", "Switching companies must clear untouched business fields while retaining fields explicitly entered for the new company.");
+assert(switched.clearKeys.includes("generatedProfile") && switched.clearKeys.includes("profileStructure") && switched.projects.length === 0, "Switching companies must clear generated, approved-structure, family-decision source state, and projects.");
+const editedExisting = isolateNewCompanyState({ name: "Northbridge", industry: "Consulting" }, { name: "Northbridge", industry: "Business Consulting" }, [{ id: "retained-project" }], false);
+assert(!editedExisting.companyChanged && editedExisting.projects.length === 1 && editedExisting.clearKeys.includes("generatedProfile") && editedExisting.clearKeys.includes("authoredFamilyDecision") && editedExisting.clearKeys.includes("exportDecision"), "Editing semantic company fields must retain projects while invalidating stale generated and family-decision state.");
 const corporateAnalysis = validateAnalyzedProfileStructure({ companyType: "Business consulting firm", recommendedSections: structure.recommendedSections });
 assert(corporateAnalysis.valid, "A supported Corporate analyzed structure must pass before approval.");
 const unsupportedCorporateAnalysis = validateAnalyzedProfileStructure({ companyType: "Business consulting firm", recommendedSections: [...structure.recommendedSections, { id: "whyChoose", displayTitle: "Why choose us", description: "Unsupported required marketing content." }] });

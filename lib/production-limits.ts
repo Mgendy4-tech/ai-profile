@@ -64,7 +64,7 @@ const array = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 
 const modelCompany = (value: unknown) => {
   const company = record(value);
-  return { name: text(company.name), about: text(company.about), activities: text(company.activities), experience: text(company.experience) };
+  return { name: text(company.name), about: text(company.about), companyType: text(company.companyType), industry: text(company.industry), customerType: text(company.customerType), servicesProducts: text(company.servicesProducts), activities: text(company.activities), experience: text(company.experience) };
 };
 const modelProjects = (value: unknown) => array(value).map((entry) => {
   const project = record(entry);

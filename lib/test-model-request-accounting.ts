@@ -14,12 +14,13 @@ const actualLogo = `data:image/png;base64,${readFileSync(resolve("lib/test-fixtu
 // JPEG decoders permit trailing bytes; this remains a decodable logo while reproducing a safely sub-3-MiB upload whose data URL exceeds 256 KiB.
 const mobileLogo = `data:image/jpeg;base64,${Buffer.concat([readFileSync(resolve("lib/test-fixtures/logos/brand-wide.jpg")), Buffer.alloc(300 * 1024, 7)]).toString("base64")}`;
 const projectImage = `data:image/jpeg;base64,${Buffer.alloc(300 * 1024, 11).toString("base64")}`;
-const company = { name: "Northbridge Advisory", about: "Small advisory company profile.", activities: "Business consulting services.", experience: "", logoUrl: mobileLogo };
+const company = { name: "Northbridge Advisory", about: "Small advisory company profile.", companyType: "Business Consulting & Professional Services", industry: "Management Consulting", customerType: "B2B", servicesProducts: "Business Strategy Consulting, Operational Improvement", activities: "Business consulting services.", experience: "12", logoUrl: mobileLogo };
 const project = { id: "project:one", name: "One Project", category: "residential", description: "A small project description.", imageUrl: projectImage };
 
 const analysisPayload = createStructureAnalysisModelPayload({ company, projects: [], generatedProfile: { content: "x".repeat(400_000) }, profileStructure: { duplicated: true } });
 assert(!validateGenerationRequestSize(analysisPayload), "A small logo-only analysis payload must remain below the text-model request limit.");
 assert(!JSON.stringify(analysisPayload).includes("base64") && !("logoUrl" in analysisPayload.company), "Analysis model payload must exclude raw logo bytes and unrelated browser state.");
+assert(analysisPayload.company.companyType === company.companyType && analysisPayload.company.industry === company.industry && analysisPayload.company.customerType === company.customerType && analysisPayload.company.servicesProducts === company.servicesProducts, "New business metadata must reach structure analysis as semantic text.");
 
 const selectedSections = [
   { id: "about", displayTitle: "About Northbridge", description: "Describe the supplied company." },
@@ -28,6 +29,7 @@ const selectedSections = [
 const generationPayload = createProfileGenerationModelPayload({ company, projects: [], selectedSections, generatedProfile: { content: "x".repeat(400_000) } });
 assert(!validateGenerationRequestSize(generationPayload), "Small profile generation with a persisted logo must remain below the text-model request limit.");
 assert(!JSON.stringify(generationPayload).includes("base64") && !("logoUrl" in generationPayload.company), "Generation model payload must exclude raw logo bytes and generated-profile state.");
+assert(generationPayload.company.servicesProducts === company.servicesProducts, "Services/products metadata must reach profile generation as semantic text.");
 assert(generationPayload.selectedSections.map((section) => section.id).join("|") === "about|services", "Approved section identity and order must survive request projection.");
 
 const visualPayload = createProfileGenerationModelPayload({ company: { ...company, logoUrl: "" }, projects: [project], selectedSections });

@@ -3,14 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isolateNewCompanyState } from '@/lib/profile-state-isolation';
-
-type CompanyData = {
-  name: string;
-  logoUrl: string;
-  about: string;
-  activities: string;
-  experience: string;
-};
+import { emptyCompanyData, normalizeCompanyData, type CompanyData } from '@/lib/company-data';
 
 type Project = {
   id: string;
@@ -20,13 +13,7 @@ type Project = {
   imageUrl: string;
 };
 
-const emptyCompanyData: CompanyData = {
-  name: '',
-  logoUrl: '',
-  about: '',
-  activities: '',
-  experience: '',
-};
+const textFieldClass = 'mt-2 w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-950 placeholder:text-gray-400 outline-none focus:border-gray-900';
 
 const readImageFile = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -50,6 +37,7 @@ export default function CompanyPage() {
   const [isAddingProject, setIsAddingProject] = useState(true);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const logoExplicitlySelected = useRef(false);
+  const explicitlyEditedFields = useRef(new Set<keyof CompanyData>());
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -59,7 +47,7 @@ export default function CompanyPage() {
 
       if (savedCompanyData) {
         try {
-          setCompanyData({ ...emptyCompanyData, ...JSON.parse(savedCompanyData) });
+          setCompanyData(normalizeCompanyData(JSON.parse(savedCompanyData)));
         } catch {
           localStorage.removeItem('companyData');
         }
@@ -96,6 +84,7 @@ export default function CompanyPage() {
   }, []);
 
   const updateField = (field: keyof CompanyData, value: string) => {
+    explicitlyEditedFields.current.add(field);
     setCompanyData((currentData) => ({ ...currentData, [field]: value }));
     setErrorMessage('');
     setSuccessMessage('');
@@ -225,7 +214,7 @@ export default function CompanyPage() {
 
     let previousCompany: CompanyData | null = null;
     try { previousCompany = JSON.parse(localStorage.getItem('companyData') ?? 'null') as CompanyData | null; } catch { previousCompany = null; }
-    const isolated = isolateNewCompanyState(previousCompany, companyData, projects, logoExplicitlySelected.current);
+    const isolated = isolateNewCompanyState(previousCompany, companyData, projects, logoExplicitlySelected.current, explicitlyEditedFields.current);
     isolated.clearKeys.forEach((key) => localStorage.removeItem(key));
     const approvedCompanyData = isolated.companyData as CompanyData;
     const approvedProjects = isolated.projects as Project[];
@@ -243,7 +232,7 @@ setTimeout(() => {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 p-8">
+    <main className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="mx-auto max-w-3xl">
         <h1 className="text-3xl font-bold text-gray-900">
           Company Information
@@ -253,7 +242,7 @@ setTimeout(() => {
           Tell us about your company.
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6 rounded-xl bg-white p-8 shadow">
+        <form onSubmit={handleSubmit} className="mt-8 space-y-6 rounded-xl bg-white p-5 shadow sm:p-8">
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Company Name
@@ -264,7 +253,7 @@ setTimeout(() => {
               placeholder="e.g. ElShaarawy for Marble & Granite"
               value={companyData.name}
               onChange={(event) => updateField('name', event.target.value)}
-              className="mt-2 w-full rounded-lg border border-gray-300 p-3"
+              className={textFieldClass}
             />
           </div>
 
@@ -309,8 +298,28 @@ setTimeout(() => {
               rows={5}
               value={companyData.about}
               onChange={(event) => updateField('about', event.target.value)}
-              className="mt-2 w-full rounded-lg border border-gray-300 p-3"
+              className={textFieldClass}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Company Type <span className="font-normal text-gray-500">(optional)</span></label>
+            <input type="text" placeholder="e.g. Professional services company" value={companyData.companyType} onChange={(event) => updateField('companyType', event.target.value)} className={textFieldClass} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Industry <span className="font-normal text-gray-500">(optional)</span></label>
+            <input type="text" placeholder="e.g. Management Consulting" value={companyData.industry} onChange={(event) => updateField('industry', event.target.value)} className={textFieldClass} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Customer / Client Type <span className="font-normal text-gray-500">(optional)</span></label>
+            <input type="text" placeholder="e.g. B2B, consumers, public sector" value={companyData.customerType} onChange={(event) => updateField('customerType', event.target.value)} className={textFieldClass} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Services / Products <span className="font-normal text-gray-500">(optional)</span></label>
+            <textarea rows={4} placeholder="List the services or products you actually provide..." value={companyData.servicesProducts} onChange={(event) => updateField('servicesProducts', event.target.value)} className={textFieldClass} />
           </div>
 
           <div>
@@ -323,7 +332,7 @@ setTimeout(() => {
               placeholder="e.g. Marble & Granite, Construction"
               value={companyData.activities}
               onChange={(event) => updateField('activities', event.target.value)}
-              className="mt-2 w-full rounded-lg border border-gray-300 p-3"
+              className={textFieldClass}
             />
           </div>
 
@@ -337,7 +346,7 @@ setTimeout(() => {
               placeholder="e.g. 20"
               value={companyData.experience}
               onChange={(event) => updateField('experience', event.target.value)}
-              className="mt-2 w-full rounded-lg border border-gray-300 p-3"
+              className={textFieldClass}
             />
           </div>
 
@@ -363,7 +372,7 @@ setTimeout(() => {
                 value={projectName}
                 onChange={(event) => setProjectName(event.target.value)}
                 placeholder="e.g. New Cairo Marble Project"
-                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                className={`${textFieldClass} px-4 py-3`}
               />
 
               <label className="mt-4 block text-sm font-medium text-gray-900">
@@ -374,7 +383,7 @@ setTimeout(() => {
                 value={category}
                 onChange={(event) => setCategory(event.target.value)}
                 placeholder="e.g. Residential, Commercial"
-                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                className={`${textFieldClass} px-4 py-3`}
               />
 
               <label className="mt-4 block text-sm font-medium text-gray-900">
@@ -385,7 +394,7 @@ setTimeout(() => {
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder="Describe the project..."
                 rows={4}
-                className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-black"
+                className={`${textFieldClass} px-4 py-3`}
               />
 
               <label className="mt-4 block text-sm font-medium text-gray-900">

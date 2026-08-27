@@ -77,14 +77,7 @@ import {
   type StructureEditResult,
 } from "@/lib/profile-structure-editor";
 import { analyzedStructureErrorMessage, validateAnalyzedProfileStructure } from "@/lib/profile-structure-boundary";
-
-type CompanyData = {
-  name: string;
-  logoUrl?: string;
-  about: string;
-  activities: string;
-  experience: string;
-};
+import { companySemanticText, companySourceMaterial, normalizeCompanyData, type CompanyData } from "@/lib/company-data";
 
 type Project = {
   id?: string;
@@ -441,7 +434,7 @@ const handleAnalyze = async () => {
       throw new Error("Please save your company information first.");
     }
 
-    const companyData = JSON.parse(savedCompanyData) as CompanyData;
+    const companyData = normalizeCompanyData(JSON.parse(savedCompanyData));
 
     if (!companyData.name?.trim() || !companyData.about?.trim()) {
       throw new Error("Please complete your company information first.");
@@ -460,12 +453,7 @@ const handleAnalyze = async () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        company: {
-          name: companyData.name,
-          about: companyData.about,
-          activities: companyData.activities,
-          experience: companyData.experience,
-        },
+        company: companySemanticText(companyData),
         projects: projects.map(({ imageUrl, ...project }) => project),
       }),
     });
@@ -519,7 +507,7 @@ setStructureConfirmed(false);
           return;
         }
 
-        const companyData = JSON.parse(savedCompanyData) as CompanyData;
+        const companyData = normalizeCompanyData(JSON.parse(savedCompanyData));
         if (!companyData.name?.trim() || !companyData.about?.trim()) {
           setProfile(null);
           setErrorMessage("Please complete your company information before generating a profile.");
@@ -567,12 +555,7 @@ const response = await fetch("/api/generate-profile", {
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
-  company: {
-    name: companyData.name,
-    about: companyData.about,
-    activities: companyData.activities,
-    experience: companyData.experience,
-  },
+  company: companySemanticText(companyData),
 
   selectedSections,
 
@@ -590,12 +573,8 @@ const validatedSections = validateGeneratedProfileSections(
   selectedSections,
   data.sections,
   {
-    serviceSourceMaterial: [
-      companyData.about,
-      companyData.activities,
-      companyData.experience,
-    ],
-    productSourceMaterial: [companyData.about, companyData.activities, companyData.experience],
+    serviceSourceMaterial: companySourceMaterial(companyData),
+    productSourceMaterial: companySourceMaterial(companyData),
     productTech: /saas|software|platform|technology|tech|digital product|ai company/i.test(data.companyType),
   },
 );
@@ -719,7 +698,7 @@ setProfile({
         try {
           const parsedCompanyData = JSON.parse(savedCompanyData);
           if (parsedCompanyData && typeof parsedCompanyData === "object") {
-            companyData = parsedCompanyData;
+            companyData = normalizeCompanyData(parsedCompanyData);
           }
         } catch {
           companyData = { name: profile.companyName, logoUrl: profile.logoUrl };
@@ -810,9 +789,7 @@ setProfile({
       }
 
       const visualCompany = {
-        name: companyData.name,
-        about: companyData.about,
-        activities: companyData.activities,
+        ...companySemanticText(normalizeCompanyData(companyData)),
         yearsOfExperience: companyData.experience,
       };
 
@@ -852,9 +829,19 @@ setProfile({
         const plannerData = await postJsonWithTimeout<unknown>(
           "/api/plan-pdf-layout",
           {
-            company: companyData,
-            profile,
-            projects: profile.projects,
+            company: companySemanticText(normalizeCompanyData(companyData)),
+            profile: {
+              companyName: profile.companyName,
+              companyType: profile.companyType,
+              sections: profile.sections.map((section) => ({
+                id: section.id,
+                title: section.title,
+                description: section.description,
+                content: section.content,
+                items: section.items.map((item) => ({ id: item.id, name: item.name, description: item.description, sourceEvidence: item.sourceEvidence })),
+              })),
+            },
+            projects: profile.projects.map((project) => ({ name: project.name, description: project.description })),
             contextualVisuals: selectedContextualVisuals,
           },
           30000
@@ -2020,7 +2007,7 @@ setProfile({
   </p>
 )}              {exportMessage && <p role={exportMessageTone === "error" ? "alert" : "status"} className={`px-5 pt-3 text-sm sm:px-7 ${exportMessageTone === "error" ? "text-red-600" : exportMessageTone === "success" ? "text-green-600" : "text-gray-600"}`}>{exportMessage}</p>}
 
-              <div className="mt-8 flex flex-wrap gap-3 border-t border-gray-200 px-5 pb-7 pt-6 sm:px-7">
+              <div className="mt-8 flex flex-col gap-3 border-t border-gray-200 px-5 pb-7 pt-6 sm:flex-row sm:flex-wrap sm:px-7">
                 <Link href="/company" className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800">
                   Edit Company Data
                 </Link>
@@ -2040,6 +2027,15 @@ setProfile({
                     />
                   )}
                   {loading ? "Regenerating..." : "Regenerate Profile"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportPdf}
+                  disabled={isExporting}
+                  aria-label="Download company profile PDF"
+                  className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {isExporting ? "Exporting..." : "Download PDF"}
                 </button>
               </div>
             </div>
