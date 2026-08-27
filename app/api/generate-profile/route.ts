@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { generatedSectionsErrorMessage, isSelectedServicesSection, structuredSectionContract, validateGeneratedProfileSections } from "@/lib/generated-profile-boundary";
 import { isProductTechCompanyType } from "@/lib/authored-templates/section-role-normalization";
-import { validateGenerationRequestSize } from "@/lib/production-limits";
+import { createProfileGenerationModelPayload, validateGenerationRequestSize } from "@/lib/production-limits";
 import { emitProductionTelemetry } from "@/lib/production-telemetry";
 
 const client = new OpenAI({
@@ -13,12 +13,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const requestLimit = validateGenerationRequestSize(body);
+    const modelPayload = createProfileGenerationModelPayload(body);
+    const requestLimit = validateGenerationRequestSize(modelPayload);
     if (requestLimit) return Response.json({ error: requestLimit.message, code: requestLimit.code, retryable: false }, { status: 413 });
 
 
 
-    const { company, projects, selectedSections } = body;
+    const { company, projects, selectedSections } = modelPayload;
 
 if (!company?.name || !company?.about) {
   return Response.json(

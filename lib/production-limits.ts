@@ -58,6 +58,44 @@ export const validateAuthoredImageOperationalLimits = (
 
 export const validateGenerationRequestSize = (value: unknown): OperationalLimitIssue | null => new TextEncoder().encode(JSON.stringify(value)).byteLength > PRODUCTION_V1_LIMITS.generationRequestBytes ? { code: "generation_request_limit", path: "request", message: "This profile is too large to generate safely. Shorten the source content or remove optional sections." } : null;
 
+const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" ? value as Record<string, unknown> : {};
+const text = (value: unknown) => typeof value === "string" ? value : "";
+const array = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
+
+const modelCompany = (value: unknown) => {
+  const company = record(value);
+  return { name: text(company.name), about: text(company.about), activities: text(company.activities), experience: text(company.experience) };
+};
+const modelProjects = (value: unknown) => array(value).map((entry) => {
+  const project = record(entry);
+  return { name: text(project.name), category: text(project.category), description: text(project.description).slice(0, 500) };
+});
+
+/** Exact text-model input for structure analysis; embedded image bytes and browser state are intentionally excluded. */
+export const createStructureAnalysisModelPayload = (value: unknown) => {
+  const request = record(value);
+  return { company: modelCompany(request.company), projects: modelProjects(request.projects) };
+};
+
+/** Exact text-model input for profile generation; source IDs and approved item identity are preserved. */
+export const createProfileGenerationModelPayload = (value: unknown) => {
+  const request = record(value);
+  return {
+    company: modelCompany(request.company),
+    projects: modelProjects(request.projects),
+    selectedSections: array(request.selectedSections).map((entry) => {
+      const section = record(entry);
+      return {
+        id: text(section.id),
+        displayTitle: text(section.displayTitle),
+        description: text(section.description),
+        ...(typeof section.semanticRole === "string" ? { semanticRole: section.semanticRole } : {}),
+        ...(Array.isArray(section.items) ? { items: section.items.map((itemValue) => { const item = record(itemValue); return { id: text(item.id), title: text(item.title), description: text(item.description) }; }) } : {}),
+      };
+    }),
+  };
+};
+
 export const validateRenderedDocumentLimits = (pageCount: number, pdfBytes: number): readonly OperationalLimitIssue[] => [
   ...(pageCount > PRODUCTION_V1_LIMITS.pages ? [{ code: "page_count_limit" as const, path: "document.pages", message: `V1 exports support at most ${PRODUCTION_V1_LIMITS.pages} pages.` }] : []),
   ...(pdfBytes > PRODUCTION_V1_LIMITS.pdfBytes ? [{ code: "pdf_byte_limit" as const, path: "document.bytes", message: "The generated PDF exceeds the 25 MB browser export limit." }] : []),

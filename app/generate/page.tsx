@@ -460,7 +460,12 @@ const handleAnalyze = async () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        company: companyData,
+        company: {
+          name: companyData.name,
+          about: companyData.about,
+          activities: companyData.activities,
+          experience: companyData.experience,
+        },
         projects: projects.map(({ imageUrl, ...project }) => project),
       }),
     });

@@ -74,7 +74,7 @@ export const normalizeProductionSectionRoles = (
       diagnostics.push({ code: "unknown_semantic_role", path: `sections.${index}.id`, sectionId: section.id, role: null });
       return;
     }
-    const role = options.productTech && (matches[0] === "services" || matches[0] === "expertise") ? "features" : !options.corporateServices && matches[0] === "expertise" ? "services" : matches[0];
+    const role = options.productTech && (matches[0] === "services" || matches[0] === "expertise") ? "features" : matches[0];
     if (roleOwners.has(role)) {
       diagnostics.push({ code: "duplicate_role_candidate", path: `sections.${index}.id`, sectionId: section.id, role });
       return;

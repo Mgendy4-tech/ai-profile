@@ -13,12 +13,14 @@ export type VisualPortfolioPlanningInput = {
   cover: CoverContent;
   narrative: NarrativeContent;
   capabilities: CapabilitiesContent;
+  details?: readonly NarrativeContent[];
   projects: readonly PortfolioProjectContent[];
 };
 
 export type VisualPortfolioPlanningIssue =
   | { code: "project_count_unsupported"; path: "projects"; message: string }
   | { code: "normalized_project_mismatch"; path: "units" | "projects"; message: string }
+  | { code: "normalized_detail_mismatch"; path: "units" | "details"; message: string }
   | CoverageIssue
   | { code: "invalid_document_plan"; path: string; message: string };
 
@@ -44,6 +46,11 @@ export const createVisualPortfolioDocumentPlan = (
   const company = input.units.find((unit) => unit.kind === "company_identity");
   const narrative = input.units.find((unit) => unit.kind === "narrative_section");
   const services = input.units.filter((unit) => unit.kind === "service_capability");
+  const normalizedDetails = input.units.filter((unit) => unit.kind === "corporate_expertise" || unit.kind === "corporate_approach" || unit.kind === "corporate_supporting_narrative");
+  const details = input.details ?? [];
+  if (normalizedDetails.length !== details.length || normalizedDetails.some((unit, index) => unit.id !== details[index]?.contentId)) {
+    return { compatible: false, plan: null, issues: [{ code: "normalized_detail_mismatch", path: "units", message: "Normalized detail units must match candidate details exactly in source order." }] };
+  }
   const pages: AuthoredDocumentPlan["pages"][number][] = [
     { pageId: "cover", templateId: "editorial-interiors-v1.cover", pageRole: "cover", candidate: input.cover, claims: [
       ...(company ? [{ contentId: company.id, mode: "consume" as const, slotId: "companyName" }] : []),
@@ -51,6 +58,7 @@ export const createVisualPortfolioDocumentPlan = (
     ] },
     { pageId: "narrative", templateId: selectEditorialInteriorsNarrativeTemplate(input.narrative).id, pageRole: "narrative", candidate: input.narrative, claims: narrative ? [{ contentId: narrative.id, mode: "consume", slotId: "body" }] : [] },
     { pageId: "capabilities", templateId: "editorial-interiors-v1.capabilities", pageRole: "capabilities", candidate: input.capabilities, claims: services.map((service, index) => ({ contentId: service.id, mode: "consume", slotId: `capabilities.${index}` })) },
+    ...details.map((detail, index) => ({ pageId: `detail:${index}`, templateId: selectEditorialInteriorsNarrativeTemplate(detail).id, pageRole: "narrative" as const, candidate: detail, claims: [{ contentId: detail.contentId, mode: "consume" as const, slotId: "body" }] })),
   ];
 
   const addProjectPage = (templateId: string, pageRole: "project_feature" | "project_grid" | "continuation", projects: readonly PortfolioProjectContent[], sequence: number) => {

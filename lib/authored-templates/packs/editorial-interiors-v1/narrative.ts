@@ -156,6 +156,6 @@ export const editorialInteriorsSparseNarrativeTemplate: AuthoredPageTemplate<Nar
 };
 
 export const selectEditorialInteriorsNarrativeTemplate = (input: NarrativeContent) =>
-  !input.callout && !input.secondaryBlock && input.body.length <= 320
+  !input.callout && !input.secondaryBlock && editorialInteriorsSparseNarrativeTemplate.prepare(input).compatible
     ? editorialInteriorsSparseNarrativeTemplate
     : editorialInteriorsNarrativeTemplate;

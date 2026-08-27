@@ -8,6 +8,7 @@ import type {
 } from "../../types";
 import type { CoverContent } from "./content";
 import { drawContainedOptionalLogo, preparedOptionalLogo } from "../logo";
+import { coverCrop } from "./portfolio-project-pages";
 import {
   clipAndDrawImage,
   createEditorialInteriorsMeasurementContext,
@@ -49,7 +50,7 @@ export const coverEnvelope: ContentEnvelope = {
       allowedRoles: ["project_image"],
       allowedProvenances: ["user_upload", "ai_generated_fictional_poc_test_asset"],
       minimumAspectRatio: visual.crops.cover.sourceAspectRange.minimum,
-      maximumAspectRatio: visual.crops.cover.sourceAspectRange.maximum,
+      maximumAspectRatio: 1.5,
     },
     {
       id: "logo",
@@ -76,7 +77,7 @@ const render = (
 ): TemplateRenderAudit => {
   paintPaper(pdf);
   const hero = getPreparedImage(instance, "hero");
-  clipAndDrawImage(pdf, hero.source.source, hero.source.format, visual.crops.cover.frame, visual.crops.cover.image);
+  clipAndDrawImage(pdf, hero.source.source, hero.source.format, visual.crops.cover.frame, hero.aspectRatio <= 0.8 ? visual.crops.cover.image : coverCrop(visual.crops.cover.frame, hero.aspectRatio));
   drawContainedOptionalLogo(pdf, preparedOptionalLogo(instance), { x: 139, y: 18, width: 53, height: 14 }, visual.palette.paper);
 
   const documentLabel = getPreparedText(instance, "documentLabel");

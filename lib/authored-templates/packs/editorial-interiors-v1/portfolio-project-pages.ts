@@ -10,7 +10,7 @@ export type PortfolioProjectPageContent = { contentId: string; projects: readonl
 type Cell = { image: { x: number; y: number; width: number; height: number }; title: { x: number; y: number; width: number }; description: { x: number; y: number; width: number }; titleSize: number; descriptionLines: number };
 type FixedDefinition = { id: string; role: "project_grid" | "continuation"; label: string; count: 1 | 2 | 3 | 4; cells: readonly Cell[] };
 
-const coverCrop = (frame: Cell["image"], sourceAspectRatio: number) => {
+export const coverCrop = (frame: Cell["image"], sourceAspectRatio: number) => {
   const frameAspectRatio = frame.width / frame.height;
   if (sourceAspectRatio >= frameAspectRatio) {
     const width = frame.height * sourceAspectRatio;

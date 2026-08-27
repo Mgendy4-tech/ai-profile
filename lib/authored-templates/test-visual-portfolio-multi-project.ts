@@ -128,7 +128,7 @@ const sections = [
   { id: "projects", title: "Projects", description: "Projects section", content: "Portfolio", items: [] },
 ];
 const normalized = normalizeProductionSectionRoles(sections);
-assert(normalized.sections.map((entry) => entry.role).join("|") === "narrative|services|projects" && normalized.diagnostics.length === 0, "Known production IDs must normalize deterministically.");
+assert(normalized.sections.map((entry) => entry.role).join("|") === "narrative|expertise|projects" && normalized.diagnostics.length === 0, "Known production IDs must normalize deterministically without collapsing expertise into services.");
 const normalizationFailures = normalizeProductionSectionRoles([...sections, { id: "about-services", title: "Ambiguous", description: "", content: "", items: [] }, { id: "team", title: "Team", description: "", content: "", items: [] }, { id: "overview", title: "Second narrative", description: "", content: "", items: [] }]);
 assert(normalizationFailures.diagnostics.map((entry) => entry.code).join("|") === "ambiguous_semantic_role|unknown_semantic_role|duplicate_role_candidate", "Ambiguous, unknown, and duplicate roles must have stable ordered diagnostics.");
 

@@ -7,6 +7,7 @@ import type {
   TemplateRenderAudit,
 } from "../../types";
 import type { ProjectFeatureContent } from "./content";
+import { coverCrop } from "./portfolio-project-pages";
 import {
   clipAndDrawImage,
   createEditorialInteriorsMeasurementContext,
@@ -48,7 +49,7 @@ export const projectFeatureEnvelope: ContentEnvelope = {
       allowedRoles: ["project_image"],
       allowedProvenances: ["user_upload", "ai_generated_fictional_poc_test_asset"],
       minimumAspectRatio: visual.crops.projectFeature.sourceAspectRange.minimum,
-      maximumAspectRatio: visual.crops.projectFeature.sourceAspectRange.maximum,
+      maximumAspectRatio: 1.5,
     },
     ...([0, 1, 2] as const).flatMap((index) => [
       textSlot(`info${index}Label`, `info.${index}.label`, "helvetica", "bold", 6.8, 48, 1, false),
@@ -100,7 +101,7 @@ const render = (
     hero.source.source,
     hero.source.format,
     visual.crops.projectFeature.frame,
-    visual.crops.projectFeature.image,
+    hero.aspectRatio <= 0.8 ? visual.crops.projectFeature.image : coverCrop(visual.crops.projectFeature.frame, hero.aspectRatio),
   );
 
   const renderedTextBySlot: Record<string, readonly string[]> = {};
