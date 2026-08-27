@@ -1,6 +1,6 @@
 import { validateGeneratedProfileSections, type GeneratedProfileSection } from "./generated-profile-boundary";
 import { addApprovedServiceItem, addApprovedStructuredItem, deleteApprovedServiceItem, editApprovedSection, editApprovedServiceItem, moveApprovedServiceItem, validateApprovedStructure, type EditableProfileStructure } from "./profile-structure-editor";
-import { isolateNewCompanyState } from "./profile-state-isolation";
+import { clearInheritedAssetsForIdentityEdit, isolateNewCompanyState, resolveExportCompanyState } from "./profile-state-isolation";
 import { validateAnalyzedProfileStructure } from "./profile-structure-boundary";
 import { normalizeCompanyData } from "./company-data";
 
@@ -44,6 +44,14 @@ const isolated = isolateNewCompanyState({ name: "Previous Company", logoUrl: "da
 assert(isolated.companyChanged && isolated.projects.length === 0 && isolated.companyData.logoUrl === "" && isolated.clearKeys.includes("profileStructure"), "A new company must not inherit logo, projects, generated profile, or structure state.");
 const retained = isolateNewCompanyState({ name: "Previous Company", logoUrl: "data:old-logo" }, { name: "Northbridge Advisory", logoUrl: "data:new-logo" }, [], true);
 assert(retained.companyData.logoUrl === "data:new-logo", "An explicitly selected new logo must be retained.");
+const immediateSwitch = clearInheritedAssetsForIdentityEdit("WinX", { name: "Aurelia Interiors", logoUrl: "data:winx-logo", about: "Aurelia source content" });
+assert(immediateSwitch.logoUrl === "", "Changing company identity in the form must clear the inherited logo before save.");
+const sameCompanyEdit = clearInheritedAssetsForIdentityEdit("Aurelia Interiors", { name: " Aurelia   Interiors ", logoUrl: "data:aurelia-logo", industry: "Interior design" });
+assert(sameCompanyEdit.logoUrl === "data:aurelia-logo", "Semantic edits for the same normalized company identity must preserve its logo.");
+const stalePersistedExport = resolveExportCompanyState({ name: "Aurelia Interiors", logoUrl: "" }, { name: "WinX", logoUrl: "data:winx-logo" });
+assert(stalePersistedExport.name === "Aurelia Interiors" && stalePersistedExport.logoUrl === "", "Aurelia export must reject persisted WinX identity and logo state.");
+const ownedPersistedExport = resolveExportCompanyState({ name: "Aurelia Interiors", logoUrl: "data:aurelia-logo" }, { name: "Aurelia Interiors", logoUrl: "data:aurelia-logo", industry: "Interior design" });
+assert(ownedPersistedExport.logoUrl === "data:aurelia-logo", "An explicitly selected Aurelia logo must survive generate/export identity resolution.");
 const legacyCompany = normalizeCompanyData({ name: "Legacy Company", logoUrl: "data:legacy-logo", about: "Legacy about", activities: "Legacy activity", experience: "9" });
 assert(legacyCompany.logoUrl === "data:legacy-logo" && legacyCompany.companyType === "" && legacyCompany.industry === "" && legacyCompany.customerType === "" && legacyCompany.servicesProducts === "", "Older companyData must load with empty new fields without losing legacy values or logo.");
 const switched = isolateNewCompanyState(

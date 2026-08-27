@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { isolateNewCompanyState } from '@/lib/profile-state-isolation';
+import { clearInheritedAssetsForIdentityEdit, isolateNewCompanyState, isSameCompanyIdentity } from '@/lib/profile-state-isolation';
 import { emptyCompanyData, normalizeCompanyData, type CompanyData } from '@/lib/company-data';
 
 type Project = {
@@ -37,6 +37,7 @@ export default function CompanyPage() {
   const [isAddingProject, setIsAddingProject] = useState(true);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const logoExplicitlySelected = useRef(false);
+  const loadedCompanyName = useRef('');
   const explicitlyEditedFields = useRef(new Set<keyof CompanyData>());
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -47,7 +48,9 @@ export default function CompanyPage() {
 
       if (savedCompanyData) {
         try {
-          setCompanyData(normalizeCompanyData(JSON.parse(savedCompanyData)));
+          const normalized = normalizeCompanyData(JSON.parse(savedCompanyData));
+          loadedCompanyName.current = normalized.name;
+          setCompanyData(normalized);
         } catch {
           localStorage.removeItem('companyData');
         }
@@ -85,7 +88,17 @@ export default function CompanyPage() {
 
   const updateField = (field: keyof CompanyData, value: string) => {
     explicitlyEditedFields.current.add(field);
-    setCompanyData((currentData) => ({ ...currentData, [field]: value }));
+    const next = { ...companyData, [field]: value };
+    if (field === 'name' && !isSameCompanyIdentity(loadedCompanyName.current, value)) {
+      logoExplicitlySelected.current = false;
+      setProjects([]);
+      setEditingProjectId(null);
+      setImageUrl('');
+      setImagePreview('');
+      setCompanyData(clearInheritedAssetsForIdentityEdit(loadedCompanyName.current, next) as CompanyData);
+    } else {
+      setCompanyData(next);
+    }
     setErrorMessage('');
     setSuccessMessage('');
   };
@@ -220,6 +233,8 @@ export default function CompanyPage() {
     const approvedProjects = isolated.projects as Project[];
     setCompanyData(approvedCompanyData);
     setProjects(approvedProjects);
+    loadedCompanyName.current = approvedCompanyData.name;
+    logoExplicitlySelected.current = false;
     localStorage.setItem('companyData', JSON.stringify(approvedCompanyData));
     localStorage.setItem('projectsData', JSON.stringify(approvedProjects));
 

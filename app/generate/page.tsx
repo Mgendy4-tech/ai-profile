@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import jsPDF from "jspdf";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   BrandAnalysis,
   PageCompositionPlan,
@@ -41,7 +41,7 @@ import {
 } from "@/lib/visual-system/pdf-project-composition";
 import type { PDFCompositionFamily } from "@/lib/visual-system/pdf-art-direction";
 import { resolvePDFCreditPlacement } from "@/lib/visual-system/pdf-image-credits";
-import { validateRenderedDocumentLimits } from "@/lib/production-limits";
+import { validateAuthoredImageOperationalLimits, validateRenderedDocumentLimits } from "@/lib/production-limits";
 import { classifyAuthoredFallbackReason, routeEditorialInteriorsV1Export } from "@/lib/authored-templates/export-orchestrator";
 import { emitProductionTelemetry } from "@/lib/production-telemetry";
 import {
@@ -78,6 +78,9 @@ import {
 } from "@/lib/profile-structure-editor";
 import { analyzedStructureErrorMessage, validateAnalyzedProfileStructure } from "@/lib/profile-structure-boundary";
 import { companySemanticText, companySourceMaterial, normalizeCompanyData, type CompanyData } from "@/lib/company-data";
+import { resolveExportCompanyState } from "@/lib/profile-state-isolation";
+import { createGenerationAttemptGuard, generationProgressMessage, type GenerationOperation } from "@/lib/generation-progress";
+import { optimizeAuthoredProjectImages } from "@/lib/authored-image-optimization";
 
 type Project = {
   id?: string;
@@ -396,12 +399,22 @@ const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
 const [editingSectionTitle, setEditingSectionTitle] = useState("");
 const [editingSectionDescription, setEditingSectionDescription] = useState("");
 const [loading, setLoading] = useState(false);
+  const [loadingOperation, setLoadingOperation] = useState<GenerationOperation>("analysis");
+  const [loadingElapsedSeconds, setLoadingElapsedSeconds] = useState(0);
+  const generationAttemptGuard = useRef(createGenerationAttemptGuard());
   const [isExporting, setIsExporting] = useState(false);
   const exportAttemptGuard = useRef(createExportAttemptGuard());
   const [errorMessage, setErrorMessage] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
   const [exportMessage, setExportMessage] = useState("");
   const [exportMessageTone, setExportMessageTone] = useState<"status" | "success" | "error">("status");
+
+useEffect(() => {
+  if (!loading) return;
+  const startedAt = Date.now();
+  const timer = window.setInterval(() => setLoadingElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+  return () => window.clearInterval(timer);
+}, [loading, loadingOperation]);
 
 const persistStructureSnapshot = (structure: ProfileStructure, sectionIds: readonly string[] = selectedSectionIds) => {
   const rawCompany = localStorage.getItem("companyData");
@@ -424,6 +437,9 @@ const applyStructureEdit = (result: StructureEditResult) => {
 };
 
 const handleAnalyze = async () => {
+  if (!generationAttemptGuard.current.tryStart()) return;
+  setLoadingOperation("analysis");
+  setLoadingElapsedSeconds(0);
   setLoading(true);
   setErrorMessage("");
 
@@ -487,11 +503,15 @@ setStructureConfirmed(false);
         : "Failed to analyze company structure.",
     );
   } finally {
+    generationAttemptGuard.current.finish();
     setLoading(false);
   }
 };
 
   const handleGenerate = () => {
+    if (!generationAttemptGuard.current.tryStart()) return;
+    setLoadingOperation("generation");
+    setLoadingElapsedSeconds(0);
     setLoading(true);
     setErrorMessage("");
     setCopyMessage("");
@@ -633,6 +653,7 @@ setProfile({
         setProfile(null);
         setErrorMessage(error instanceof Error ? error.message : "We could not generate a complete company profile.");
       } finally {
+        generationAttemptGuard.current.finish();
         setLoading(false);
       }
     }, 400);
@@ -689,20 +710,21 @@ setProfile({
       let selectedContextualVisuals: SelectedContextualVisual[] = [];
       let pdfBrandAnalysis: BrandAnalysis | null = null;
 
-      let companyData: Partial<CompanyData> = {
+      const generatedCompanyData: Partial<CompanyData> = {
         name: profile.companyName,
         logoUrl: profile.logoUrl,
       };
+      let companyData: Partial<CompanyData> = generatedCompanyData;
       const savedCompanyData = localStorage.getItem("companyData");
 
       if (savedCompanyData) {
         try {
           const parsedCompanyData = JSON.parse(savedCompanyData);
           if (parsedCompanyData && typeof parsedCompanyData === "object") {
-            companyData = normalizeCompanyData(parsedCompanyData);
+            companyData = resolveExportCompanyState(generatedCompanyData, normalizeCompanyData(parsedCompanyData));
           }
         } catch {
-          companyData = { name: profile.companyName, logoUrl: profile.logoUrl };
+          companyData = generatedCompanyData;
         }
       }
 
@@ -740,6 +762,10 @@ setProfile({
         }
       }
 
+      const originalImageIssues = validateAuthoredImageOperationalLimits(companyData, authoredProjects);
+      const optimizedAuthoredProjects = originalImageIssues.length === 0
+        ? (await optimizeAuthoredProjectImages(authoredProjects)).projects
+        : authoredProjects;
       const authoredDecision = await routeEditorialInteriorsV1Export({
         company: {
           name: typeof companyData.name === "string" ? companyData.name : profile.companyName,
@@ -753,7 +779,7 @@ setProfile({
           companyType: profile.companyType,
           sections: profile.sections,
         },
-        projects: authoredProjects,
+        projects: optimizedAuthoredProjects,
       });
       if (process.env.NODE_ENV !== "production") {
         console.debug("[authored-export-decision]", {
@@ -1632,12 +1658,13 @@ setProfile({
               className="mx-auto block h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-900"
             />
             <h2 className="mt-5 text-xl font-semibold text-gray-900">
-              {profileStructure || profile
-                ? "Generating Company Profile"
-                : "Analyzing Company Information"}
+              {loadingOperation === "generation" ? "Generating Company Profile" : "Analyzing Company Information"}
             </h2>
-            <p className="mt-2 text-sm leading-6 text-gray-600">
-              Analyzing your company information and projects...
+            <p className="mt-3 text-sm font-medium leading-6 text-gray-700">
+              This usually takes around 2–3 minutes. Please keep this page open.
+            </p>
+            <p role="status" aria-live="polite" aria-atomic="true" className="mt-3 min-h-6 text-sm leading-6 text-gray-600">
+              {generationProgressMessage(loadingOperation, loadingElapsedSeconds)}
             </p>
           </div>
         </div>

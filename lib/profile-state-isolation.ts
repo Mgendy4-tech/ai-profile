@@ -3,6 +3,23 @@ export type NewCompanyIsolationResult = { companyData: Record<string, unknown>; 
 
 const identity = (value: string | undefined) => (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
+export const isSameCompanyIdentity = (left: string | undefined, right: string | undefined) =>
+  Boolean(identity(left)) && identity(left) === identity(right);
+
+export const clearInheritedAssetsForIdentityEdit = <T extends Record<string, unknown> & { name?: string; logoUrl?: string }>(
+  loadedCompanyName: string,
+  nextCompany: T,
+) => isSameCompanyIdentity(loadedCompanyName, nextCompany.name)
+  ? nextCompany
+  : { ...nextCompany, logoUrl: "" };
+
+export const resolveExportCompanyState = <T extends StoredCompanyIdentity>(
+  generatedCompany: T,
+  persistedCompany: StoredCompanyIdentity | null,
+): T | StoredCompanyIdentity => persistedCompany && isSameCompanyIdentity(generatedCompany.name, persistedCompany.name)
+  ? persistedCompany
+  : generatedCompany;
+
 export const isolateNewCompanyState = (
   previous: StoredCompanyIdentity | null,
   next: Record<string, unknown> & { name?: string; logoUrl?: string },
