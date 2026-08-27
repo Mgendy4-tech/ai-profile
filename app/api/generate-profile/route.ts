@@ -3,6 +3,7 @@ import { generatedSectionsErrorMessage, isSelectedServicesSection, structuredSec
 import { isProductTechCompanyType } from "@/lib/authored-templates/section-role-normalization";
 import { createProfileGenerationModelPayload, validateGenerationRequestSize } from "@/lib/production-limits";
 import { emitProductionTelemetry } from "@/lib/production-telemetry";
+import { approvedSectionManifest, semanticCoverageContract } from "@/lib/generated-profile-prompt-contract";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -33,7 +34,7 @@ const sections = Array.isArray(selectedSections)
   : [];
 const serviceSections = sections.filter(isSelectedServicesSection);
 const productSections = sections.filter((section: { id: string; displayTitle: string; description: string }) => { const contract = structuredSectionContract(section); return contract && contract.kind !== "service"; });
-const serviceSourceMaterial = [company.about, company.activities, company.experience]
+const serviceSourceMaterial = [company.about, company.companyType, company.industry, company.customerType, company.servicesProducts, company.activities, company.experience]
   .filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
 const serviceContract = serviceSections.length === 0 ? "" : `
 
@@ -81,6 +82,11 @@ ${JSON.stringify(
 Approved Profile Structure:
 ${JSON.stringify(sections, null, 2)}
 
+APPROVED SECTION MANIFEST — return every entry exactly once, in this order, with these exact IDs and titles:
+${approvedSectionManifest(sections)}
+
+${semanticCoverageContract(company)}
+
 IMPORTANT RULES:
 
 1. Generate content ONLY for the approved sections listed above.
@@ -106,6 +112,8 @@ IMPORTANT RULES:
 11. Write clear, professional B2B company-profile English.
 
 12. The profile should feel specifically written for this company, not like a generic template.
+
+13. The sections array length must be exactly ${sections.length}. Emit every approved manifest entry exactly once and in manifest order. Never translate, rename, normalize, omit, or duplicate an approved section ID or title.
 
 ${serviceContract}
 ${productContract}
@@ -184,7 +192,7 @@ Do not return explanations outside the JSON.
       );
     }
 
-    const validatedSections = validateGeneratedProfileSections(sections, profile?.sections, { serviceSourceMaterial, productSourceMaterial: serviceSourceMaterial, productTech: isProductTechCompanyType(profile?.companyType ?? "") });
+    const validatedSections = validateGeneratedProfileSections(sections, profile?.sections, { serviceSourceMaterial, productSourceMaterial: serviceSourceMaterial, productTech: isProductTechCompanyType(profile?.companyType ?? ""), experienceYears: company.experience });
     if (!validatedSections.valid) {
       emitProductionTelemetry({ name: "model_generation_rejected", failureClass: "model_contract_rejection", reasonCode: validatedSections.diagnostics[0]?.code ?? "generated_profile_sections_invalid", latencyMs: Date.now() - startedAt });
       return Response.json(

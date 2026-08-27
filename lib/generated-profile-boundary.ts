@@ -44,7 +44,8 @@ export type GeneratedSectionDiagnosticCode =
   | "generated_product_item_unstable_id"
   | "generated_product_item_title_capacity_unsupported"
   | "generated_product_item_evidence_unsupported"
-  | "generated_product_content_capacity_unsupported";
+  | "generated_product_content_capacity_unsupported"
+  | "generated_experience_evidence_missing";
 
 export type GeneratedSectionDiagnostic = {
   code: GeneratedSectionDiagnosticCode;
@@ -85,6 +86,7 @@ export type GeneratedProfileValidationContext = {
   serviceSourceMaterial?: readonly string[];
   productSourceMaterial?: readonly string[];
   productTech?: boolean;
+  experienceYears?: string;
 };
 
 const normalizeEvidence = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
@@ -211,6 +213,11 @@ export const validateGeneratedProfileSections = (
     if (approvedItems.length && returned.items.length !== approvedItems.length) diagnostics.push({ code: "generated_product_item_invalid", sectionId: selected.id, path: `sections.${validSections.indexOf(returned)}.items` });
     diagnostics.push(...validateProductItems(returned, validSections.indexOf(returned), [selected.description, ...approvedItems.flatMap((item) => [item.title, item.description]), ...(context.productSourceMaterial ?? [])], approvedItems, contract));
   });
+  const experience = context.experienceYears?.trim() ?? "";
+  if (/^\d+(?:\.\d+)?$/.test(experience)) {
+    const generatedText = normalizeEvidence(validSections.flatMap((section) => [section.content, ...section.items.flatMap((item) => [item.name, item.description])]).join("\n"));
+    if (!generatedText.includes(`${normalizeEvidence(experience)} years of experience`)) diagnostics.push({ code: "generated_experience_evidence_missing", sectionId: null, path: "sections" });
+  }
   if (diagnostics.length > 0) return { valid: false, sections: null, diagnostics };
   return { valid: true, sections: selectedSections.map((section) => returnedById.get(section.id)!), diagnostics: [] };
 };

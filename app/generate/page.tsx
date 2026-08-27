@@ -576,6 +576,7 @@ const validatedSections = validateGeneratedProfileSections(
     serviceSourceMaterial: companySourceMaterial(companyData),
     productSourceMaterial: companySourceMaterial(companyData),
     productTech: /saas|software|platform|technology|tech|digital product|ai company/i.test(data.companyType),
+    experienceYears: companyData.experience,
   },
 );
 if (!validatedSections.valid) {
@@ -1700,9 +1701,9 @@ setProfile({
   return (
     <div
   key={section.id}
-  className="rounded-lg border border-gray-200 bg-white p-4 transition hover:border-gray-400"
+  className="rounded-lg border border-gray-200 bg-white p-3 transition hover:border-gray-400 sm:p-4"
 >
-  <div className="flex gap-3">
+  <div className="flex flex-col gap-3 sm:flex-row">
     <input
       type="checkbox"
       aria-label={`Include ${section.displayTitle}`}
@@ -1718,7 +1719,7 @@ setProfile({
         });
         setStructureConfirmed(false);
       }}
-      className="mt-1 h-4 w-4"
+      className="h-4 w-4 sm:mt-1"
     />
 
     <div className="min-w-0 flex-1">
@@ -1806,8 +1807,8 @@ setProfile({
           </div>
         </div>
       ) : (
-        <div className="flex items-start justify-between gap-3">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
             <p className="font-medium text-gray-900">
               {section.displayTitle}
             </p>
@@ -1826,9 +1827,10 @@ setProfile({
               setEditingSectionDescription(section.description);
               setStructureConfirmed(false);
             }}
-            className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 hover:border-gray-900"
+            aria-label={`Edit ${section.displayTitle}`}
+            className="self-start shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 hover:border-gray-900"
           >
-            Edit {section.displayTitle}
+            Edit
           </button>
         </div>
       )}
