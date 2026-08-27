@@ -1,4 +1,5 @@
 import type { BrandAnalysis, PageCompositionDensity } from "./types";
+import { PDF_EDITORIAL_TYPE_CONSTRAINTS } from "./pdf-editorial-typesetting";
 
 export type PDFColor = readonly [number, number, number];
 export type PDFFontStyle = "normal" | "bold" | "italic" | "bolditalic";
@@ -44,6 +45,11 @@ export type PDFDesignTokens = {
     gutter: number;
   };
   typography: PDFTypographyTokens;
+  typographySteps: {
+    hero: readonly [44, 52, 60, 72];
+    section: readonly [30, 34, 38, 42];
+    subheading: readonly [16, 18, 21];
+  };
   spacing: PDFSpacingTokens;
   rules: {
     hairlineWidth: number;
@@ -85,20 +91,20 @@ const TEXT_LIGHT: PDFColor = [255, 255, 255];
 
 const BASE_TYPOGRAPHY: PDFTypographyTokens = {
   display: {
-    fontSize: 25,
-    lineHeight: 10,
+    fontSize: 52,
+    lineHeight: 19,
     fontStyle: "bold",
     uppercase: false,
   },
   h1: {
-    fontSize: 21,
-    lineHeight: 8.2,
+    fontSize: 34,
+    lineHeight: 13,
     fontStyle: "bold",
     uppercase: false,
   },
   h2: {
-    fontSize: 14,
-    lineHeight: 6.2,
+    fontSize: 18,
+    lineHeight: 7.5,
     fontStyle: "bold",
     uppercase: false,
   },
@@ -109,19 +115,19 @@ const BASE_TYPOGRAPHY: PDFTypographyTokens = {
     uppercase: false,
   },
   body: {
-    fontSize: 11.2,
-    lineHeight: 6.2,
+    fontSize: 10,
+    lineHeight: 5.6,
     fontStyle: "normal",
     uppercase: false,
   },
   caption: {
-    fontSize: 9.3,
-    lineHeight: 4.8,
+    fontSize: 8,
+    lineHeight: 4.2,
     fontStyle: "normal",
     uppercase: false,
   },
   overline: {
-    fontSize: 8.5,
+    fontSize: 8,
     lineHeight: 4.2,
     fontStyle: "normal",
     uppercase: true,
@@ -251,6 +257,11 @@ export const createPDFDesignTokens = (
       gutter: 4,
     },
     typography: BASE_TYPOGRAPHY,
+    typographySteps: {
+      hero: [44, 52, 60, 72],
+      section: [30, 34, 38, 42],
+      subheading: [16, 18, 21],
+    },
     spacing: BASE_SPACING,
     rules: {
       hairlineWidth: 0.4,
@@ -312,7 +323,7 @@ export const resolveTypographyForDensity = (
       adjustments.headingScale
     ),
     body: scaleTypographyRole(
-      tokens.typography.body,
+      { ...tokens.typography.body, fontSize: Math.max(tokens.typography.body.fontSize, PDF_EDITORIAL_TYPE_CONSTRAINTS.minimumBodyFontSize) },
       1,
       adjustments.bodyLeadingScale
     ),
@@ -341,6 +352,9 @@ export const resolveSpacingForDensity = (
     sectionGap: scaleValue(tokens.spacing.sectionGap),
   };
 };
+
+export const getPDFLineHeightFactor = (role: PDFTypographyRole) =>
+  role.lineHeight / (role.fontSize * 0.352778);
 
 export const resolvePagePalette = (
   tokens: PDFDesignTokens,

@@ -2,13 +2,15 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { jsPDF } from "jspdf";
 import { normalizeAuthoredContentUnits, createContentShape } from "./content-shape";
-import { createCorporateServicesDocumentPlan } from "./corporate-services-planner";
+import { createCorporateServicesDocumentPlan, prepareCorporateServicesDocumentPlan, renderPreparedCorporateServicesPlan } from "./corporate-services-planner";
 import { validateDocumentCoverage } from "./coverage";
 import { routeEditorialInteriorsV1Export } from "./export-orchestrator";
 import { rankAuthoredTemplateFamilies } from "./family-ranking";
 import type { ProductionEnrichmentInput } from "./enrichment";
 import { authoredTemplateFamilies } from "./registry";
+import { normalizeProductionSectionRoles } from "./section-role-normalization";
 import type { CorporateServicesPageContent } from "./packs/corporate-services-v1/content";
+import { CORPORATE_SPARSE_NARRATIVE_BODY_REGION, corporateServicesNarrativeDenseTemplate, corporateServicesNarrativeSparseTemplate, corporateServicesNarrativeStandardTemplate } from "./packs/corporate-services-v1/narrative";
 import { CORPORATE_SERVICES_TEXT_GEOMETRY, corporateServicesContinuationTemplates, corporateServicesPrimaryTemplates } from "./packs/corporate-services-v1/services";
 
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
@@ -31,8 +33,45 @@ const planFor = (input: ProductionEnrichmentInput) => {
 };
 
 const run = async () => {
-for (const count of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
-  const input = fixture(count, count === 9 ? "dense" : "normal");
+const sparseCandidate = { contentId: "sparse:normal", title: "Built for considered business decisions", supportingLine: "Fictional test positioning statement for manual review.", body: narrativeSentence };
+const sparsePrepared = corporateServicesNarrativeSparseTemplate.prepare(sparseCandidate);
+assert(sparsePrepared.compatible, "Normal sparse narrative body must pass preflight.");
+if (!sparsePrepared.compatible) throw new Error("Expected normal sparse narrative preparation.");
+const sparseBody = sparsePrepared.instance.preparedSlots.body;
+assert(sparseBody.kind === "text", "Sparse body must prepare as text.");
+if (sparseBody.kind !== "text") throw new Error("Expected sparse prepared body text.");
+const sparsePdf = new jsPDF({ unit: "mm", format: "a4" });
+const sparseAudit = corporateServicesNarrativeSparseTemplate.render(sparsePdf, sparsePrepared.instance);
+sparsePdf.setFont("helvetica", "normal"); sparsePdf.setFontSize(CORPORATE_SPARSE_NARRATIVE_BODY_REGION.fontSize);
+assert(sparseBody.lines.every((line) => sparsePdf.getTextWidth(line) <= CORPORATE_SPARSE_NARRATIVE_BODY_REGION.width), "Normal sparse body lines must remain inside the authored horizontal bound.");
+assert(sparseBody.lines.length <= CORPORATE_SPARSE_NARRATIVE_BODY_REGION.maxLines, "Normal sparse body must remain inside the authored vertical capacity.");
+assert(sparseAudit.renderedTextBySlot.body === sparseBody.lines, "Sparse renderer must consume the exact prepared body line array.");
+
+let longestAcceptedBody = "capacity";
+let oneOverCapacityBody = "";
+for (let count = 2; count < 500; count += 1) {
+  const candidateBody = Array.from({ length: count }, () => "capacity").join(" ");
+  const result = corporateServicesNarrativeSparseTemplate.prepare({ ...sparseCandidate, contentId: `sparse:capacity:${count}`, body: candidateBody });
+  if (result.compatible) longestAcceptedBody = candidateBody;
+  else { oneOverCapacityBody = candidateBody; break; }
+}
+const longestAccepted = corporateServicesNarrativeSparseTemplate.prepare({ ...sparseCandidate, contentId: "sparse:longest", body: longestAcceptedBody });
+assert(longestAccepted.compatible, "Longest accepted sparse body must pass preflight.");
+if (!longestAccepted.compatible) throw new Error("Expected longest accepted sparse body.");
+const longestSlot = longestAccepted.instance.preparedSlots.body;
+assert(longestSlot.kind === "text" && longestSlot.lines.length === CORPORATE_SPARSE_NARRATIVE_BODY_REGION.maxLines, "Longest accepted sparse body must occupy exactly the authored ten-line capacity.");
+if (longestSlot.kind !== "text") throw new Error("Expected longest sparse body text.");
+assert(longestSlot.lines.every((line) => { sparsePdf.setFont("helvetica", "normal"); sparsePdf.setFontSize(CORPORATE_SPARSE_NARRATIVE_BODY_REGION.fontSize); return sparsePdf.getTextWidth(line) <= CORPORATE_SPARSE_NARRATIVE_BODY_REGION.width; }), "Longest accepted sparse body must remain horizontally contained.");
+const overSparse = corporateServicesNarrativeSparseTemplate.prepare({ ...sparseCandidate, contentId: "sparse:over", body: oneOverCapacityBody });
+const overSparseRepeat = corporateServicesNarrativeSparseTemplate.prepare({ ...sparseCandidate, contentId: "sparse:over", body: oneOverCapacityBody });
+assert(!overSparse.compatible && !overSparseRepeat.compatible && JSON.stringify(overSparse.issues) === JSON.stringify(overSparseRepeat.issues), "One-over-capacity sparse body must fail preflight deterministically.");
+if (!overSparse.compatible) assert(overSparse.issues.some((issue) => issue.code === "text_line_limit_exceeded" && issue.path === "body"), "Sparse capacity rejection must identify the body line limit.");
+
+const standardBefore = corporateServicesNarrativeStandardTemplate.prepare({ ...sparseCandidate, contentId: "standard:unchanged", body: narrativeSentence.repeat(5) });
+const denseBefore = corporateServicesNarrativeDenseTemplate.prepare({ ...sparseCandidate, contentId: "dense:unchanged", body: narrativeSentence.repeat(12) });
+assert(standardBefore.compatible && denseBefore.compatible, "Existing normal and dense Corporate narrative variants must retain their approved envelopes.");
+for (const count of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
+  const input = fixture(count, count >= 9 ? "dense" : "normal");
   const decision = await routeEditorialInteriorsV1Export(input);
   assert(decision.mode === "authored" && decision.familyId === "corporate-services", `${count} services must select Corporate / Services: ${JSON.stringify(decision.mode === "fallback" ? decision.reasons : decision)}.`);
   const planned = planFor(input); assert(planned.result.compatible, `${count} services must produce a fixed authored plan.`);
@@ -42,6 +81,26 @@ for (const count of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
     assert(planned.result.plan.pages.every((page) => !("geometry" in page) && !("layout" in page) && !("columns" in page)), "Document plans must never contain generated geometry.");
   }
 }
+
+const overCapacity = planFor(fixture(13, "dense"));
+assert(!overCapacity.result.compatible && overCapacity.result.issues.some((issue) => issue.code === "service_count_unsupported"), "Thirteen services must fail the bounded authored capacity explicitly.");
+
+const longNarrative = fixture(2, "dense"); longNarrative.profile.sections[0].content = narrativeSentence.repeat(40);
+const longNarrativePlan = planFor(longNarrative);
+assert(longNarrativePlan.result.compatible, "Long narrative planning must select the dense authored state before preflight.");
+if (longNarrativePlan.result.compatible) assert(!prepareCorporateServicesDocumentPlan(longNarrativePlan.result.plan).compatible, "Narrative beyond the dense envelope must reject safely without font shrinking.");
+
+const projectUnits = normalizeAuthoredContentUnits({ company: {}, sections: [{ id: "about", role: "narrative", content: "Narrative." }, { id: "services", role: "services", items: Array.from({ length: 5 }, (_, index) => ({ id: `service:${index}` })) }], projects: [{ id: "work:1", hasAuthenticImage: true }, { id: "work:2", hasAuthenticImage: true }] });
+const projectPlan = createCorporateServicesDocumentPlan({ units: projectUnits, cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: "Fictional Company", companyType: "Professional services" }, narrative: { contentId: "about", title: "Company overview", body: "Narrative.", supportingLine: "Fictional test content." }, servicesHeading: "Services", servicesSupportingLine: "Fictional test content.", services: Array.from({ length: 5 }, (_, index) => ({ contentId: `service:${index}`, index: `0${index + 1}`, title: `Service ${index + 1}`, description: "Fictional test service." })), projectsHeading: "Selected work", projectsSupportingLine: "Fictional test work.", projects: [{ contentId: "work:1", name: "Work One", description: "Source-shaped project description." }, { contentId: "work:2", name: "Work Two", description: "Source-shaped project description." }] });
+assert(projectPlan.compatible && validateDocumentCoverage(projectUnits, projectPlan.plan).complete, "Corporate optional work must consume genuine project units exactly once.");
+if (projectPlan.compatible) {
+  const duplicatePlan = structuredClone(projectPlan.plan);
+  duplicatePlan.pages[1].claims = [...duplicatePlan.pages[1].claims, { contentId: "work:1", mode: "consume", slotId: "duplicate" }];
+  assert(validateDocumentCoverage(projectUnits, duplicatePlan).issues.some((issue) => issue.code === "duplicate_content_consumption"), "Duplicate Corporate work consumption must fail the shared coverage ledger.");
+}
+assert(rankAuthoredTemplateFamilies(authoredTemplateFamilies, createContentShape(projectUnits))[0]?.familyId === "visual-portfolio", "Authentic project imagery must keep strongly portfolio-shaped content ranked to Visual / Portfolio.");
+const missingImageUnits = projectUnits.map((unit) => unit.kind === "project" ? { ...unit, hasAuthenticImage: false } : unit);
+assert(rankAuthoredTemplateFamilies(authoredTemplateFamilies, createContentShape(missingImageUnits))[0]?.familyId === "corporate-services", "Missing project imagery must leave a service-led company eligible for Corporate / Services without promoting contextual media.");
 
 for (const templates of [corporateServicesPrimaryTemplates, corporateServicesContinuationTemplates]) for (const [templateIndex, template] of templates.entries()) {
   const count = templateIndex + 1;
@@ -68,6 +127,50 @@ assert(JSON.stringify(serviceRanking) === JSON.stringify(rankAuthoredTemplateFam
 
 const portfolioUnits = normalizeAuthoredContentUnits({ company: {}, sections: [{ id: "about", role: "narrative", content: "Portfolio narrative." }, { id: "services", role: "services", items: [0, 1, 2, 3].map((index) => ({ id: `service:${index}` })) }], projects: [{ id: "project:1", hasAuthenticImage: true }, { id: "project:2", hasAuthenticImage: true }] });
 assert(rankAuthoredTemplateFamilies(authoredTemplateFamilies, createContentShape(portfolioUnits))[0]?.familyId === "visual-portfolio", "Portfolio-heavy content with authentic coverage must keep Visual / Portfolio first.");
+
+const northbridgeSections = [
+  { id: "about", title: "About Northbridge Advisory", description: "A source-grounded company introduction.", content: "Northbridge Advisory is a fictional production-shaped consulting fixture used to verify exact semantic coverage.", items: [] },
+  { id: "services", title: "Consulting & Advisory Services", description: "Source-shaped service information.", content: "The fixture supplies structured advisory services without invented outcomes.", items: Array.from({ length: 4 }, (_, index) => ({ name: `Advisory Service ${index + 1}`, description: "Clearly labelled fictional test service content." })) },
+  { id: "expertise", title: "Areas of Focus", description: "Source-shaped expertise context.", content: "The fictional fixture focuses on operations, priorities, management processes, and sustainable growth.", items: [] },
+  { id: "howItWorks", title: "Our Advisory Approach", description: "Source-shaped process context.", content: "The fictional fixture works with leadership teams to identify challenges and structure practical responses.", items: [] },
+  { id: "solutions", title: "Supporting Sustainable Growth", description: "Source-shaped supporting context.", content: "The fictional fixture describes practical operational foundations without claiming measured outcomes.", items: [] },
+] as const;
+const northbridgeNormalized = normalizeProductionSectionRoles(northbridgeSections, { corporateServices: true });
+assert(northbridgeNormalized.diagnostics.length === 0, "Exact Northbridge sections must normalize without unknown, ambiguous, or duplicate-role diagnostics.");
+assert(northbridgeNormalized.sections.map((entry) => `${entry.section.id}:${entry.role}`).join("|") === "about:narrative|services:services|expertise:expertise|howItWorks:approach|solutions:supporting_narrative", "Northbridge semantic roles must remain exact and deterministic.");
+const northbridgeUnits = normalizeAuthoredContentUnits({ company: {}, sections: [
+  { id: "about", role: "narrative", content: northbridgeSections[0].content },
+  { id: "services", role: "services", items: northbridgeSections[1].items.map((_, index) => ({ id: `services:item:${index}` })) },
+  { id: "expertise", role: "expertise", content: northbridgeSections[2].content },
+  { id: "howItWorks", role: "approach", content: northbridgeSections[3].content },
+  { id: "solutions", role: "supporting_narrative", content: northbridgeSections[4].content },
+], projects: [] });
+const northbridgeShape = createContentShape(northbridgeUnits);
+const northbridgeRanking = rankAuthoredTemplateFamilies(authoredTemplateFamilies, northbridgeShape);
+assert(northbridgeRanking[0]?.familyId === "corporate-services" && northbridgeShape.facts.authenticProjectImageCount === 0, "Northbridge must rank Corporate first without treating contextual imagery as authentic project coverage.");
+const northbridgePlan = createCorporateServicesDocumentPlan({
+  units: northbridgeUnits,
+  cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: "Northbridge Advisory", companyType: "Business Consulting and Advisory Firm" },
+  narrative: { contentId: "about", title: northbridgeSections[0].title, body: northbridgeSections[0].content, supportingLine: northbridgeSections[0].description },
+  servicesHeading: northbridgeSections[1].title,
+  servicesSupportingLine: northbridgeSections[1].description,
+  services: northbridgeSections[1].items.map((item, index) => ({ contentId: `services:item:${index}`, index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description })),
+  details: northbridgeSections.slice(2).map((section) => ({ contentId: section.id, title: section.title, body: section.content, supportingLine: section.description })),
+});
+assert(northbridgePlan.compatible, "Northbridge must create a Corporate authored plan.");
+if (!northbridgePlan.compatible) throw new Error("Expected Northbridge Corporate plan.");
+const northbridgeCoverage = validateDocumentCoverage(northbridgeUnits, northbridgePlan.plan);
+assert(northbridgeCoverage.complete && northbridgeCoverage.consumedContentIds.length === northbridgeUnits.length && new Set(northbridgeCoverage.consumedContentIds).size === northbridgeUnits.length, "Every Northbridge normalized unit must be consumed exactly once without silent section loss.");
+const ambiguousCorporate = normalizeProductionSectionRoles([{ ...northbridgeSections[0], id: "about-services" }]);
+assert(ambiguousCorporate.diagnostics[0]?.code === "ambiguous_semantic_role", "Unsupported ambiguous Corporate IDs must still fail explicitly.");
+
+const northbridgeInput: ProductionEnrichmentInput = { company: { name: "Northbridge Advisory", about: northbridgeSections[0].content, activities: "Business Consulting & Advisory Services", experience: "Fictional test source field." }, profile: { companyName: "Northbridge Advisory", companyType: "Business Consulting and Advisory Firm", sections: northbridgeSections }, projects: [] };
+const northbridgeDecision = await routeEditorialInteriorsV1Export(northbridgeInput);
+assert(northbridgeDecision.mode === "authored" && northbridgeDecision.familyId === "corporate-services" && northbridgeDecision.packId === "corporate-services-v1", "Production-shaped Northbridge must render through Corporate authored orchestration, not legacy fallback.");
+if (northbridgeDecision.mode !== "authored") throw new Error(`Northbridge authored orchestration failed: ${JSON.stringify(northbridgeDecision.reasons)}`);
+assert(northbridgeDecision.pageOrder.slice(-3).join("|") === "corporate-services-v1.narrative-sparse|corporate-services-v1.narrative-sparse|corporate-services-v1.narrative-sparse", "Northbridge detail sections must use fixed existing Corporate narrative variants.");
+const northbridgeOutput = resolve("artifacts", "manual-review", "corporate-services-v1-northbridge-production-review.pdf");
+mkdirSync(dirname(northbridgeOutput), { recursive: true }); writeFileSync(northbridgeOutput, Buffer.from(northbridgeDecision.pdf.output("arraybuffer")));
 
 const unsupported = fixture(3, "normal"); unsupported.profile.sections = [...unsupported.profile.sections, { id: "team", title: "Team", description: "", content: "Required unsupported content.", items: [] }];
 const unsupportedDecision = await routeEditorialInteriorsV1Export(unsupported);

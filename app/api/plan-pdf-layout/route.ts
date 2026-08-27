@@ -185,19 +185,16 @@ STRICT RULES:
       );
 
       if (resolved.usedFallback && resolved.semanticIssues.length > 0) {
-        console.error(
-          "Page composition semantic validation failed:",
-          resolved.semanticIssues
-        );
+        console.error("Page composition semantic validation failed", { issueCodes: resolved.semanticIssues.map((issue) => issue.code) });
       }
 
       return Response.json(resolved.layoutPlan);
     } catch (error) {
-      console.error("PDF page composition planner failed:", error);
+      console.error("PDF page composition planner failed", { name: error instanceof Error ? error.name : "UnknownError" });
       return Response.json(fallbackPlan);
     }
   } catch (error) {
-    console.error("PDF layout planner request failed:", error);
+    console.error("PDF layout planner request failed", { name: error instanceof Error ? error.name : "UnknownError" });
     return Response.json(
       { error: "Failed to plan PDF layout." },
       { status: 500 }

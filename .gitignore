@@ -33,6 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# local design experiments and generated review evidence
+/experiments/Experiment_Pack_01/
+/artifacts/manual-review/*.pdf
+/artifacts/beta-hardening/*.json
+/artifacts/go-live/*.json
+
 # vercel
 .vercel
 

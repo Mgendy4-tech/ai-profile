@@ -5,14 +5,20 @@ import type {
 } from "./composition-resolver";
 import type { SelectedContextualVisual } from "./types";
 import {
-  resolveDensityAdjustments,
   resolvePagePalette,
+  getPDFLineHeightFactor,
   resolveSpacingForDensity,
   resolveTypographyForDensity,
   type PDFDesignTokens,
   type PDFPageMode,
 } from "./pdf-design-tokens";
 import { resolvePDFPageMode } from "./pdf-page-pacing";
+import {
+  resolvePDFArtDirection,
+  type PDFArtDirection,
+  type PDFCompositionFamily,
+} from "./pdf-art-direction";
+import { PDF_EDITORIAL_TYPE_CONSTRAINTS } from "./pdf-editorial-typesetting";
 
 export type NarrativeCompositionVariant =
   | "media_left"
@@ -55,7 +61,10 @@ export type NarrativePageLayout = {
   pageMode: PDFPageMode;
   textColumns: 1 | 2;
   usesPlaceholderPanel: false;
+  artDirection: PDFArtDirection;
 };
+
+export type PDFTextBounds = { top: number; bottom: number };
 
 export type PreparedNarrativeSection = {
   id: string;
@@ -70,6 +79,9 @@ export type PreparedNarrativeSection = {
   titleLineHeight: number;
   contentFontSize: number;
   contentLineHeight: number;
+  headingBounds: PDFTextBounds;
+  ruleY: number;
+  bodyBounds: PDFTextBounds | null;
   items: PreparedNarrativeItem[];
   bottom: number;
 };
@@ -145,7 +157,9 @@ export const createNarrativePageLayout = (
   hasImage: boolean,
   pageIndex = 1,
   previousVariant: NarrativeCompositionVariant | null = null,
-  previousMode: PDFPageMode | null = null
+  previousMode: PDFPageMode | null = null,
+  textLength = 0,
+  previousFamily: PDFCompositionFamily | null = null
 ): NarrativePageLayout | null => {
   const { page } = activation;
   const gap = page.densityParameters.sectionGap;
@@ -162,47 +176,58 @@ export const createNarrativePageLayout = (
     hasImage,
     previousMode,
   });
-  const mediaRatioScale = resolveDensityAdjustments(
-    page.density
-  ).mediaRatioScale;
-  const baseMediaWidth = page.sectionArea.x - gap - page.contentArea.x;
-  const baseMediaHeight = page.sectionArea.y - gap - page.contentArea.y;
-  const splitMediaWidth = baseMediaWidth * mediaRatioScale;
-  const stackMediaHeight = baseMediaHeight * mediaRatioScale;
+  const artDirection = resolvePDFArtDirection({
+    pageIndex,
+    pageRole: page.pageRole,
+    archetype: page.archetype,
+    density: page.density,
+    sectionCount: page.sections.length,
+    textLength,
+    hasContextualImage: hasImage && Boolean(activation.visual),
+    hasAuthenticProjectImage: false,
+    imageAspectRatio:
+      activation.visual?.width && activation.visual.height
+        ? activation.visual.width / activation.visual.height
+        : null,
+    previousFamily,
+    previousMode,
+  });
   const mediaArea: ResolvedArea | null = variant === "media_left"
     ? {
-        x: page.contentArea.x,
-        y: page.contentArea.y,
-        width: splitMediaWidth,
-        height: page.contentArea.height,
+        x: page.pageArea.x,
+        y: page.pageArea.y,
+        width: page.pageArea.width * 0.48,
+        height: page.pageArea.height,
       }
     : variant === "media_right"
     ? {
-        x: page.contentArea.x + page.contentArea.width - splitMediaWidth,
-        y: page.contentArea.y,
-        width: splitMediaWidth,
-        height: page.contentArea.height,
+        x: page.pageArea.x + page.pageArea.width * 0.52,
+        y: page.pageArea.y,
+        width: page.pageArea.width * 0.48,
+        height: page.pageArea.height,
       }
     : variant === "top_media"
     ? {
-        x: page.contentArea.x,
-        y: page.contentArea.y,
-        width: page.contentArea.width,
-        height: stackMediaHeight,
+        x: page.pageArea.x,
+        y: page.pageArea.y,
+        width: page.pageArea.width,
+        height: page.pageArea.height * 0.45,
       }
     : null;
   const textArea: ResolvedArea = variant === "media_left" && mediaArea
     ? {
-        x: mediaArea.x + mediaArea.width + gap,
+        x: page.pageArea.x + page.pageArea.width * 0.55,
         y: page.contentArea.y,
-        width: page.contentArea.width - mediaArea.width - gap,
+        width:
+          page.contentArea.x + page.contentArea.width -
+          (page.pageArea.x + page.pageArea.width * 0.55),
         height: page.contentArea.height,
       }
     : variant === "media_right" && mediaArea
     ? {
         x: page.contentArea.x,
         y: page.contentArea.y,
-        width: page.contentArea.width - mediaArea.width - gap,
+        width: page.pageArea.width * 0.42 - page.contentArea.x,
         height: page.contentArea.height,
       }
     : variant === "top_media" && mediaArea
@@ -210,7 +235,9 @@ export const createNarrativePageLayout = (
         x: page.contentArea.x,
         y: mediaArea.y + mediaArea.height + gap,
         width: page.contentArea.width,
-        height: page.contentArea.height - mediaArea.height - gap,
+        height:
+          page.contentArea.y + page.contentArea.height -
+          (mediaArea.y + mediaArea.height + gap),
       }
     : { ...page.contentArea };
   const areas = [
@@ -237,6 +264,7 @@ export const createNarrativePageLayout = (
         ? 2
         : 1,
     usesPlaceholderPanel: false,
+    artDirection,
   };
 };
 
@@ -273,14 +301,31 @@ export const prepareNarrativePage = (
   designTokens: PDFDesignTokens,
   pageIndex = 1,
   previousVariant: NarrativeCompositionVariant | null = null,
-  previousMode: PDFPageMode | null = null
+  previousMode: PDFPageMode | null = null,
+  previousFamily: PDFCompositionFamily | null = null
 ): PreparedNarrativePage | null => {
+  const sectionIds = new Set(activation.page.sections.map((section) => section.sectionId));
+  const textLength = availableSections
+    .filter((section) => sectionIds.has(section.id))
+    .reduce(
+      (total, section) =>
+        total +
+        section.title.length +
+        section.content.length +
+        section.items.reduce(
+          (itemTotal, item) => itemTotal + item.name.length + item.description.length,
+          0
+        ),
+      0
+    );
   const layout = createNarrativePageLayout(
     activation,
     hasImage,
     pageIndex,
     previousVariant,
-    previousMode
+    previousMode,
+    textLength,
+    previousFamily
   );
 
   if (!layout) {
@@ -303,8 +348,12 @@ export const prepareNarrativePage = (
   const columnGap = layout.textColumns === 2 ? spacingTokens.lg : 0;
   const textWidth =
     (layout.textArea.width - columnGap) / layout.textColumns - rightInset;
+  const bottomRailClearance =
+    layout.artDirection.compositionFamily === "typography_manifesto"
+      ? spacingTokens.lg + spacingTokens.sm
+      : spacingTokens.sm;
   const bottomLimit =
-    layout.textArea.y + layout.textArea.height - spacingTokens.sm;
+    layout.textArea.y + layout.textArea.height - bottomRailClearance;
   const cursorYs = Array.from(
     { length: layout.textColumns },
     () => layout.textArea.y + spacingTokens.xl
@@ -328,7 +377,15 @@ export const prepareNarrativePage = (
     const emphasized =
       reference.treatment === "lead" ||
       activation.page.hierarchy.primarySectionId === reference.sectionId;
-    const headingRole = emphasized ? typography.h1 : typography.h2;
+    const headingRole = layout.artDirection.compositionFamily === "typography_manifesto"
+      ? typography.display
+      : layout.artDirection.compositionFamily === "structural_interstitial"
+      ? emphasized
+        ? typography.h1
+        : typography.h2
+      : emphasized
+      ? typography.h1
+      : typography.h2;
     const titleFontSize = headingRole.fontSize;
     const titleLineHeight = headingRole.lineHeight;
     const contentFontSize = typography.body.fontSize;
@@ -348,10 +405,31 @@ export const prepareNarrativePage = (
     const contentLines = section.content.trim()
       ? (pdf.splitTextToSize(section.content.trim(), textWidth) as string[])
       : [];
-    const titleY = cursorYs[columnIndex];
+    const pointToMm = 0.352778;
+    const titleAscent = titleFontSize * pointToMm * 0.78;
+    const titleY = cursorYs[columnIndex] + titleAscent;
+    const headingBounds: PDFTextBounds = {
+      top: titleY - titleAscent,
+      bottom:
+        titleY +
+        Math.max(0, titleLines.length - 1) * titleLineHeight +
+        titleFontSize * pointToMm * 0.24,
+    };
+    const ruleY = headingBounds.bottom + Math.max(
+      spacingTokens.xs,
+      PDF_EDITORIAL_TYPE_CONSTRAINTS.headingToRuleClearance
+    );
     const contentY =
-      titleY + titleLines.length * titleLineHeight + spacingTokens.sm;
-    let bottom = contentY + contentLines.length * contentLineHeight;
+      ruleY + Math.max(
+        spacingTokens.sm,
+        PDF_EDITORIAL_TYPE_CONSTRAINTS.ruleToBodyClearance
+      ) + contentFontSize * pointToMm * 0.78;
+    const contentBottom = contentLines.length > 0
+      ? contentY +
+        Math.max(0, contentLines.length - 1) * contentLineHeight +
+        contentFontSize * pointToMm * 0.24
+      : contentY;
+    let bottom = contentBottom;
     const preparedItems: PreparedNarrativeItem[] = [];
 
     for (const item of section.items) {
@@ -370,7 +448,10 @@ export const prepareNarrativePage = (
       const itemDescriptionLines = item.description.trim()
         ? (pdf.splitTextToSize(item.description.trim(), textWidth) as string[])
         : [];
-      const itemTitleY = bottom + spacingTokens.sm;
+      const itemTitleY = bottom + Math.max(
+        spacingTokens.sm,
+        PDF_EDITORIAL_TYPE_CONSTRAINTS.subsectionSpacing
+      );
       const itemDescriptionY =
         itemTitleY + itemTitleLines.length * typography.h3.lineHeight +
         spacingTokens.xs;
@@ -405,40 +486,80 @@ export const prepareNarrativePage = (
       titleLineHeight,
       contentFontSize,
       contentLineHeight,
+      headingBounds,
+      ruleY,
+      bodyBounds:
+        contentLines.length > 0
+          ? { top: contentY - contentFontSize * pointToMm * 0.78, bottom: contentBottom }
+          : null,
       items: preparedItems,
       bottom,
     });
-    cursorYs[columnIndex] = bottom + spacing;
+    cursorYs[columnIndex] = bottom + Math.max(
+      spacing,
+      PDF_EDITORIAL_TYPE_CONSTRAINTS.paragraphSpacing
+    );
   }
 
-  if (!layout.mediaArea && preparedSections.length > 0) {
+  if (preparedSections.length > 0) {
     const columnXs = [...new Set(preparedSections.map((section) => section.x))];
+
+    const shiftSection = (section: PreparedNarrativeSection, offset: number) => {
+      section.titleY += offset;
+      section.contentY += offset;
+      section.bottom += offset;
+      section.headingBounds.top += offset;
+      section.headingBounds.bottom += offset;
+      section.ruleY += offset;
+      if (section.bodyBounds) {
+        section.bodyBounds.top += offset;
+        section.bodyBounds.bottom += offset;
+      }
+      section.items.forEach((item) => {
+        item.titleY += offset;
+        item.descriptionY += offset;
+        item.bottom += offset;
+      });
+    };
 
     columnXs.forEach((columnX, columnIndex) => {
       const columnSections = preparedSections.filter(
         (section) => section.x === columnX
       );
+      if (!layout.mediaArea && columnSections.length > 1) {
+        const currentSpan =
+          columnSections[columnSections.length - 1].bottom -
+          columnSections[0].headingBounds.top;
+        const targetSpan = layout.textArea.height * 0.62;
+        const extraGap = Math.min(
+          60,
+          Math.max(0, (targetSpan - currentSpan) / (columnSections.length - 1))
+        );
+        columnSections.forEach((section, index) => {
+          if (index > 0) shiftSection(section, extraGap * index);
+        });
+      }
       const first = columnSections[0];
       const last = columnSections[columnSections.length - 1];
-      const blockHeight = last.bottom - first.titleY;
-      const utilizationRatio = layout.textColumns === 2
-        ? 0.3 + columnIndex * 0.1
+      const blockHeight = last.bottom - first.headingBounds.top;
+      const utilizationRatio = layout.mediaArea
+        ? 0.42
+        : layout.textColumns === 2
+        ? 0.22 + columnIndex * 0.12
+        : columnSections.length > 1
+        ? 0.18
         : 0.38;
       const preferredTop =
         layout.textArea.y +
         Math.max(spacingTokens.xl, (layout.textArea.height - blockHeight) * utilizationRatio);
       const latestTop = bottomLimit - blockHeight;
-      const offset = Math.max(0, Math.min(preferredTop, latestTop) - first.titleY);
+      const offset = Math.max(
+        0,
+        Math.min(preferredTop, latestTop) - first.headingBounds.top
+      );
 
       columnSections.forEach((section) => {
-        section.titleY += offset;
-        section.contentY += offset;
-        section.bottom += offset;
-        section.items.forEach((item) => {
-          item.titleY += offset;
-          item.descriptionY += offset;
-          item.bottom += offset;
-        });
+        shiftSection(section, offset);
       });
     });
   }
@@ -520,38 +641,26 @@ export const drawNarrativePage = ({
       );
     }
   } else {
-    pdf.setDrawColor(
-      palette.accent[0],
-      palette.accent[1],
-      palette.accent[2]
-    );
-    pdf.setLineWidth(designTokens.rules.hairlineWidth);
-    pdf.line(
-      layout.contentArea.x,
-      layout.contentArea.y,
-      layout.contentArea.x + designTokens.rules.shortRuleWidth,
-      layout.contentArea.y
-    );
-    pdf.line(
-      layout.contentArea.x + layout.contentArea.width,
-      layout.contentArea.y,
-      layout.contentArea.x + layout.contentArea.width,
-      layout.contentArea.y + layout.contentArea.height
-    );
+    if (layout.artDirection.compositionFamily === "structural_interstitial") {
+      pdf.setFillColor(palette.accent[0], palette.accent[1], palette.accent[2]);
+      pdf.rect(0, 0, spacing.lg, layout.pageArea.height, "F");
+    }
   }
 
-  pdf.setTextColor(
-    palette.secondaryText[0],
-    palette.secondaryText[1],
-    palette.secondaryText[2]
-  );
-  pdf.setFont("helvetica", typography.overline.fontStyle);
-  pdf.setFontSize(typography.overline.fontSize);
-  pdf.text(
-    activation.page.pageRole.toUpperCase(),
-    layout.textArea.x,
-    layout.textArea.y + typography.overline.lineHeight
-  );
+  if (layout.artDirection.compositionFamily === "architectural_split") {
+    pdf.setTextColor(
+      palette.secondaryText[0],
+      palette.secondaryText[1],
+      palette.secondaryText[2]
+    );
+    pdf.setFont("helvetica", typography.overline.fontStyle);
+    pdf.setFontSize(typography.overline.fontSize);
+    pdf.text(
+      activation.page.pageRole.toUpperCase(),
+      layout.textArea.x,
+      layout.textArea.y + typography.overline.lineHeight
+    );
+  }
 
   prepared.sections.forEach((section) => {
     pdf.setTextColor(
@@ -561,6 +670,9 @@ export const drawNarrativePage = ({
     );
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(section.titleFontSize);
+    pdf.setLineHeightFactor(
+      section.titleLineHeight / (section.titleFontSize * 0.352778)
+    );
     pdf.text(section.titleLines, section.x, section.titleY);
 
     if (section.emphasized) {
@@ -572,12 +684,12 @@ export const drawNarrativePage = ({
       pdf.setLineWidth(designTokens.rules.hairlineWidth * 2);
       pdf.line(
         section.x,
-        section.contentY - spacing.xs,
+        section.ruleY,
         section.x + Math.min(
           designTokens.rules.shortRuleWidth,
           layout.textArea.width
         ),
-        section.contentY - spacing.xs
+        section.ruleY
       );
     }
 
@@ -589,6 +701,9 @@ export const drawNarrativePage = ({
       );
       pdf.setFont("helvetica", typography.body.fontStyle);
       pdf.setFontSize(section.contentFontSize);
+      pdf.setLineHeightFactor(
+        section.contentLineHeight / (section.contentFontSize * 0.352778)
+      );
       pdf.text(section.contentLines, section.x, section.contentY);
     }
 
@@ -600,6 +715,7 @@ export const drawNarrativePage = ({
       );
       pdf.setFont("helvetica", typography.h3.fontStyle);
       pdf.setFontSize(typography.h3.fontSize);
+      pdf.setLineHeightFactor(getPDFLineHeightFactor(typography.h3));
       pdf.text(item.titleLines, section.x, item.titleY);
 
       if (item.descriptionLines.length > 0) {
@@ -610,6 +726,7 @@ export const drawNarrativePage = ({
         );
         pdf.setFont("helvetica", typography.caption.fontStyle);
         pdf.setFontSize(typography.caption.fontSize);
+        pdf.setLineHeightFactor(getPDFLineHeightFactor(typography.caption));
         pdf.text(item.descriptionLines, section.x, item.descriptionY);
       }
     });

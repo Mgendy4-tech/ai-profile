@@ -38,11 +38,12 @@ export const corporateServicesFamily = {
   priority: 90,
   packs: [corporateServicesV1Pack],
   evaluate: (shape) => ({
-    eligible: shape.facts.narrativeSectionCount === 1 && shape.facts.serviceCount > 0 && shape.facts.projectCount === 0,
+    eligible: shape.facts.narrativeSectionCount === 1 && shape.facts.serviceCount > 0 && shape.facts.serviceCount <= 12 && shape.facts.projectCount <= 6,
     reasons: [
       { code: "service_content_available", contribution: shape.facts.serviceCount >= 4 ? 3 : shape.facts.serviceCount > 0 ? 2 : -3, evidenceContentIds: [] },
       { code: "narrative_content_available", contribution: shape.facts.narrativeSectionCount === 1 ? 2 : -3, evidenceContentIds: [] },
-      { code: "project_free_business_profile", contribution: shape.facts.projectCount === 0 ? 2 : -2, evidenceContentIds: [] },
+      { code: "corporate_detail_content_available", contribution: shape.facts.corporateDetailCount > 0 ? 1 : 0, evidenceContentIds: [] },
+      { code: "projects_absent_or_secondary", contribution: shape.facts.projectCount === 0 ? 2 : shape.facts.authenticProjectImageCoverage < 0.75 ? 0 : -2, evidenceContentIds: [] },
     ],
   }),
 } as const satisfies AuthoredTemplateFamily;

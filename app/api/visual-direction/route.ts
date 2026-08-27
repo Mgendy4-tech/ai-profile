@@ -149,7 +149,7 @@ Return exactly this structure:
 
     return NextResponse.json(direction);
   } catch (error) {
-    console.error("Visual direction failed:", error);
+    console.error("Visual direction failed", { name: error instanceof Error ? error.name : "UnknownError" });
 
     return NextResponse.json(
       { error: "Failed to create visual direction." },

@@ -41,15 +41,22 @@ export const narrativeEnvelope: ContentEnvelope = {
   ],
 };
 
-const prepare = (input: NarrativeContent) => evaluateContentEnvelope(
-  "editorial-interiors-v1.narrative",
-  narrativeEnvelope,
+export const sparseNarrativeEnvelope: ContentEnvelope = {
+  slots: [
+    { ...singleLine("title", "title", visual.fonts.display, 172), maxLines: 2 },
+    { id: "body", path: "body", kind: "text", required: true, fontFamily: "helvetica", fontStyle: "normal", fontSize: 10, widthMm: 103, maxLines: 4 },
+  ],
+};
+
+const prepareFor = (templateId: string, envelope: ContentEnvelope, input: NarrativeContent) => evaluateContentEnvelope(
+  templateId,
+  envelope,
   input,
   createEditorialInteriorsMeasurementContext(),
   [input.contentId],
 );
 
-const render = (
+const renderStandard = (
   pdf: jsPDF,
   instance: TemplateInstance<NarrativeContent>,
 ): TemplateRenderAudit => {
@@ -109,6 +116,46 @@ export const editorialInteriorsNarrativeTemplate: AuthoredPageTemplate<Narrative
   family: "editorial_narrative",
   priority: 100,
   envelope: narrativeEnvelope,
-  prepare,
-  render,
+  prepare: (input) => prepareFor("editorial-interiors-v1.narrative", narrativeEnvelope, input),
+  render: renderStandard,
 };
+
+const renderSparse = (pdf: jsPDF, instance: TemplateInstance<NarrativeContent>): TemplateRenderAudit => {
+  paintPaper(pdf);
+  const title = getPreparedText(instance, "title");
+  const body = getPreparedText(instance, "body");
+  pdf.setTextColor(...visual.palette.charcoal);
+  pdf.setFont("times", "normal");
+  pdf.setFontSize(34);
+  pdf.setLineHeightFactor(12 / (34 * 0.352778));
+  pdf.text([...title.lines], 19, 53);
+  pdf.setDrawColor(...visual.palette.ochre);
+  pdf.setLineWidth(visual.rule.lineWidth);
+  pdf.line(19, 86, 42, 86);
+  pdf.setTextColor(...visual.palette.secondary);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(7.5);
+  pdf.setCharSpace(visual.eyebrow.characterSpacing);
+  pdf.text("01 / ABOUT", 19, 112);
+  pdf.setCharSpace(0);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  pdf.setLineHeightFactor(1.48);
+  pdf.text([...body.lines], 88, 126);
+  return { templateId: instance.templateId, renderedTextBySlot: { title: title.lines, body: body.lines } };
+};
+
+export const editorialInteriorsSparseNarrativeTemplate: AuthoredPageTemplate<NarrativeContent> = {
+  id: "editorial-interiors-v1.narrative-sparse",
+  pageRole: "narrative",
+  family: "editorial_narrative",
+  priority: 101,
+  envelope: sparseNarrativeEnvelope,
+  prepare: (input) => prepareFor("editorial-interiors-v1.narrative-sparse", sparseNarrativeEnvelope, input),
+  render: renderSparse,
+};
+
+export const selectEditorialInteriorsNarrativeTemplate = (input: NarrativeContent) =>
+  !input.callout && !input.secondaryBlock && input.body.length <= 320
+    ? editorialInteriorsSparseNarrativeTemplate
+    : editorialInteriorsNarrativeTemplate;

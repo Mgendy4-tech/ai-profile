@@ -1,0 +1,5 @@
+import assert from "node:assert/strict"; import { validateProductionEnvironment } from "./server/production-environment";
+const valid = validateProductionEnvironment({ NODE_ENV: "production", OPENAI_API_KEY: "secret-openai-value", PEXELS_API_KEY: "secret-pexels-value" }); assert(valid.ready); assert(valid.required.every((entry) => entry.present)); assert(!JSON.stringify(valid).includes("secret-openai-value") && !JSON.stringify(valid).includes("secret-pexels-value"));
+const missing = validateProductionEnvironment({ NODE_ENV: "production", OPENAI_API_KEY: " " }); assert(!missing.ready && missing.required.find((entry) => entry.name === "PEXELS_API_KEY")?.present === false);
+const exposed = validateProductionEnvironment({ NODE_ENV: "production", OPENAI_API_KEY: "x", PEXELS_API_KEY: "y", NEXT_PUBLIC_OPENAI_API_KEY: "bad" }); assert(!exposed.ready); assert.deepEqual(exposed.accidentalClientExposure, ["NEXT_PUBLIC_OPENAI_API_KEY"]);
+console.log("Production environment presence and accidental client-exposure tests passed without printing secret values.");

@@ -7,11 +7,11 @@ import type { AuthoredDocumentPlan } from "./library-types";
 import type { ImageSlotValue } from "./types";
 import { prepareEditorialInteriorsV1Document, renderPreparedEditorialInteriorsV1Document } from "./packs/editorial-interiors-v1";
 import type { EditorialInteriorsV1DocumentInput } from "./packs/editorial-interiors-v1/content";
-import type { PortfolioProjectContent } from "./packs/editorial-interiors-v1/portfolio-project-pages";
+import { editorialInteriorsProjectTextGeometry, type PortfolioProjectContent } from "./packs/editorial-interiors-v1/portfolio-project-pages";
 import { createVisualPortfolioDocumentPlan, prepareVisualPortfolioDocumentPlan, renderPreparedVisualPortfolioPlan } from "./visual-portfolio-planner";
 
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
-const REVIEW_IMAGE_BUFFER = readFileSync(resolve("experiments", "Experiment_Pack_01", "assets", "aurelia-interior-hero.png"));
+const REVIEW_IMAGE_BUFFER = readFileSync(resolve("lib", "test-fixtures", "visual", "aurelia-user-upload.png"));
 const REVIEW_IMAGE = `data:image/png;base64,${REVIEW_IMAGE_BUFFER.toString("base64")}`;
 const image = (projectId: string): ImageSlotValue & { projectId: string } => ({ role: "project_image", provenance: "user_upload", format: "PNG", width: REVIEW_IMAGE_BUFFER.readUInt32BE(16), height: REVIEW_IMAGE_BUFFER.readUInt32BE(20), source: REVIEW_IMAGE, projectId });
 
@@ -51,12 +51,13 @@ const expectedProjectTemplates: Record<number, readonly string[]> = {
   4: ["editorial-interiors-v1.project-grid-4"],
   5: ["editorial-interiors-v1.project-grid-4", "editorial-interiors-v1.portfolio-continuation-1"],
   6: ["editorial-interiors-v1.project-grid-4", "editorial-interiors-v1.portfolio-continuation-2"],
+  7: ["editorial-interiors-v1.project-grid-4", "editorial-interiors-v1.portfolio-continuation-3"],
   8: ["editorial-interiors-v1.project-grid-4", "editorial-interiors-v1.portfolio-continuation-4"],
   9: ["editorial-interiors-v1.project-grid-4", "editorial-interiors-v1.portfolio-continuation-4", "editorial-interiors-v1.portfolio-continuation-1"],
   12: ["editorial-interiors-v1.project-grid-4", "editorial-interiors-v1.portfolio-continuation-4", "editorial-interiors-v1.portfolio-continuation-4"],
 };
 
-for (const count of [1, 2, 3, 4, 5, 6, 8, 9, 12]) {
+for (const count of [1, 2, 3, 4, 5, 6, 7, 8, 9, 12]) {
   const input = fixture(count);
   const result = createVisualPortfolioDocumentPlan(input);
   assert(result.compatible, `${count} projects must produce a complete Visual plan.`);
@@ -70,6 +71,26 @@ for (const count of [1, 2, 3, 4, 5, 6, 8, 9, 12]) {
   const prepared = prepareVisualPortfolioDocumentPlan(result.plan);
   assert(prepared.compatible, `${count}-project fixed templates must pass preflight.`);
 }
+
+Object.entries(editorialInteriorsProjectTextGeometry).forEach(([templateId, cells]) => {
+  cells.forEach((cell, index) => {
+    assert(cell.titleMaxLines === 2, `${templateId} project ${index + 1} must reserve two fixed title lines.`);
+    assert(cell.clearanceMm > 0, `${templateId} project ${index + 1} must keep a positive title/description clearance.`);
+  });
+});
+
+const twoLineLead = fixture(2);
+twoLineLead.projects[0].name = "Aurelia Courtyard Residence and Material Study";
+const twoLinePlan = createVisualPortfolioDocumentPlan(twoLineLead);
+if (!twoLinePlan.compatible) throw new Error("Expected two-line lead project plan.");
+const twoLinePrepared = prepareVisualPortfolioDocumentPlan(twoLinePlan.plan);
+assert(twoLinePrepared.compatible, "Two-line lead project title must pass deterministic preflight.");
+if (!twoLinePrepared.compatible) throw new Error("Expected prepared two-line lead project.");
+const leadTitle = twoLinePrepared.prepared.instances[3].preparedSlots.project0Name;
+assert(leadTitle.kind === "text" && leadTitle.lines.length === 2, "Lead project regression title must prepare as exactly two lines.");
+if (leadTitle.kind !== "text") throw new Error("Expected prepared lead project title text.");
+const twoLineRender = renderPreparedVisualPortfolioPlan(twoLinePrepared.prepared);
+assert(twoLineRender.audits[3].renderedTextBySlot.project0Name === leadTitle.lines, "Two-line lead title must render from the exact preflight lines.");
 
 const thirteen = createVisualPortfolioDocumentPlan(fixture(13));
 assert(thirteen.compatible && thirteen.plan.pages.slice(3).flatMap((page) => page.claims.filter((claim) => claim.mode === "consume")).length === 13, "Thirteen and larger project sets must use repeated fixed continuations without truncation.");

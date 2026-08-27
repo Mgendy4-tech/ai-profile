@@ -1,31 +1,45 @@
 import type { jsPDF } from "jspdf";
 import { normalizeAuthoredContentUnits, createContentShape } from "./content-shape";
 import { enrichProductionContentForAuthoredTemplates, type EnrichmentDiagnostic, type ImageMetadataDecoder, type ProductionEnrichmentInput } from "./enrichment";
-import { rankAuthoredTemplateFamilies } from "./family-ranking";
+import { explainAuthoredTemplateFamilyRanking } from "./family-ranking";
 import { authoredTemplateFamilies } from "./registry";
-import { isProductTechCompanyType, normalizeProductionSectionRoles, type SectionRoleDiagnostic } from "./section-role-normalization";
+import { isCorporateServicesCompanyType, isProductTechCompanyType, normalizeProductionSectionRoles, type SectionRoleDiagnostic } from "./section-role-normalization";
 import type { ContractIssue, PageRole } from "./types";
 import { createVisualPortfolioDocumentPlan, prepareVisualPortfolioDocumentPlan, renderPreparedVisualPortfolioPlan, type VisualPortfolioPlanningIssue } from "./visual-portfolio-planner";
 import { createCorporateServicesDocumentPlan, prepareCorporateServicesDocumentPlan, renderPreparedCorporateServicesPlan, type CorporateServicesPlanningIssue } from "./corporate-services-planner";
 import { createProductTechDocumentPlan, prepareProductTechDocumentPlan, renderPreparedProductTechPlan, type ProductTechPlanningIssue } from "./product-tech-planner";
+import { validateProjectOperationalLimits, validateRenderedDocumentLimits } from "../production-limits";
+import type { FamilyRankingExplanation } from "./library-types";
 
-export type AuthoredExportFallbackReason = { stage: "normalization" | "enrichment" | "ranking" | "planning" | "compatibility"; code: string; path: string; pageRole: PageRole | null };
+export type AuthoredExportFallbackReason = { stage: "operational" | "normalization" | "enrichment" | "ranking" | "planning" | "compatibility"; code: string; path: string; pageRole: PageRole | null };
+export type AuthoredFallbackCategory = "expected_unsupported_content_shape" | "missing_authentic_asset" | "authored_capacity_incompatibility" | "ambiguous_semantic_normalization" | "runtime_system_error";
+export const classifyAuthoredFallbackReason = (reason: AuthoredExportFallbackReason): AuthoredFallbackCategory => {
+  if (reason.stage === "normalization") return "ambiguous_semantic_normalization";
+  if ((reason.stage === "enrichment" && /image|asset/.test(reason.code)) || /project_(source_)?mismatch|normalized_project_mismatch/.test(reason.code)) return "missing_authentic_asset";
+  if (reason.stage === "compatibility" || reason.stage === "operational" || /capacity|count|limit/.test(reason.code)) return "authored_capacity_incompatibility";
+  if (reason.stage === "ranking" || reason.stage === "planning") return "expected_unsupported_content_shape";
+  return "runtime_system_error";
+};
 export type AuthoredExportDecision =
-  | { mode: "authored"; familyId: "visual-portfolio" | "corporate-services" | "product-tech"; packId: "editorial-interiors-v1" | "corporate-services-v1" | "product-tech-v1"; pdf: jsPDF; pageOrder: readonly string[]; reasons: [] }
-  | { mode: "fallback"; familyId: null; packId: "editorial-interiors-v1"; pdf: null; pageOrder: null; reasons: readonly AuthoredExportFallbackReason[] };
+  | { mode: "authored"; familyId: "visual-portfolio" | "corporate-services" | "product-tech"; packId: "editorial-interiors-v1" | "corporate-services-v1" | "product-tech-v1"; pdf: jsPDF; pageOrder: readonly string[]; reasons: []; ranking: FamilyRankingExplanation }
+  | { mode: "fallback"; familyId: null; packId: "editorial-interiors-v1"; pdf: null; pageOrder: null; reasons: readonly AuthoredExportFallbackReason[]; ranking: FamilyRankingExplanation | null };
 
-const fallback = (reasons: readonly AuthoredExportFallbackReason[]): AuthoredExportDecision => ({ mode: "fallback", familyId: null, packId: "editorial-interiors-v1", pdf: null, pageOrder: null, reasons });
-const normalizationReason = (issue: SectionRoleDiagnostic): AuthoredExportFallbackReason => ({ stage: "normalization", code: issue.code, path: issue.path, pageRole: issue.role === "services" || issue.role === "features" || issue.role === "use_cases" ? "capabilities" : issue.role === "projects" ? "project_grid" : issue.role });
+const fallback = (reasons: readonly AuthoredExportFallbackReason[], ranking: FamilyRankingExplanation | null = null): AuthoredExportDecision => ({ mode: "fallback", familyId: null, packId: "editorial-interiors-v1", pdf: null, pageOrder: null, reasons, ranking });
+const normalizationReason = (issue: SectionRoleDiagnostic): AuthoredExportFallbackReason => ({ stage: "normalization", code: issue.code, path: issue.path, pageRole: issue.role === "services" || issue.role === "features" || issue.role === "use_cases" ? "capabilities" : issue.role === "projects" ? "project_grid" : issue.role === "narrative" || issue.role === "expertise" || issue.role === "approach" || issue.role === "supporting_narrative" ? "narrative" : null });
 const enrichmentReason = (issue: EnrichmentDiagnostic): AuthoredExportFallbackReason => ({ stage: "enrichment", code: issue.code, path: issue.path, pageRole: issue.pageRole });
 const planningReason = (issue: VisualPortfolioPlanningIssue | CorporateServicesPlanningIssue | ProductTechPlanningIssue): AuthoredExportFallbackReason => ({ stage: "planning", code: issue.code, path: issue.path, pageRole: null });
 const compatibilityReason = (issue: ContractIssue): AuthoredExportFallbackReason => ({ stage: "compatibility", code: issue.code, path: issue.path, pageRole: null });
+const renderedLimitReasons = (pdf: jsPDF): AuthoredExportFallbackReason[] => validateRenderedDocumentLimits(pdf.getNumberOfPages(), pdf.output("arraybuffer").byteLength).map((issue) => ({ stage: "operational", code: issue.code, path: issue.path, pageRole: null }));
 
 export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmentInput, decodeDimensions?: ImageMetadataDecoder): Promise<AuthoredExportDecision> => {
+  const operationalIssues = validateProjectOperationalLimits(input.projects);
+  if (operationalIssues.length) return fallback(operationalIssues.map((issue) => ({ stage: "operational", code: issue.code, path: issue.path, pageRole: null })));
   const productTechSignal = isProductTechCompanyType(input.profile.companyType);
-  const normalizedRoles = normalizeProductionSectionRoles(input.profile.sections, { productTech: productTechSignal && input.projects.length === 0 });
+  const normalizedRoles = normalizeProductionSectionRoles(input.profile.sections, { productTech: productTechSignal && input.projects.length === 0, corporateServices: isCorporateServicesCompanyType(input.profile.companyType) });
   if (normalizedRoles.diagnostics.length > 0) return fallback(normalizedRoles.diagnostics.map(normalizationReason));
   const narrativeEntry = normalizedRoles.sections.find((entry) => entry.role === "narrative");
-  const servicesEntry = normalizedRoles.sections.find((entry) => entry.role === "services");
+  const servicesEntry = normalizedRoles.sections.find((entry) => entry.role === "services") ?? normalizedRoles.sections.find((entry) => entry.role === "expertise");
+  const corporateDetailEntries = normalizedRoles.sections.filter((entry): entry is typeof entry & { role: "expertise" | "approach" | "supporting_narrative" } => entry !== servicesEntry && (entry.role === "expertise" || entry.role === "approach" || entry.role === "supporting_narrative"));
   const featuresEntry = normalizedRoles.sections.find((entry) => entry.role === "features");
   const useCasesEntry = normalizedRoles.sections.find((entry) => entry.role === "use_cases");
   const projectsEntry = normalizedRoles.sections.find((entry) => entry.role === "projects");
@@ -40,15 +54,16 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
   const units = normalizeAuthoredContentUnits({ company: {}, sections: [
     { id: narrativeEntry.section.id, role: "narrative", content: narrativeEntry.section.content },
     ...(servicesEntry ? [{ id: servicesEntry.section.id, role: "services" as const, items: servicesEntry.section.items.map((_, index) => ({ id: `${servicesEntry.section.id}:item:${index}` })) }] : []),
+    ...corporateDetailEntries.map((entry) => ({ id: entry.section.id, role: entry.role, content: entry.section.content })),
     ...(featuresEntry ? [{ id: featuresEntry.section.id, role: "features" as const, items: featuresEntry.section.items.map((_, index) => ({ id: `${featuresEntry.section.id}:item:${index}` })) }] : []),
     ...(useCasesEntry ? [{ id: useCasesEntry.section.id, role: "use_cases" as const, items: useCasesEntry.section.items.map((_, index) => ({ id: `${useCasesEntry.section.id}:item:${index}` })) }] : []),
   ], projects: input.projects.map((project) => ({ id: project.id, hasAuthenticImage: visualByProjectId.has(project.id) })) });
-  const ranking = rankAuthoredTemplateFamilies(authoredTemplateFamilies, createContentShape(units, null, productTechSignal));
-  const selectedFamily = ranking[0]?.familyId;
-  if (!selectedFamily) return fallback([{ stage: "ranking", code: "no_eligible_authored_family", path: "contentShape", pageRole: null }]);
+  const ranking = explainAuthoredTemplateFamilyRanking(authoredTemplateFamilies, createContentShape(units, null, productTechSignal));
+  const selectedFamily = ranking.selectedFamilyId;
+  if (!selectedFamily) return fallback([{ stage: "ranking", code: "no_eligible_authored_family", path: "contentShape", pageRole: null }], ranking);
 
   if (selectedFamily === "product-tech") {
-    if (!featuresEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }]);
+    if (!featuresEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
     const planning = createProductTechDocumentPlan({ units,
       cover: { contentId: "company", documentLabel: "PRODUCT PROFILE", companyName: input.company.name, companyType: input.profile.companyType },
       overview: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, supportingLine: narrativeEntry.section.description },
@@ -56,38 +71,39 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
       features: featuresEntry.section.items.map((item, index) => ({ contentId: `${featuresEntry.section.id}:item:${index}`, index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description })),
       ...(useCasesEntry?.section.items.length ? { useCases: { heading: useCasesEntry.section.title, supportingLine: useCasesEntry.section.description, items: useCasesEntry.section.items.map((item, index) => ({ contentId: `${useCasesEntry.section.id}:item:${index}`, index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description })) } } : {}),
     });
-    if (!planning.compatible) return fallback(planning.issues.map(planningReason)); const prepared = prepareProductTechDocumentPlan(planning.plan); if (!prepared.compatible) return fallback(prepared.issues.map(compatibilityReason)); const rendered = renderPreparedProductTechPlan(prepared.prepared);
-    return { mode: "authored", familyId: "product-tech", packId: "product-tech-v1", pdf: rendered.pdf, pageOrder: planning.plan.pages.map((page) => page.templateId), reasons: [] };
+    if (!planning.compatible) return fallback(planning.issues.map(planningReason), ranking); const prepared = prepareProductTechDocumentPlan(planning.plan); if (!prepared.compatible) return fallback(prepared.issues.map(compatibilityReason), ranking); const rendered = renderPreparedProductTechPlan(prepared.prepared);
+    const limits = renderedLimitReasons(rendered.pdf); if (limits.length) return fallback(limits, ranking); return { mode: "authored", familyId: "product-tech", packId: "product-tech-v1", pdf: rendered.pdf, pageOrder: planning.plan.pages.map((page) => page.templateId), reasons: [], ranking };
   }
 
   if (selectedFamily === "corporate-services") {
-    if (!servicesEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }]);
+    if (!servicesEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
     const planning = createCorporateServicesDocumentPlan({
       units,
       cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: input.company.name, companyType: input.profile.companyType },
       narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, supportingLine: narrativeEntry.section.description },
-      ...(input.company.activities && input.company.experience ? { approach: { contentId: "company", heading: "Business approach", activities: input.company.activities, experience: input.company.experience } } : {}),
+      ...(corporateDetailEntries.some((entry) => entry.role === "approach") ? {} : input.company.activities && input.company.experience ? { approach: { contentId: "company", heading: "Business approach", activities: input.company.activities, experience: input.company.experience } } : {}),
       servicesHeading: servicesEntry.section.title,
       servicesSupportingLine: servicesEntry.section.description,
       services: servicesEntry.section.items.map((item, index) => ({ contentId: `${servicesEntry.section.id}:item:${index}`, index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description })),
+      details: corporateDetailEntries.map((entry) => ({ contentId: entry.section.id, title: entry.section.title, body: entry.section.content, supportingLine: entry.section.description })),
     });
-    if (!planning.compatible) return fallback(planning.issues.map(planningReason));
+    if (!planning.compatible) return fallback(planning.issues.map(planningReason), ranking);
     const prepared = prepareCorporateServicesDocumentPlan(planning.plan);
-    if (!prepared.compatible) return fallback(prepared.issues.map(compatibilityReason));
+    if (!prepared.compatible) return fallback(prepared.issues.map(compatibilityReason), ranking);
     const rendered = renderPreparedCorporateServicesPlan(prepared.prepared);
-    return { mode: "authored", familyId: "corporate-services", packId: "corporate-services-v1", pdf: rendered.pdf, pageOrder: planning.plan.pages.map((page) => page.templateId), reasons: [] };
+    const limits = renderedLimitReasons(rendered.pdf); if (limits.length) return fallback(limits, ranking); return { mode: "authored", familyId: "corporate-services", packId: "corporate-services-v1", pdf: rendered.pdf, pageOrder: planning.plan.pages.map((page) => page.templateId), reasons: [], ranking };
   }
 
-  if (!servicesEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }]);
-  if (narrativeEntry.section.items.length > 1) return fallback([{ stage: "planning", code: "source_content_not_covered", path: `profile.sections.${input.profile.sections.indexOf(narrativeEntry.section)}.items`, pageRole: "narrative" }]);
-  if (servicesEntry.section.items.length !== 4) return fallback([{ stage: "planning", code: "capability_count_unsupported", path: `profile.sections.${input.profile.sections.indexOf(servicesEntry.section)}.items`, pageRole: "capabilities" }]);
+  if (!servicesEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
+  if (narrativeEntry.section.items.length > 1) return fallback([{ stage: "planning", code: "source_content_not_covered", path: `profile.sections.${input.profile.sections.indexOf(narrativeEntry.section)}.items`, pageRole: "narrative" }], ranking);
+  if (servicesEntry.section.items.length !== 4) return fallback([{ stage: "planning", code: "capability_count_unsupported", path: `profile.sections.${input.profile.sections.indexOf(servicesEntry.section)}.items`, pageRole: "capabilities" }], ranking);
   const imageDiagnostics = enriched.diagnostics.filter((issue) => issue.code.startsWith("image_") || issue.code === "authentic_project_image_metadata_missing");
-  if (imageDiagnostics.length > 0) return fallback(imageDiagnostics.map(enrichmentReason));
+  if (imageDiagnostics.length > 0) return fallback(imageDiagnostics.map(enrichmentReason), ranking);
   const missingVisuals: AuthoredExportFallbackReason[] = input.projects.flatMap((project, index) => visualByProjectId.has(project.id) ? [] : [{ stage: "enrichment", code: "authentic_project_image_metadata_missing", path: `projects.${index}.imageUrl`, pageRole: "project_grid" }]);
-  if (missingVisuals.length > 0) return fallback(missingVisuals);
+  if (missingVisuals.length > 0) return fallback(missingVisuals, ranking);
 
   const firstProject = input.projects[0];
-  if (!firstProject) return fallback([{ stage: "enrichment", code: "authentic_project_image_metadata_missing", path: "projects", pageRole: "cover" }]);
+  if (!firstProject) return fallback([{ stage: "enrichment", code: "authentic_project_image_metadata_missing", path: "projects", pageRole: "cover" }], ranking);
   const toImage = (projectId: string) => {
     const visual = visualByProjectId.get(projectId);
     if (!visual) throw new Error(`Verified visual ${projectId} became unavailable.`);
@@ -102,9 +118,9 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     ] },
     projects: input.projects.map((project) => ({ contentId: project.id, name: project.name, description: project.description, image: toImage(project.id) })),
   });
-  if (!planning.compatible) return fallback(planning.issues.map(planningReason));
+  if (!planning.compatible) return fallback(planning.issues.map(planningReason), ranking);
   const prepared = prepareVisualPortfolioDocumentPlan(planning.plan);
-  if (!prepared.compatible) return fallback(prepared.issues.map(compatibilityReason));
+  if (!prepared.compatible) return fallback(prepared.issues.map(compatibilityReason), ranking);
   const rendered = renderPreparedVisualPortfolioPlan(prepared.prepared);
-  return { mode: "authored", familyId: "visual-portfolio", packId: "editorial-interiors-v1", pdf: rendered.pdf, pageOrder: planning.plan.pages.map((page) => page.templateId), reasons: [] };
+  const limits = renderedLimitReasons(rendered.pdf); if (limits.length) return fallback(limits, ranking); return { mode: "authored", familyId: "visual-portfolio", packId: "editorial-interiors-v1", pdf: rendered.pdf, pageOrder: planning.plan.pages.map((page) => page.templateId), reasons: [], ranking };
 };

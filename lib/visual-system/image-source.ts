@@ -36,6 +36,7 @@ export const searchPexelsImages = async (
   const apiKey = process.env.PEXELS_API_KEY;
 
   if (!apiKey) {
+    emitProductionTelemetry({ name: "external_api_failed", failureClass: "external_api_failure", provider: "pexels", operation: "image_search", reasonCode: "pexels_configuration_missing" });
     throw new Error("Missing PEXELS_API_KEY.");
   }
 
@@ -56,6 +57,7 @@ export const searchPexelsImages = async (
   });
 
   if (!response.ok) {
+    emitProductionTelemetry({ name: "external_api_failed", failureClass: "external_api_failure", provider: "pexels", operation: "image_search", reasonCode: `pexels_${response.status}` });
     throw new Error(
       `Pexels request failed with status ${response.status}.`
     );
@@ -72,3 +74,4 @@ export const searchPexelsImages = async (
     height: photo.height,
   }));
 };
+import { emitProductionTelemetry } from "../production-telemetry";

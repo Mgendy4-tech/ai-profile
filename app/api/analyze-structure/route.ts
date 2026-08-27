@@ -1,12 +1,18 @@
 import OpenAI from "openai";
+import { analyzedStructureErrorMessage, validateAnalyzedProfileStructure } from "@/lib/profile-structure-boundary";
+import { validateGenerationRequestSize } from "@/lib/production-limits";
+import { emitProductionTelemetry } from "@/lib/production-telemetry";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
   try {
     const body = await request.json();
+    const requestLimit = validateGenerationRequestSize(body);
+    if (requestLimit) return Response.json({ error: requestLimit.message, code: requestLimit.code, retryable: false }, { status: 413 });
 
     const { company, projects } = body;
 
@@ -72,6 +78,9 @@ Rules:
 15. If the Project data array is empty, do NOT recommend a Projects section.
 16. Do not assume that a company has projects, partnerships, clients, case studies, or other business assets simply because they are common in its industry.
 17. The available company data and project data must determine which sections are appropriate.
+18. For consulting, advisory, agency, or professional-services companies without projects, use only these supported semantic section IDs: "about", "services", "expertise", "howItWorks", and "solutions". Always include "about" and "services"; include the other supported IDs only when the supplied company information supports them. Do not recommend unsupported marketing sections merely to reach a target count.
+19. For SaaS, software, platform, AI, technology, or digital-product companies without projects, use only these Product / Tech authored IDs: "about", "features", and "useCases". Always include "about" and "features"; include "useCases" only when explicitly supported. Do not relabel product capabilities as services and do not recommend unsupported sections.
+20. For Product / Tech structures, keep each section description/instruction concise: at most 8 ordinary words for "about" and at most 18 ordinary words for "features" or "useCases". Avoid long unbroken words.
 `;
 
     const response = await client.responses.create({
@@ -96,15 +105,19 @@ Rules:
       return Response.json(
         {
           error: "The AI response was not valid JSON.",
-          raw: output,
+          code: "analyzed_profile_json_invalid",
+          retryable: true,
         },
         { status: 500 }
       );
     }
 
-    return Response.json(analysis);
+    const validated = validateAnalyzedProfileStructure(analysis);
+    if (!validated.valid) { emitProductionTelemetry({ name: "structure_analysis_rejected", failureClass: "model_contract_rejection", reasonCode: validated.diagnostics[0]?.code ?? "analyzed_profile_structure_invalid", latencyMs: Date.now() - startedAt }); return Response.json({ error: analyzedStructureErrorMessage, code: "analyzed_profile_structure_invalid", retryable: true, ...(process.env.NODE_ENV !== "production" ? { diagnostics: validated.diagnostics } : {}) }, { status: 502 }); }
+    return Response.json(validated.structure);
   } catch (error) {
-    console.error("Analyze structure error:", error);
+    emitProductionTelemetry({ name: "external_api_failed", failureClass: "external_api_failure", provider: "openai", operation: "analyze_structure", reasonCode: error instanceof OpenAI.APIError ? `openai_${error.status}` : "runtime_system_failure" });
+    console.error("Analyze structure failed", { name: error instanceof Error ? error.name : "UnknownError" });
 
     return Response.json(
       { error: "Failed to analyze company structure." },

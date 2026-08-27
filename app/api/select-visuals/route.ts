@@ -98,7 +98,7 @@ export async function POST(request: Request) {
             fallbackReason: result.fallbackReason,
           };
         } catch (error) {
-          console.error(`Visual selection failed for brief ${brief.id}:`, error);
+          console.error("Visual selection failed", { briefId: brief.id, name: error instanceof Error ? error.name : "UnknownError" });
           visuals[briefIndex] = createFallbackVisual(
             brief,
             "Visual selection failed for this brief."
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
     const response: SelectVisualsResponse = { visuals };
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Select visuals request failed:", error);
+    console.error("Select visuals request failed", { name: error instanceof Error ? error.name : "UnknownError" });
     return NextResponse.json(
       { error: "Failed to select contextual visuals." },
       { status: 500 }

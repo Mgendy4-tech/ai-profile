@@ -9,6 +9,7 @@ export type AuthoredNormalizationInput = {
   company: { id?: string };
   sections: readonly (
     | { id: string; role: "narrative"; content: string; coverage?: "required" | "optional" }
+    | { id: string; role: "expertise" | "approach" | "supporting_narrative"; content: string; coverage?: "required" | "optional" }
     | { id: string; role: "services"; items: readonly { id?: string }[]; coverage?: "required" | "optional" }
     | { id: string; role: "features" | "use_cases"; items: readonly { id?: string }[]; coverage?: "required" | "optional" }
   )[];
@@ -25,10 +26,10 @@ export const normalizeAuthoredContentUnits = (
     coverage: "required",
   },
   ...input.sections.flatMap((section, sectionIndex): NormalizedContentUnit[] => {
-    if (section.role === "narrative") {
+    if ("content" in section) {
       return [{
         id: section.id,
-        kind: "narrative_section",
+        kind: section.role === "narrative" ? "narrative_section" as const : section.role === "expertise" ? "corporate_expertise" as const : section.role === "approach" ? "corporate_approach" as const : "corporate_supporting_narrative" as const,
         sourcePath: `sections.${sectionIndex}`,
         coverage: section.coverage ?? "required",
         characterCount: section.content.length,
@@ -61,6 +62,7 @@ export const deriveDeterministicContentFacts = (
     narrativeSectionCount: narrative.length,
     narrativeCharacterCount: narrative.reduce((total, section) => total + section.characterCount, 0),
     serviceCount: units.filter((unit) => unit.kind === "service_capability").length,
+    corporateDetailCount: units.filter((unit) => unit.kind === "corporate_expertise" || unit.kind === "corporate_approach" || unit.kind === "corporate_supporting_narrative").length,
     productFeatureCount: units.filter((unit) => unit.kind === "product_feature").length,
     useCaseCount: units.filter((unit) => unit.kind === "use_case").length,
     productTechSignal,

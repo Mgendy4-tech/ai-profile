@@ -11,7 +11,8 @@ import {
   type PDFDesignTokens,
   type PDFPageMode,
 } from "./pdf-design-tokens";
-import { resolvePDFPageMode } from "./pdf-page-pacing";
+import { resolvePDFArtDirection, type PDFArtDirection } from "./pdf-art-direction";
+import { fitWordAwareDisplayTitle } from "./pdf-editorial-typesetting";
 
 export type CoverEditorialMode = "image" | "image_free";
 export type CoverEditorialVariant =
@@ -32,6 +33,8 @@ export type CoverEditorialLayout = {
   titleArea: ResolvedArea;
   sectionsConsumed: [];
   usesPlaceholderPanel: false;
+  usesInsetFrame: false;
+  artDirection: PDFArtDirection;
 };
 
 export type CoverEditorialActivation = {
@@ -50,6 +53,16 @@ export type DrawCoverEditorialInput = {
     width: number;
     height: number;
   } | null;
+};
+
+export type PreparedCoverTypography = {
+  fontSize: number;
+  titleLines: string[];
+  eyebrowBounds: { top: number; bottom: number };
+  ruleY: number;
+  titleBaselineY: number;
+  titleBounds: { top: number; bottom: number };
+  lineHeight: number;
 };
 
 const copyArea = (area: ResolvedArea): ResolvedArea => ({ ...area });
@@ -100,14 +113,33 @@ export const createCoverEditorialLayout = (
   }
 
   const pageArea = copyArea(page.pageArea);
-  const variant = selectCoverEditorialVariant(hasHeroImage, heroVisual);
-  const pageMode = resolvePDFPageMode({
+  const ratio = heroVisual?.width && heroVisual.height
+    ? heroVisual.width / heroVisual.height
+    : heroVisual?.aspectRatio === "16:9"
+    ? 16 / 9
+    : heroVisual?.aspectRatio === "4:3"
+    ? 4 / 3
+    : 1;
+  const artDirection = resolvePDFArtDirection({
     pageIndex: 0,
     pageRole: "cover",
+    archetype: page.archetype,
     density: page.density,
-    hasImage: variant !== "typographic_hero",
+    sectionCount: 0,
+    textLength: 0,
+    hasContextualImage: hasHeroImage && Boolean(heroVisual),
+    hasAuthenticProjectImage: false,
+    imageAspectRatio: ratio,
+    previousFamily: null,
     previousMode: null,
   });
+  const variant: CoverEditorialVariant =
+    artDirection.compositionFamily === "cover_bleed"
+      ? "full_bleed_overlay"
+      : artDirection.compositionFamily === "cover_split"
+      ? "asymmetric_split"
+      : "typographic_hero";
+  const pageMode = artDirection.pageMode;
   const heroArea: ResolvedArea | null = variant === "full_bleed_overlay"
     ? {
         x: page.pageArea.x,
@@ -130,6 +162,13 @@ export const createCoverEditorialLayout = (
         width: page.contentArea.width * 0.56,
         height: page.contentArea.height * 0.44,
       }
+    : variant === "typographic_hero"
+    ? {
+        x: page.contentArea.x,
+        y: page.contentArea.y,
+        width: page.contentArea.width * 0.82,
+        height: page.contentArea.height,
+      }
     : {
         x: page.contentArea.x,
         y: page.contentArea.y,
@@ -149,18 +188,32 @@ export const createCoverEditorialLayout = (
         width: panelArea.width,
         height: panelArea.height,
       };
-  const logoArea: ResolvedArea = {
-    x: panelArea.x + 10,
-    y: panelArea.y + 12,
-    width: Math.max(1, panelArea.width - 20),
-    height: 16,
-  };
-  const titleArea: ResolvedArea = {
-    x: panelArea.x + 10,
-    y: panelArea.y + panelArea.height * 0.42,
-    width: Math.max(1, panelArea.width - 20),
-    height: panelArea.height * 0.4,
-  };
+  const logoArea: ResolvedArea = variant === "typographic_hero"
+    ? {
+        x: panelArea.x + 10,
+        y: panelArea.y + panelArea.height * 0.12,
+        width: Math.max(1, panelArea.width * 0.62),
+        height: 32,
+      }
+    : {
+        x: panelArea.x + 10,
+        y: panelArea.y + 12,
+        width: Math.max(1, panelArea.width - 20),
+        height: 16,
+      };
+  const titleArea: ResolvedArea = variant === "typographic_hero"
+    ? {
+        x: panelArea.x + 10,
+        y: panelArea.y + panelArea.height * 0.48,
+        width: Math.max(1, panelArea.width - 10),
+        height: panelArea.height * 0.42,
+      }
+    : {
+        x: panelArea.x + 10,
+        y: panelArea.y + panelArea.height * 0.42,
+        width: Math.max(1, panelArea.width - 20),
+        height: panelArea.height * 0.4,
+      };
 
   const areas = [
     ...(heroArea ? [heroArea] : []),
@@ -190,6 +243,8 @@ export const createCoverEditorialLayout = (
     titleArea,
     sectionsConsumed: [],
     usesPlaceholderPanel: false,
+    usesInsetFrame: false,
+    artDirection,
   };
 };
 
@@ -212,6 +267,65 @@ export const selectCoverEditorialVariant = (
   return ratio >= 1.5 ? "full_bleed_overlay" : "asymmetric_split";
 };
 
+export const prepareCoverTypography = (
+  pdf: jsPDF,
+  layout: CoverEditorialLayout,
+  companyName: string,
+  designTokens: PDFDesignTokens
+): PreparedCoverTypography | null => {
+  const pointToMm = 0.352778;
+  const typography = resolveTypographyForDensity(
+    designTokens,
+    layout.artDirection.compositionFamily === "cover_typographic"
+      ? "minimal"
+      : "balanced"
+  );
+  const eyebrowBaseline = layout.eyebrowPosition.y;
+  const eyebrowBounds = {
+    top: eyebrowBaseline - typography.overline.fontSize * pointToMm * 0.78,
+    bottom: eyebrowBaseline + typography.overline.fontSize * pointToMm * 0.24,
+  };
+  const ruleY = eyebrowBounds.bottom + designTokens.spacing.sm;
+  const titleTop = ruleY + designTokens.spacing.sm;
+
+  const fit = fitWordAwareDisplayTitle(pdf, companyName, {
+    maxWidth: layout.titleArea.width,
+    maxHeight: layout.titleArea.y + layout.titleArea.height - titleTop,
+    approvedSizes: designTokens.typographySteps.hero,
+    fallbackSizes: [40, 36, 32],
+    minLines: 2,
+    maxLines: 4,
+  });
+
+  if (fit) {
+    const candidate = fit.fontSize;
+    const titleLines = fit.lines;
+    const lineHeight = fit.lineHeight;
+    const titleBaselineY = titleTop + candidate * pointToMm * 0.78;
+    const titleBounds = {
+      top: titleTop,
+      bottom:
+        titleBaselineY +
+        Math.max(0, titleLines.length - 1) * lineHeight +
+        candidate * pointToMm * 0.24,
+    };
+
+    if (titleBounds.bottom <= layout.titleArea.y + layout.titleArea.height) {
+      return {
+        fontSize: candidate,
+        titleLines,
+        eyebrowBounds,
+        ruleY,
+        titleBaselineY,
+        titleBounds,
+        lineHeight,
+      };
+    }
+  }
+
+  return null;
+};
+
 export const drawCoverEditorial = ({
   pdf,
   page,
@@ -223,6 +337,7 @@ export const drawCoverEditorial = ({
   renderedVisual: SelectedContextualVisual | null;
   variant: CoverEditorialVariant;
   pageMode: PDFPageMode;
+  compositionFamily: PDFArtDirection["compositionFamily"];
 } => {
   if (!companyName.trim()) {
     throw new Error("A company name is required for the editorial cover.");
@@ -248,6 +363,16 @@ export const drawCoverEditorial = ({
   const coverPalette = resolvePagePalette(designTokens, layout.pageMode);
   const accentPalette = resolvePagePalette(designTokens, "accent");
   const typography = resolveTypographyForDensity(designTokens, page.density);
+  const preparedTypography = prepareCoverTypography(
+    pdf,
+    layout,
+    companyName,
+    designTokens
+  );
+
+  if (!preparedTypography) {
+    throw new Error("Company name does not fit the editorial cover safely.");
+  }
 
   const basePalette = layout.variant === "typographic_hero"
     ? coverPalette
@@ -291,17 +416,23 @@ export const drawCoverEditorial = ({
       "F"
     );
   } else {
+    pdf.setFillColor(
+      coverPalette.accent[0],
+      coverPalette.accent[1],
+      coverPalette.accent[2]
+    );
+    pdf.rect(0, 0, designTokens.spacing.lg, layout.pageArea.height, "F");
     pdf.setDrawColor(
       coverPalette.primaryText[0],
       coverPalette.primaryText[1],
       coverPalette.primaryText[2]
     );
-    pdf.setLineWidth(designTokens.rules.hairlineWidth);
-    pdf.rect(
+    pdf.setLineWidth(designTokens.rules.hairlineWidth * 2);
+    pdf.line(
       page.contentArea.x,
-      page.contentArea.y,
-      page.contentArea.width,
-      page.contentArea.height
+      page.contentArea.y + page.contentArea.height - designTokens.spacing.lg,
+      page.contentArea.x + page.contentArea.width,
+      page.contentArea.y + page.contentArea.height - designTokens.spacing.lg
     );
   }
 
@@ -321,24 +452,21 @@ export const drawCoverEditorial = ({
   pdf.setLineWidth(designTokens.rules.hairlineWidth);
   pdf.line(
     layout.titleArea.x,
-    layout.titleArea.y + designTokens.spacing.md,
+    preparedTypography.ruleY,
     layout.titleArea.x + Math.min(
       designTokens.rules.shortRuleWidth,
       layout.titleArea.width
     ),
-    layout.titleArea.y + designTokens.spacing.md
+    preparedTypography.ruleY
   );
 
   pdf.setFont("helvetica", typography.display.fontStyle);
-  pdf.setFontSize(typography.display.fontSize);
-  const titleLines = pdf.splitTextToSize(
-    companyName.trim(),
-    layout.titleArea.width
-  ) as string[];
+  pdf.setFontSize(preparedTypography.fontSize);
+  pdf.setLineHeightFactor(1.12);
   pdf.text(
-    titleLines.slice(0, 5),
+    preparedTypography.titleLines,
     layout.titleArea.x,
-    layout.titleArea.y + designTokens.spacing.xl + designTokens.spacing.xs
+    preparedTypography.titleBaselineY
   );
 
   if (logo?.source && logo.width > 0 && logo.height > 0) {
@@ -358,5 +486,6 @@ export const drawCoverEditorial = ({
     renderedVisual: heroImageSource ? activation.heroVisual : null,
     variant: layout.variant,
     pageMode: layout.pageMode,
+    compositionFamily: layout.artDirection.compositionFamily,
   };
 };

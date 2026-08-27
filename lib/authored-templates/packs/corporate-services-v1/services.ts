@@ -4,7 +4,14 @@ import type { AuthoredPageTemplate, ContentEnvelope, TemplateRenderAudit } from 
 import type { CorporateServicesPageContent } from "./content";
 import { corporateServicesV1VisualSystem as v, createCorporateMeasurementContext, paintCorporatePaper, preparedCorporateText } from "./visual-system";
 
-type Definition = { count: 1 | 2 | 3 | 4; continuation: boolean; id: string };
+type Definition = { count: 1 | 2 | 3 | 4; continuation: boolean; id: string; rowTops: readonly number[] };
+
+const FIXED_ROW_TOPS = {
+  1: [112],
+  2: [112, 194],
+  3: [112, 166.667, 221.333],
+  4: [112, 153, 194, 235],
+} as const;
 
 export const CORPORATE_SERVICES_TEXT_GEOMETRY = {
   top: 112,
@@ -40,9 +47,8 @@ const templateFor = (definition: Definition): AuthoredPageTemplate<CorporateServ
       pdf.setTextColor(...v.palette.ink); pdf.setFont("times", "bold"); pdf.setFontSize(29); pdf.setLineHeightFactor(1); pdf.text([...heading.lines], 19, 65);
       const supporting = preparedCorporateText(instance, "supportingLine"); audit.supportingLine = supporting.lines;
       pdf.setTextColor(...v.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.5); pdf.setLineHeightFactor(1.35); pdf.text([...supporting.lines], 19, 88);
-      const top = CORPORATE_SERVICES_TEXT_GEOMETRY.top; const available = CORPORATE_SERVICES_TEXT_GEOMETRY.bottom - top; const rowHeight = available / definition.count;
       definition.count && instance.source.services.forEach((service, index) => {
-        const y = top + index * rowHeight;
+        const y = definition.rowTops[index];
         if (index === 0) pdf.setDrawColor(...v.palette.cobalt); else pdf.setDrawColor(...v.palette.mist); pdf.setLineWidth(index === 0 ? 0.8 : 0.35); pdf.line(19, y, 191, y);
         pdf.setTextColor(...v.palette.cobalt); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8); pdf.text(service.index, CORPORATE_SERVICES_TEXT_GEOMETRY.indexX, y + CORPORATE_SERVICES_TEXT_GEOMETRY.titleYOffset);
         const title = preparedCorporateText(instance, `service${index}Title`); const description = preparedCorporateText(instance, `service${index}Description`);
@@ -56,5 +62,5 @@ const templateFor = (definition: Definition): AuthoredPageTemplate<CorporateServ
   };
 };
 
-export const corporateServicesPrimaryTemplates = ([1, 2, 3, 4] as const).map((count) => templateFor({ count, continuation: false, id: `corporate-services-v1.services-${count}` }));
-export const corporateServicesContinuationTemplates = ([1, 2, 3, 4] as const).map((count) => templateFor({ count, continuation: true, id: `corporate-services-v1.services-continuation-${count}` }));
+export const corporateServicesPrimaryTemplates = ([1, 2, 3, 4] as const).map((count) => templateFor({ count, continuation: false, id: `corporate-services-v1.services-${count}`, rowTops: FIXED_ROW_TOPS[count] }));
+export const corporateServicesContinuationTemplates = ([1, 2, 3, 4] as const).map((count) => templateFor({ count, continuation: true, id: `corporate-services-v1.services-continuation-${count}`, rowTops: FIXED_ROW_TOPS[count] }));

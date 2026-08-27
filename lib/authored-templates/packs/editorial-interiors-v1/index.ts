@@ -14,7 +14,7 @@ import type {
   ProjectFeatureContent,
 } from "./content";
 import { editorialInteriorsCoverTemplate } from "./cover";
-import { editorialInteriorsNarrativeTemplate } from "./narrative";
+import { editorialInteriorsNarrativeTemplate, editorialInteriorsSparseNarrativeTemplate, selectEditorialInteriorsNarrativeTemplate } from "./narrative";
 import { editorialInteriorsProjectFeatureTemplate } from "./project-feature";
 import { editorialInteriorsMultiProjectTemplates } from "./portfolio-project-pages";
 import { editorialInteriorsV1VisualSystem } from "./visual-system";
@@ -36,6 +36,7 @@ export const editorialInteriorsV1Pack = {
     editorialInteriorsNarrativeTemplate,
     editorialInteriorsCapabilitiesTemplate,
     editorialInteriorsProjectFeatureTemplate,
+    editorialInteriorsSparseNarrativeTemplate,
     ...editorialInteriorsMultiProjectTemplates,
   ],
 } as const satisfies TemplatePack;
@@ -58,9 +59,10 @@ export type EditorialInteriorsV1PreparationResult =
 export const prepareEditorialInteriorsV1Document = (
   input: EditorialInteriorsV1DocumentInput,
 ): EditorialInteriorsV1PreparationResult => {
+  const narrativeTemplate = selectEditorialInteriorsNarrativeTemplate(input.narrative);
   const results = [
     editorialInteriorsCoverTemplate.prepare(input.cover),
-    editorialInteriorsNarrativeTemplate.prepare(input.narrative),
+    narrativeTemplate.prepare(input.narrative),
     editorialInteriorsCapabilitiesTemplate.prepare(input.capabilities),
     editorialInteriorsProjectFeatureTemplate.prepare(input.projectFeature),
   ] as const;
@@ -123,7 +125,8 @@ export const renderPreparedEditorialInteriorsV1Document = (
   pdf.setFileId("00000000000000000000000000000000");
   const coverAudit = editorialInteriorsCoverTemplate.render(pdf, prepared.instances[0]);
   pdf.addPage("a4", "portrait");
-  const narrativeAudit = editorialInteriorsNarrativeTemplate.render(pdf, prepared.instances[1]);
+  const narrativeTemplate = selectEditorialInteriorsNarrativeTemplate(prepared.instances[1].source);
+  const narrativeAudit = narrativeTemplate.render(pdf, prepared.instances[1]);
   pdf.addPage("a4", "portrait");
   const capabilitiesAudit = editorialInteriorsCapabilitiesTemplate.render(pdf, prepared.instances[2]);
   pdf.addPage("a4", "portrait");
@@ -139,6 +142,7 @@ export {
   editorialInteriorsCapabilitiesTemplate,
   editorialInteriorsCoverTemplate,
   editorialInteriorsNarrativeTemplate,
+  editorialInteriorsSparseNarrativeTemplate,
   editorialInteriorsProjectFeatureTemplate,
   editorialInteriorsV1VisualSystem,
 };

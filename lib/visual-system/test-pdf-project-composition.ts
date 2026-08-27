@@ -100,6 +100,12 @@ assert(
   "Two-project grids must use an asymmetric dominant hierarchy."
 );
 assert(
+  preparedGrid!.projects[1].captionWidth >=
+    preparedGrid!.contentArea.width * 0.35 &&
+    preparedGrid!.projects[1].imageArea!.x === preparedGrid!.projects[1].titleX,
+  "The secondary project column must be readable and share a clean image/text alignment."
+);
+assert(
   JSON.stringify(preparedGrid) === JSON.stringify(repeatedGrid),
   "Identical project inputs must resolve identically."
 );
@@ -113,6 +119,36 @@ assert(
     ),
   "Project pages must use authentic images without UI-card styling."
 );
+assert(
+  preparedGrid?.artDirection.compositionFamily === "editorial_portfolio" &&
+    preparedGrid.projects[0].imageArea?.x === 0 &&
+    preparedGrid.projects[0].imageArea?.y === 0,
+  "Editorial Portfolio should give the dominant authentic image edge-bleed ownership."
+);
+preparedGrid?.projects.forEach((project) => {
+  assert(
+    project.descriptionFontSize >= 9.5 && project.descriptionLineHeight >= 5.2,
+    "Project descriptions must remain comfortably readable."
+  );
+  assert(
+    project.headingBounds.bottom < project.ruleY,
+    "Project caption rule must clear title glyph bounds."
+  );
+  if (project.descriptionBounds) {
+    assert(
+      project.ruleY < project.descriptionBounds.top,
+      "Project caption rule must clear description glyph bounds."
+    );
+  }
+  assert(
+    project.headingBounds.top >= 0 && project.bottom <= 297,
+    "Project text bounds must remain inside the physical A4 page."
+  );
+  assert(
+    !("location" in project) && !("year" in project) && !("scope" in project),
+    "Project composition must not invent unavailable metadata."
+  );
+});
 
 const isWithinA4 = (area: ResolvedArea) =>
   area.x >= 0 &&

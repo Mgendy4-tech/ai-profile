@@ -2,10 +2,10 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { routeEditorialInteriorsV1Export } from "./export-orchestrator";
 import type { ProductionEnrichmentInput } from "./enrichment";
-import { EDITORIAL_INTERIORS_V1_PAGE_ORDER } from "./packs/editorial-interiors-v1";
+import { EDITORIAL_INTERIORS_V1_PAGE_ORDER, editorialInteriorsSparseNarrativeTemplate } from "./packs/editorial-interiors-v1";
 
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
-const REVIEW_IMAGE_BUFFER = readFileSync(resolve("experiments", "Experiment_Pack_01", "assets", "aurelia-interior-hero.png"));
+const REVIEW_IMAGE_BUFFER = readFileSync(resolve("lib", "test-fixtures", "visual", "aurelia-user-upload.png"));
 const REVIEW_IMAGE = `data:image/png;base64,${REVIEW_IMAGE_BUFFER.toString("base64")}`;
 const REVIEW_DIMENSIONS = { width: REVIEW_IMAGE_BUFFER.readUInt32BE(16), height: REVIEW_IMAGE_BUFFER.readUInt32BE(20) };
 const decode = async () => REVIEW_DIMENSIONS;
@@ -76,7 +76,9 @@ const run = async () => {
   assert(valid.mode === "authored", "Fully compatible production input must select authored mode.");
   if (valid.mode !== "authored") throw new Error("Expected authored decision.");
   assert(valid.pdf.getNumberOfPages() === 4, "Authored export must contain exactly four pages.");
-  assert(valid.pageOrder.join("|") === EDITORIAL_INTERIORS_V1_PAGE_ORDER.join("|"), "Authored export must preserve exact approved page order.");
+  const expectedSparsePageOrder = [...EDITORIAL_INTERIORS_V1_PAGE_ORDER];
+  expectedSparsePageOrder[1] = editorialInteriorsSparseNarrativeTemplate.id;
+  assert(valid.pageOrder.join("|") === expectedSparsePageOrder.join("|"), "Authored export must preserve the exact approved sparse narrative page order.");
   for (let page = 1; page <= 4; page += 1) {
     valid.pdf.setPage(page);
     assert(Math.abs(valid.pdf.internal.pageSize.getWidth() - 210) < 0.01 && Math.abs(valid.pdf.internal.pageSize.getHeight() - 297) < 0.01, `Page ${page} must be A4.`);

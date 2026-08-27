@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { isolateNewCompanyState } from '@/lib/profile-state-isolation';
 
 type CompanyData = {
   name: string;
@@ -48,6 +49,7 @@ export default function CompanyPage() {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [isAddingProject, setIsAddingProject] = useState(true);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const logoExplicitlySelected = useRef(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -111,7 +113,7 @@ export default function CompanyPage() {
     }
 
     const reader = new FileReader();
-    reader.onload = () => updateField('logoUrl', String(reader.result));
+    reader.onload = () => { logoExplicitlySelected.current = true; updateField('logoUrl', String(reader.result)); };
     reader.onerror = () => {
       setErrorMessage('We could not read that logo. Please try another file.');
       setSuccessMessage('');
@@ -214,17 +216,23 @@ export default function CompanyPage() {
 
     if (
       !companyData.name.trim() ||
-      !companyData.about.trim() ||
-      !companyData.activities.trim() ||
-      !companyData.experience.trim()
+      !companyData.about.trim()
     ) {
-      setErrorMessage('Please fill in all company fields before saving.');
+      setErrorMessage('Please provide the company name and about information before saving.');
       setSuccessMessage('');
       return;
     }
 
-    localStorage.setItem('companyData', JSON.stringify(companyData));
-    localStorage.setItem('projectsData', JSON.stringify(projects));
+    let previousCompany: CompanyData | null = null;
+    try { previousCompany = JSON.parse(localStorage.getItem('companyData') ?? 'null') as CompanyData | null; } catch { previousCompany = null; }
+    const isolated = isolateNewCompanyState(previousCompany, companyData, projects, logoExplicitlySelected.current);
+    isolated.clearKeys.forEach((key) => localStorage.removeItem(key));
+    const approvedCompanyData = isolated.companyData as CompanyData;
+    const approvedProjects = isolated.projects as Project[];
+    setCompanyData(approvedCompanyData);
+    setProjects(approvedProjects);
+    localStorage.setItem('companyData', JSON.stringify(approvedCompanyData));
+    localStorage.setItem('projectsData', JSON.stringify(approvedProjects));
 
 setTimeout(() => {
   router.push('/generate');
@@ -307,7 +315,7 @@ setTimeout(() => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Main Activities
+              Main Activities <span className="font-normal text-gray-500">(optional)</span>
             </label>
 
             <input
@@ -321,7 +329,7 @@ setTimeout(() => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Years of Experience
+              Years of Experience <span className="font-normal text-gray-500">(optional)</span>
             </label>
 
             <input

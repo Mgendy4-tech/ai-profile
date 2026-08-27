@@ -2,12 +2,18 @@ import type jsPDF from "jspdf";
 import type { ResolvedArea, ResolvedCompositionPage } from "./composition-resolver";
 import {
   resolvePagePalette,
+  getPDFLineHeightFactor,
   resolveSpacingForDensity,
   resolveTypographyForDensity,
   type PDFDesignTokens,
   type PDFPageMode,
 } from "./pdf-design-tokens";
-import { resolvePDFPageMode } from "./pdf-page-pacing";
+import {
+  resolvePDFArtDirection,
+  type PDFArtDirection,
+  type PDFCompositionFamily,
+} from "./pdf-art-direction";
+import { PDF_EDITORIAL_TYPE_CONSTRAINTS } from "./pdf-editorial-typesetting";
 
 export type AuthenticProjectImage = {
   role: "project_image";
@@ -49,6 +55,11 @@ export type PreparedProjectItem = {
   captionWidth: number;
   dominant: boolean;
   bottom: number;
+  headingBounds: { top: number; bottom: number };
+  ruleY: number;
+  descriptionBounds: { top: number; bottom: number } | null;
+  descriptionFontSize: number;
+  descriptionLineHeight: number;
 };
 
 export type PreparedProjectPage = {
@@ -61,6 +72,7 @@ export type PreparedProjectPage = {
   consumedSectionIds: string[];
   usesContextualStock: false;
   usesRoundedCards: false;
+  artDirection: PDFArtDirection;
 };
 
 const isWithinA4 = (area: ResolvedArea, page: ResolvedArea) =>
@@ -123,7 +135,8 @@ export const prepareProjectPage = (
   availableProjects: readonly ProjectPortfolioItem[],
   designTokens: PDFDesignTokens,
   pageIndex: number,
-  previousMode: PDFPageMode | null
+  previousMode: PDFPageMode | null,
+  previousFamily: PDFCompositionFamily | null = null
 ): PreparedProjectPage | null => {
   const byName = new Map(availableProjects.map((project) => [project.name, project]));
   const projects = activation.projectNames.map((name) => byName.get(name));
@@ -153,13 +166,23 @@ export const prepareProjectPage = (
 
   const variant = selectProjectVariant(activation, safeProjects);
   const hasImage = safeProjects.some((project) => Boolean(project.image));
-  const pageMode = resolvePDFPageMode({
+  const artDirection = resolvePDFArtDirection({
     pageIndex,
     pageRole: "projects",
+    archetype: activation.page.archetype,
     density: activation.page.density,
-    hasImage,
+    sectionCount: 1,
+    textLength: safeProjects.reduce(
+      (total, project) => total + project.name.length + project.description.length,
+      0
+    ),
+    hasContextualImage: false,
+    hasAuthenticProjectImage: hasImage,
+    imageAspectRatio: null,
+    previousFamily,
     previousMode,
   });
+  const pageMode = artDirection.pageMode;
   const typography = resolveTypographyForDensity(
     designTokens,
     activation.page.density
@@ -177,10 +200,10 @@ export const prepareProjectPage = (
 
     if (variant === "image_feature") {
       imageArea = {
-        x: content.x,
-        y: content.y + spacing.lg,
-        width: content.width,
-        height: content.height * 0.58,
+        x: 0,
+        y: 0,
+        width: activation.page.pageArea.width,
+        height: activation.page.pageArea.height * 0.55,
       };
       captionY = imageArea.y + imageArea.height + spacing.lg;
     } else if (variant === "typographic_feature") {
@@ -191,14 +214,14 @@ export const prepareProjectPage = (
       if (index === 0) {
         imageArea = project.image
           ? {
-              x: content.x,
-              y: content.y + spacing.lg,
-              width: content.width * 0.6,
-              height: content.height * 0.52,
+              x: 0,
+              y: 0,
+              width: activation.page.pageArea.width * 0.62,
+              height: activation.page.pageArea.height * 0.56,
             }
           : null;
         captionX = content.x;
-        captionWidth = content.width * 0.6;
+        captionWidth = content.width * 0.58;
         captionY = imageArea
           ? imageArea.y + imageArea.height + spacing.md
           : content.y + content.height * 0.3;
@@ -206,14 +229,14 @@ export const prepareProjectPage = (
         dominant = false;
         imageArea = project.image
           ? {
-              x: content.x + content.width * 0.66,
-              y: content.y + content.height * 0.2,
-              width: content.width * 0.34,
-              height: content.height * 0.34,
+              x: content.x + content.width * 0.64,
+              y: content.y + content.height * 0.17,
+              width: content.width * 0.36,
+              height: content.height * 0.3,
             }
           : null;
-        captionX = content.x + content.width * 0.66;
-        captionWidth = content.width * 0.34;
+        captionX = content.x + content.width * 0.64;
+        captionWidth = content.width * 0.36;
         captionY = imageArea
           ? imageArea.y + imageArea.height + spacing.md
           : content.y + content.height * 0.52;
@@ -240,14 +263,35 @@ export const prepareProjectPage = (
     const heading = dominant ? typography.h1 : typography.h2;
     pdf.setFont("helvetica", heading.fontStyle);
     pdf.setFontSize(heading.fontSize);
+    pdf.setLineHeightFactor(getPDFLineHeightFactor(heading));
     const titleLines = pdf.splitTextToSize(project.name, captionWidth) as string[];
-    pdf.setFont("helvetica", typography.caption.fontStyle);
-    pdf.setFontSize(typography.caption.fontSize);
+    const descriptionFontSize = Math.max(
+      typography.body.fontSize,
+      PDF_EDITORIAL_TYPE_CONSTRAINTS.minimumProjectDescriptionFontSize
+    );
+    const descriptionLineHeight = Math.max(typography.body.lineHeight, 5.2);
+    pdf.setFont("helvetica", typography.body.fontStyle);
+    pdf.setFontSize(descriptionFontSize);
     const descriptionLines = project.description.trim()
       ? (pdf.splitTextToSize(project.description.trim(), captionWidth) as string[])
       : [];
-    const descriptionY = captionY + titleLines.length * heading.lineHeight + spacing.xs;
-    const bottom = descriptionY + descriptionLines.length * typography.caption.lineHeight;
+    const pointToMm = 0.352778;
+    const headingBounds = {
+      top: captionY - heading.fontSize * pointToMm * 0.78,
+      bottom:
+        captionY +
+        Math.max(0, titleLines.length - 1) * heading.lineHeight +
+        heading.fontSize * pointToMm * 0.24,
+    };
+    const ruleY = headingBounds.bottom + spacing.xs;
+    const descriptionY =
+      ruleY + spacing.sm + descriptionFontSize * pointToMm * 0.78;
+    const descriptionBottom = descriptionLines.length > 0
+      ? descriptionY +
+        Math.max(0, descriptionLines.length - 1) * descriptionLineHeight +
+        descriptionFontSize * pointToMm * 0.24
+      : descriptionY;
+    const bottom = descriptionBottom;
 
     prepared.push({
       name: project.name,
@@ -262,6 +306,17 @@ export const prepareProjectPage = (
       captionWidth,
       dominant,
       bottom,
+      headingBounds,
+      ruleY,
+      descriptionBounds:
+        descriptionLines.length > 0
+          ? {
+              top: descriptionY - descriptionFontSize * pointToMm * 0.78,
+              bottom: descriptionBottom,
+            }
+          : null,
+      descriptionFontSize,
+      descriptionLineHeight,
     });
   });
 
@@ -287,6 +342,7 @@ export const prepareProjectPage = (
     consumedSectionIds: [activation.sectionId],
     usesContextualStock: false,
     usesRoundedCards: false,
+    artDirection,
   };
 };
 
@@ -363,9 +419,9 @@ export const drawProjectPage = (
     pdf.setLineWidth(designTokens.rules.hairlineWidth);
     pdf.line(
       project.titleX,
-      project.descriptionY - spacing.xs,
+      project.ruleY,
       project.titleX + Math.min(designTokens.rules.shortRuleWidth, project.captionWidth),
-      project.descriptionY - spacing.xs
+      project.ruleY
     );
 
     if (project.descriptionLines.length > 0) {
@@ -374,8 +430,11 @@ export const drawProjectPage = (
         palette.secondaryText[1],
         palette.secondaryText[2]
       );
-      pdf.setFont("helvetica", typography.caption.fontStyle);
-      pdf.setFontSize(typography.caption.fontSize);
+      pdf.setFont("helvetica", typography.body.fontStyle);
+      pdf.setFontSize(project.descriptionFontSize);
+      pdf.setLineHeightFactor(
+        project.descriptionLineHeight / (project.descriptionFontSize * 0.352778)
+      );
       pdf.text(project.descriptionLines, project.titleX, project.descriptionY);
     }
   });

@@ -1,12 +1,20 @@
 import OpenAI from "openai";
+import { generatedSectionsErrorMessage, isSelectedServicesSection, structuredSectionContract, validateGeneratedProfileSections } from "@/lib/generated-profile-boundary";
+import { isProductTechCompanyType } from "@/lib/authored-templates/section-role-normalization";
+import { validateGenerationRequestSize } from "@/lib/production-limits";
+import { emitProductionTelemetry } from "@/lib/production-telemetry";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
   try {
     const body = await request.json();
+
+    const requestLimit = validateGenerationRequestSize(body);
+    if (requestLimit) return Response.json({ error: requestLimit.message, code: requestLimit.code, retryable: false }, { status: 413 });
 
 
 
@@ -22,6 +30,36 @@ if (!company?.name || !company?.about) {
 const sections = Array.isArray(selectedSections)
   ? selectedSections
   : [];
+const serviceSections = sections.filter(isSelectedServicesSection);
+const productSections = sections.filter((section: { id: string; displayTitle: string; description: string }) => { const contract = structuredSectionContract(section); return contract && contract.kind !== "service"; });
+const serviceSourceMaterial = [company.about, company.activities, company.experience]
+  .filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
+const serviceContract = serviceSections.length === 0 ? "" : `
+
+STRUCTURED SERVICES CONTRACT:
+
+- The approved service section IDs are: ${serviceSections.map((section: { id: string }) => JSON.stringify(section.id)).join(", ")}.
+- Each service section must contain between 1 and 12 items. Never truncate a supplied service list.
+- Every service item must have exactly these content fields: "id", "name", "description", and "sourceEvidence".
+- Use deterministic IDs in returned order: "<section id>:service:1", "<section id>:service:2", and so on.
+- "name" is the concise service title.
+- Keep each service "name" to at most 28 characters, with no individual word longer than 16 characters, so it fits the fixed authored title region without font shrinking.
+- Derive every service name and description only from the company information or the approved service-section intent.
+- "sourceEvidence" must be a short exact quotation copied verbatim from the company information or that approved section's description which supports the service. Include that exact quotation verbatim in the item's description. Do not use general industry knowledge.
+- If the supplied sources do not support at least one service item, do not invent one; the response will be rejected explicitly.
+- When an approved service section already contains an "items" array, return exactly those items in that order, preserve every item "id" and "title" exactly (return "title" as "name"), and use the approved item description as source intent. Do not add or remove approved items.
+`;
+const productContract = productSections.length === 0 ? "" : `
+
+STRUCTURED PRODUCT CONTRACT:
+- Product structured sections are: ${productSections.map((section: { id: string }) => JSON.stringify(section.id)).join(", ")}.
+- Feature sections require 1-12 items; use-case sections require 1-9 items. Never truncate or add filler.
+- Every item must contain "id", "name", "description", and "sourceEvidence".
+- Without approved items, IDs are "<section id>:feature:1" or "<section id>:use-case:1" in returned order.
+- Feature names must be at most 40 characters with no word over 20 characters. Use-case names must be at most 34 characters with no word over 16 characters.
+- Derive titles and descriptions only from supplied company information or approved intent. "sourceEvidence" must be an exact supplied quotation included verbatim in the description.
+- If approved items exist, preserve their IDs, titles (as "name"), count, and order exactly. Do not add or remove them.
+`;
 
 const prompt = `
 Analyze the company information below and create professional company profile content based ONLY on the approved profile structure.
@@ -31,9 +69,9 @@ ${JSON.stringify(company, null, 2)}
 
 Projects:
 ${JSON.stringify(
-  (projects || []).map((project: any) => ({
-    name: project.name,
-    description: project.description?.slice(0, 500),
+  (projects || []).map((project: { name?: unknown; description?: unknown }) => ({
+    name: typeof project.name === "string" ? project.name : "",
+    description: typeof project.description === "string" ? project.description.slice(0, 500) : "",
   })),
   null,
   2
@@ -68,6 +106,9 @@ IMPORTANT RULES:
 
 12. The profile should feel specifically written for this company, not like a generic template.
 
+${serviceContract}
+${productContract}
+
 Return ONLY valid JSON.
 
 Return exactly this structure:
@@ -91,6 +132,17 @@ For sections that contain multiple items, such as projects, use:
   {
     "name": "Item name",
     "description": "Item description"
+}
+]
+
+For approved service sections, use the STRUCTURED SERVICES CONTRACT above instead. Example shape:
+
+"items": [
+  {
+    "id": "services:service:1",
+    "name": "Source-backed service title",
+    "description": "Source-backed service description",
+    "sourceEvidence": "Exact quotation from supplied source material"
   }
 ]
 
@@ -124,15 +176,34 @@ Do not return explanations outside the JSON.
       return Response.json(
         {
           error: "The AI response was not valid JSON.",
-          raw: output,
+          code: "generated_profile_json_invalid",
+          retryable: true,
         },
         { status: 500 }
       );
     }
 
+    const validatedSections = validateGeneratedProfileSections(sections, profile?.sections, { serviceSourceMaterial, productSourceMaterial: serviceSourceMaterial, productTech: isProductTechCompanyType(profile?.companyType ?? "") });
+    if (!validatedSections.valid) {
+      emitProductionTelemetry({ name: "model_generation_rejected", failureClass: "model_contract_rejection", reasonCode: validatedSections.diagnostics[0]?.code ?? "generated_profile_sections_invalid", latencyMs: Date.now() - startedAt });
+      return Response.json(
+        {
+          error: generatedSectionsErrorMessage,
+          code: "generated_profile_sections_invalid",
+          retryable: true,
+          ...(process.env.NODE_ENV !== "production" ? { diagnostics: validatedSections.diagnostics } : {}),
+        },
+        { status: 502 },
+      );
+    }
+
+    profile.sections = validatedSections.sections;
+    emitProductionTelemetry({ name: "model_generation_completed", latencyMs: Date.now() - startedAt, sectionCount: validatedSections.sections.length });
+
     return Response.json(profile);
   } catch (error) {
-    console.error("Generate profile error:", error);
+    emitProductionTelemetry({ name: "external_api_failed", failureClass: "external_api_failure", provider: "openai", operation: "generate_profile", reasonCode: error instanceof OpenAI.APIError ? `openai_${error.status}` : "runtime_system_failure" });
+    console.error("Generate profile failed", { name: error instanceof Error ? error.name : "UnknownError" });
 
     return Response.json(
       { error: "Failed to generate company profile." },

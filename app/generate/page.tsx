@@ -39,7 +39,11 @@ import {
   prepareProjectPage,
   type ProjectPortfolioItem,
 } from "@/lib/visual-system/pdf-project-composition";
-import { routeEditorialInteriorsV1Export } from "@/lib/authored-templates/export-orchestrator";
+import type { PDFCompositionFamily } from "@/lib/visual-system/pdf-art-direction";
+import { resolvePDFCreditPlacement } from "@/lib/visual-system/pdf-image-credits";
+import { validateRenderedDocumentLimits } from "@/lib/production-limits";
+import { classifyAuthoredFallbackReason, routeEditorialInteriorsV1Export } from "@/lib/authored-templates/export-orchestrator";
+import { emitProductionTelemetry } from "@/lib/production-telemetry";
 import {
   createDevelopmentExportEventSink,
   createExportAttemptGuard,
@@ -55,6 +59,24 @@ import {
   isCompanyIntroductionSection,
   selectContextualVisual,
 } from "@/lib/visual-system/pdf-visual-helpers";
+import {
+  createStableCustomSectionId,
+  generatedSectionsErrorMessage,
+  structuredSectionContract,
+  persistApprovedProfileStructure,
+  validateGeneratedProfileSections,
+} from "@/lib/generated-profile-boundary";
+import {
+  addApprovedStructuredItem,
+  deleteApprovedServiceItem,
+  editApprovedSection,
+  editApprovedStructuredItem,
+  moveApprovedServiceItem,
+  validateApprovedStructure,
+  type EditableProfileStructure,
+  type StructureEditResult,
+} from "@/lib/profile-structure-editor";
+import { analyzedStructureErrorMessage, validateAnalyzedProfileStructure } from "@/lib/profile-structure-boundary";
 
 type CompanyData = {
   name: string;
@@ -65,6 +87,7 @@ type CompanyData = {
 };
 
 type Project = {
+  id?: string;
   name: string;
   description: string;
   imageUrl?: string;
@@ -90,8 +113,10 @@ type GeneratedSection = {
   description: string;
   content: string;
   items: {
+    id?: string;
     name: string;
     description: string;
+    sourceEvidence?: string;
     imageUrl?: string;
   }[];
 };
@@ -100,6 +125,8 @@ type ProfileSection = {
   id: string;
   displayTitle: string;
   description: string;
+  semanticRole?: string;
+  items?: readonly { id: string; title: string; description: string }[];
 };
 
 type ProfileStructure = {
@@ -229,6 +256,48 @@ const getPdfImageSource = (image: HTMLImageElement) => {
   return canvas.toDataURL("image/png");
 };
 
+const getAspectFillPdfImageSource = (
+  image: HTMLImageElement,
+  frameWidth: number,
+  frameHeight: number
+) => {
+  const crop = calculateAspectFillCrop(
+    image.naturalWidth,
+    image.naturalHeight,
+    frameWidth,
+    frameHeight
+  );
+
+  if (!crop) {
+    throw new Error("Invalid project image crop geometry");
+  }
+
+  const canvas = document.createElement("canvas");
+  const outputWidth = Math.min(1800, Math.max(1, image.naturalWidth));
+  const outputHeight = Math.max(1, Math.round(outputWidth * frameHeight / frameWidth));
+  canvas.width = outputWidth;
+  canvas.height = outputHeight;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("Could not prepare project image crop");
+  }
+
+  context.drawImage(
+    image,
+    crop.sourceX,
+    crop.sourceY,
+    crop.sourceWidth,
+    crop.sourceHeight,
+    0,
+    0,
+    outputWidth,
+    outputHeight
+  );
+
+  return canvas.toDataURL("image/jpeg", 0.9);
+};
+
 const loadContextualPdfImage = async (
   src: string,
   frameWidth: number,
@@ -332,6 +401,7 @@ const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
 const [structureConfirmed, setStructureConfirmed] = useState(false);
 const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
 const [editingSectionTitle, setEditingSectionTitle] = useState("");
+const [editingSectionDescription, setEditingSectionDescription] = useState("");
 const [loading, setLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const exportAttemptGuard = useRef(createExportAttemptGuard());
@@ -339,6 +409,26 @@ const [loading, setLoading] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
   const [exportMessage, setExportMessage] = useState("");
   const [exportMessageTone, setExportMessageTone] = useState<"status" | "success" | "error">("status");
+
+const persistStructureSnapshot = (structure: ProfileStructure, sectionIds: readonly string[] = selectedSectionIds) => {
+  const rawCompany = localStorage.getItem("companyData");
+  if (!rawCompany) return;
+  persistApprovedProfileStructure(localStorage, JSON.parse(rawCompany), structure, sectionIds);
+};
+const commitStructure = (update: (current: ProfileStructure) => ProfileStructure) => {
+  setProfileStructure((current) => {
+    if (!current) return current;
+    const next = update(current);
+    persistStructureSnapshot(next);
+    return next;
+  });
+  setStructureConfirmed(false);
+};
+const applyStructureEdit = (result: StructureEditResult) => {
+  if (!result.valid) { setErrorMessage(result.error); return; }
+  setErrorMessage("");
+  commitStructure(() => result.structure as ProfileStructure);
+};
 
 const handleAnalyze = async () => {
   setLoading(true);
@@ -381,17 +471,20 @@ const handleAnalyze = async () => {
       throw new Error(data.error || "Failed to analyze company structure.");
     }
 
-    setProfileStructure(data);
+const validatedStructure = validateAnalyzedProfileStructure(data);
+if (!validatedStructure.valid) throw new Error(analyzedStructureErrorMessage);
+const approvedAnalysis = validatedStructure.structure;
+    setProfileStructure(approvedAnalysis);
 setSelectedSectionIds(
-  data.recommendedSections.map((section: ProfileSection) => section.id)
+  approvedAnalysis.recommendedSections.map((section: ProfileSection) => section.id)
 );
 setStructureConfirmed(false);
     localStorage.setItem(
       "profileStructure",
       JSON.stringify({
         companyData,
-        analysis: data,
-        selectedSections: data.recommendedSections,
+        analysis: approvedAnalysis,
+        selectedSections: approvedAnalysis.recommendedSections,
       }),
     );
   } catch (error) {
@@ -433,11 +526,16 @@ if (!profileStructure) {
   return;
 }
 
-const selectedSections =
-  profileStructure.recommendedSections.filter(
-    (section: ProfileSection) =>
-      selectedSectionIds.includes(section.id)
-  ) || [];
+persistApprovedProfileStructure(
+  localStorage,
+  companyData,
+  profileStructure,
+  selectedSectionIds,
+);
+const persistedStructure = JSON.parse(localStorage.getItem("profileStructure") ?? "null") as { selectedSections?: ProfileSection[] } | null;
+const selectedSections = persistedStructure?.selectedSections ?? [];
+const structureError = validateApprovedStructure(profileStructure);
+if (structureError) throw new Error(structureError);
           const projects = savedProjectsData
           ? (JSON.parse(savedProjectsData) as Project[]).filter(
               (project) => project.name?.trim() && project.description?.trim(),
@@ -483,12 +581,29 @@ if (!response.ok) {
   throw new Error(data.error || "Failed to generate profile.");
 }
 
+const validatedSections = validateGeneratedProfileSections(
+  selectedSections,
+  data.sections,
+  {
+    serviceSourceMaterial: [
+      companyData.about,
+      companyData.activities,
+      companyData.experience,
+    ],
+    productSourceMaterial: [companyData.about, companyData.activities, companyData.experience],
+    productTech: /saas|software|platform|technology|tech|digital product|ai company/i.test(data.companyType),
+  },
+);
+if (!validatedSections.valid) {
+  throw new Error(generatedSectionsErrorMessage);
+}
+
 setProfile({
   companyName: companyData.name.trim(),
   logoUrl: companyData.logoUrl,
 
   companyType: data.companyType,
-  sections: (data.sections || []).map((section: GeneratedSection) => ({
+  sections: validatedSections.sections.map((section: GeneratedSection) => ({
     ...section,
     items: (section.items || []).map((item: GeneratedSection["items"][number]) => ({
       ...item,
@@ -499,21 +614,21 @@ setProfile({
 
   // Keep old fields temporarily so the existing preview/PDF still works
   about:
-    data.sections?.find((section: GeneratedSection) => section.id === "about")
+    validatedSections.sections.find((section: GeneratedSection) => section.id === "about")
       ?.content || "",
 
-  expertise: data.sections
-    ?.find((section: GeneratedSection) => section.id === "expertise")
+  expertise: validatedSections.sections
+    .find((section: GeneratedSection) => section.id === "expertise")
     ?.items?.map(
   (item: GeneratedSection["items"][number]) => item.name
 ) || [],
 
   experience:
-    data.sections?.find(
+    validatedSections.sections.find(
       (section: GeneratedSection) => section.id === "experience",
     )?.content || "",
 
-  projects: (data.sections?.find(
+  projects: (validatedSections.sections.find(
     (section: GeneratedSection) => section.id === "projects",
   )?.items || []).map((item: GeneratedSection["items"][number]) => ({
     name: item.name,
@@ -522,16 +637,16 @@ setProfile({
   })),
 
   reasons:
-    data.sections
-      ?.find((section: GeneratedSection) => section.id === "whyChoose")
+    validatedSections.sections
+      .find((section: GeneratedSection) => section.id === "whyChoose")
       ?.items?.map(
   (item: GeneratedSection["items"][number]) => item.name
 ) || [],
 });
 
-      } catch {
+      } catch (error) {
         setProfile(null);
-        setErrorMessage("We could not read the saved company information. Please save it again and try again.");
+        setErrorMessage(error instanceof Error ? error.message : "We could not generate a complete company profile.");
       } finally {
         setLoading(false);
       }
@@ -658,6 +773,7 @@ setProfile({
       if (process.env.NODE_ENV !== "production") {
         console.debug("[authored-export-decision]", {
           mode: authoredDecision.mode,
+          familyId: authoredDecision.familyId,
           packId: authoredDecision.packId,
           reasons: authoredDecision.reasons.map((reason) => ({
             stage: reason.stage,
@@ -668,6 +784,9 @@ setProfile({
         });
       }
       if (authoredDecision.mode === "authored") {
+        const pdfBytes = authoredDecision.pdf.output("arraybuffer").byteLength;
+        emitProductionTelemetry({ name: "family_selected", familyId: authoredDecision.familyId, packId: authoredDecision.packId });
+        emitProductionTelemetry({ name: "export_succeeded", familyId: authoredDecision.familyId, packId: authoredDecision.packId, latencyMs: Date.now() - exportStartedAt, pdfBytes, pageCount: authoredDecision.pdf.getNumberOfPages() });
         authoredDecision.pdf.save(`${profile.companyName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "company-profile"}.pdf`);
         emitExportCompleted(exportEventSink, exportEventId, exportStartedAt, Date.now(), "authored_success", authoredDecision.familyId, authoredDecision.pdf.getNumberOfPages());
         setExportMessageTone("success");
@@ -675,6 +794,15 @@ setProfile({
         return;
       }
       fallbackDiagnostics = authoredDecision.reasons.map(({ stage, code, pageRole }) => ({ stage, code, pageRole }));
+      const fallbackCategory = authoredDecision.reasons[0] ? classifyAuthoredFallbackReason(authoredDecision.reasons[0]) : "expected_unsupported_content_shape";
+      emitProductionTelemetry({ name: "expected_fallback", failureClass: fallbackCategory === "authored_capacity_incompatibility" ? "operational_limit" : "expected_authored_incompatibility", category: fallbackCategory, reasonCodes: authoredDecision.reasons.map((reason) => reason.code) });
+      const operationalFailure = authoredDecision.reasons.find((reason) => reason.stage === "operational");
+      if (operationalFailure) {
+        emitExportFailed(exportEventSink, exportEventId, exportStartedAt, Date.now());
+        setExportMessageTone("error");
+        setExportMessage(operationalFailure.code === "project_count_limit" ? "This profile exceeds the V1 project limit. Keep at most 12 projects and try again." : "One or more project images exceed the safe browser limits. Use PNG or JPEG images up to 3 MB each and keep the combined images within 3 MB.");
+        return;
+      }
 
       const visualCompany = {
         name: companyData.name,
@@ -897,7 +1025,11 @@ setProfile({
       const renderedV2SectionIds = new Set<string>();
       let previousV2PageMode: PDFPageMode | null = null;
       let previousNarrativeVariant: NarrativeCompositionVariant | null = null;
+      let previousV2Family: PDFCompositionFamily | null = null;
       const renderedV2PageModes = new Map<number, PDFPageMode>();
+      let lastContentPageNumber: number | null = null;
+      let lastContentBottom = 0;
+      let lastContentCreditX = margin;
 
       if (coverActivation) {
         try {
@@ -920,6 +1052,7 @@ setProfile({
             renderedContextualVisuals.push(coverResult.renderedVisual);
           }
           previousV2PageMode = coverResult.pageMode;
+          previousV2Family = coverResult.compositionFamily;
 
           renderedV2Cover = true;
           pdf.addPage();
@@ -958,6 +1091,7 @@ setProfile({
               break;
             }
 
+            const loadedProjectImages = new Map<string, HTMLImageElement>();
             const availableProjects: ProjectPortfolioItem[] = await Promise.all(
               projectSection.items.map(async (item) => {
                 if (!item.imageUrl) {
@@ -970,6 +1104,7 @@ setProfile({
 
                 try {
                   const image = await loadPdfImage(item.imageUrl);
+                  loadedProjectImages.set(item.name, image);
                   return {
                     name: item.name,
                     description: item.description,
@@ -997,10 +1132,29 @@ setProfile({
               availableProjects,
               pdfDesignTokens,
               projectPageIndex,
-              previousV2PageMode
+              previousV2PageMode,
+              previousV2Family
             );
 
             if (!preparedProject) {
+              break;
+            }
+
+            try {
+              preparedProject.projects.forEach((project) => {
+                const loadedImage = loadedProjectImages.get(project.name);
+
+                if (project.image && project.imageArea && loadedImage) {
+                  project.image.source = getAspectFillPdfImageSource(
+                    loadedImage,
+                    project.imageArea.width,
+                    project.imageArea.height
+                  );
+                  project.image.width = project.imageArea.width;
+                  project.image.height = project.imageArea.height;
+                }
+              });
+            } catch {
               break;
             }
 
@@ -1017,10 +1171,16 @@ setProfile({
                 renderedV2SectionIds.add(sectionId);
               });
               previousV2PageMode = preparedProject.pageMode;
+              previousV2Family = preparedProject.artDirection.compositionFamily;
               renderedV2PageModes.set(
                 projectPageNumber,
                 preparedProject.pageMode
               );
+              lastContentPageNumber = projectPageNumber;
+              lastContentBottom = Math.max(
+                ...preparedProject.projects.map((project) => project.bottom)
+              );
+              lastContentCreditX = preparedProject.contentArea.x;
               pdf.addPage();
               y = topContent;
             } catch {
@@ -1039,7 +1199,9 @@ setProfile({
             Boolean(activation.visual),
             pageIndex,
             previousNarrativeVariant,
-            previousV2PageMode
+            previousV2PageMode,
+            undefined,
+            previousV2Family
           );
           const narrativeImageSource =
             imageLayout?.mediaArea && activation.visual?.imageUrl
@@ -1065,7 +1227,8 @@ setProfile({
             pdfDesignTokens,
             pageIndex,
             previousNarrativeVariant,
-            previousV2PageMode
+            previousV2PageMode,
+            previousV2Family
           );
 
           if (!prepared) {
@@ -1091,10 +1254,16 @@ setProfile({
             }
             previousNarrativeVariant = prepared.layout.variant;
             previousV2PageMode = prepared.layout.pageMode;
+            previousV2Family = prepared.layout.artDirection.compositionFamily;
             renderedV2PageModes.set(
               narrativePageNumber,
               prepared.layout.pageMode
             );
+            lastContentPageNumber = narrativePageNumber;
+            lastContentBottom = Math.max(
+              ...prepared.sections.map((section) => section.bottom)
+            );
+            lastContentCreditX = prepared.layout.textArea.x;
 
             pdf.addPage();
             y = topContent;
@@ -1359,28 +1528,57 @@ setProfile({
         }
       }
 
+      if (renderBlocks.length > 0) {
+        lastContentPageNumber = pdf.getNumberOfPages();
+        lastContentBottom = y;
+        lastContentCreditX = margin;
+      }
+
       const creditedVisuals = renderedContextualVisuals.filter(
         (visual, index, visuals) =>
           visuals.findIndex((candidate) => candidate.briefId === visual.briefId) === index
       );
 
       if (creditedVisuals.length > 0) {
-        startNewPage();
-        pdf.setTextColor(107, 114, 128);
+        const creditPlacement = resolvePDFCreditPlacement({
+          credits: creditedVisuals,
+          contentBottom: lastContentBottom,
+          pageTop: topContent,
+          safeBottom: pageHeight - 19,
+        });
+        if (!creditPlacement) {
+          throw new Error("Unable to preserve required image attribution.");
+        }
+        if (creditPlacement.mode === "append" && lastContentPageNumber !== null) {
+          pdf.setPage(lastContentPageNumber);
+          y = creditPlacement.startY;
+        } else {
+          startNewPage();
+          y = creditPlacement.startY;
+          lastContentPageNumber = pdf.getNumberOfPages();
+        }
+        const creditPalette = resolvePagePalette(
+          pdfDesignTokens,
+          renderedV2PageModes.get(lastContentPageNumber) ?? "light"
+        );
+        pdf.setDrawColor(...creditPalette.divider);
+        pdf.setLineWidth(pdfDesignTokens.rules.hairlineWidth);
+        pdf.line(
+          lastContentCreditX,
+          y - 3,
+          lastContentCreditX + pdfDesignTokens.rules.shortRuleWidth,
+          y - 3
+        );
+        pdf.setTextColor(...creditPalette.secondaryText);
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(9);
-        pdf.text("IMAGE CREDITS", margin, y);
+        pdf.text("IMAGE CREDITS", lastContentCreditX, y);
         y += 8;
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(8);
 
-        creditedVisuals.forEach((visual) => {
-          const photographer = visual.photographer || "Pexels contributor";
-          pdf.text(
-            `${visual.purpose}: Photo by ${photographer} — Pexels`,
-            margin,
-            y
-          );
+        creditPlacement.lines.forEach((line) => {
+          pdf.text(line, lastContentCreditX, y);
           y += 5;
         });
       }
@@ -1413,14 +1611,18 @@ setProfile({
         pdf.text(`Page ${pageNumber} of ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: "right" });
       }
 
+      const legacyLimits = validateRenderedDocumentLimits(pdf.getNumberOfPages(), pdf.output("arraybuffer").byteLength);
+      if (legacyLimits.length) throw new Error(legacyLimits[0].code);
       pdf.save(`${profile.companyName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "company-profile"}.pdf`);
+      emitProductionTelemetry({ name: "export_succeeded", familyId: null, packId: null, latencyMs: Date.now() - exportStartedAt, pdfBytes: pdf.output("arraybuffer").byteLength, pageCount: pdf.getNumberOfPages() });
       emitExportCompleted(exportEventSink, exportEventId, exportStartedAt, Date.now(), "standard_success", null, pdf.getNumberOfPages(), fallbackDiagnostics);
       setExportMessageTone("success");
       setExportMessage("Your company profile is ready.");
-    } catch {
+    } catch (error) {
+      emitProductionTelemetry({ name: "export_failed", failureClass: "export_failure", reasonCode: error instanceof Error && (error.message === "page_count_limit" || error.message === "pdf_byte_limit") ? error.message : "pdf_export_failed", latencyMs: Date.now() - exportStartedAt });
       emitExportFailed(exportEventSink, exportEventId, exportStartedAt, Date.now());
       setExportMessageTone("error");
-      setExportMessage(`We couldn't create your PDF this time. Please try again. Reference: ${exportEventId}`);
+      setExportMessage(error instanceof Error && (error.message === "page_count_limit" || error.message === "pdf_byte_limit") ? "This profile exceeds the safe V1 PDF size or page limit. Reduce optional content or image weight and try again." : `We couldn't create your PDF this time. Please try again. Reference: ${exportEventId}`);
     } finally {
       exportAttemptGuard.current.finish();
       setIsExporting(false);
@@ -1511,14 +1713,17 @@ setProfile({
   <div className="flex gap-3">
     <input
       type="checkbox"
+      aria-label={`Include ${section.displayTitle}`}
       checked={isSelected}
       disabled={loading}
       onChange={() => {
-        setSelectedSectionIds((current) =>
-          current.includes(section.id)
+        setSelectedSectionIds((current) => {
+          const next = current.includes(section.id)
             ? current.filter((id) => id !== section.id)
-            : [...current, section.id],
-        );
+            : [...current, section.id];
+          persistStructureSnapshot(profileStructure, next);
+          return next;
+        });
         setStructureConfirmed(false);
       }}
       className="mt-1 h-4 w-4"
@@ -1529,6 +1734,8 @@ setProfile({
         <div>
           <input
             type="text"
+            aria-label={`${section.displayTitle} title`}
+            aria-describedby={errorMessage ? "structure-error" : undefined}
             value={editingSectionTitle}
             disabled={loading}
             onChange={(event) =>
@@ -1537,40 +1744,55 @@ setProfile({
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-black"
             autoFocus
           />
+          <textarea
+            value={editingSectionDescription}
+            disabled={loading}
+            onChange={(event) => setEditingSectionDescription(event.target.value)}
+            rows={3}
+            aria-label={`${section.displayTitle} description`}
+            className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-black"
+          />
+
+          {structuredSectionContract(section) && (
+            <div className="mt-3 space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Structured items ({section.items?.length ?? 0}/{structuredSectionContract(section)!.max})</p>
+              {(section.items ?? []).map((item, itemIndex) => (
+                <div key={item.id} className="rounded-md border border-gray-200 bg-white p-3">
+                  <p className="text-sm font-medium text-gray-900">{item.title}</p>
+                  <p className="mt-1 text-xs leading-5 text-gray-600">{item.description}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => {
+                      const title = window.prompt("Service title:", item.title); if (title === null) return;
+                      const description = window.prompt("Service description:", item.description); if (description === null) return;
+                      applyStructureEdit(editApprovedStructuredItem(profileStructure as EditableProfileStructure, section.id, item.id, { title, description }));
+                    }} aria-label={`Edit ${item.title}`} className="rounded border border-gray-300 px-2 py-1 text-xs">Edit item</button>
+                    <button type="button" aria-label={`Move ${item.title} up`} disabled={itemIndex === 0} onClick={() => commitStructure((current) => moveApprovedServiceItem(current, section.id, item.id, -1) as ProfileStructure)} className="rounded border border-gray-300 px-2 py-1 text-xs disabled:opacity-40">Move up</button>
+                    <button type="button" aria-label={`Move ${item.title} down`} disabled={itemIndex === (section.items?.length ?? 0) - 1} onClick={() => commitStructure((current) => moveApprovedServiceItem(current, section.id, item.id, 1) as ProfileStructure)} className="rounded border border-gray-300 px-2 py-1 text-xs disabled:opacity-40">Move down</button>
+                    <button type="button" aria-label={`Delete ${item.title}`} onClick={() => { commitStructure((current) => deleteApprovedServiceItem(current, section.id, item.id) as ProfileStructure); window.setTimeout(() => document.getElementById(`add-item-${section.id}`)?.focus(), 0); }} className="rounded border border-red-200 px-2 py-1 text-xs text-red-700">Delete item</button>
+                  </div>
+                </div>
+              ))}
+              <button id={`add-item-${section.id}`} type="button" aria-label={`Add item to ${section.displayTitle}`} disabled={(section.items?.length ?? 0) >= structuredSectionContract(section)!.max} onClick={() => {
+                const contract = structuredSectionContract(section)!; if ((section.items?.length ?? 0) >= contract.max) { setErrorMessage(`This section supports at most ${contract.max} items.`); return; }
+                const title = window.prompt("New item title:"); if (!title) return;
+                const description = window.prompt("New item description/instruction:"); if (!description) return;
+                applyStructureEdit(addApprovedStructuredItem(profileStructure as EditableProfileStructure, section.id, { title, description }));
+              }} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium disabled:opacity-40">+ Add structured item</button>
+            </div>
+          )}
 
           <div className="mt-2 flex gap-2">
             <button
               type="button"
               disabled={loading}
               onClick={() => {
-                const newTitle = editingSectionTitle.trim();
-
-                if (!newTitle) {
-                  return;
-                }
-
-                setProfileStructure((current) => {
-                  if (!current) {
-                    return current;
-                  }
-
-                  return {
-                    ...current,
-                    recommendedSections: current.recommendedSections.map(
-                      (currentSection) =>
-                        currentSection.id === section.id
-                          ? {
-                              ...currentSection,
-                              displayTitle: newTitle,
-                            }
-                          : currentSection,
-                    ),
-                  };
-                });
+                const result = editApprovedSection(profileStructure as EditableProfileStructure, section.id, { displayTitle: editingSectionTitle, description: editingSectionDescription });
+                if (!result.valid) { setErrorMessage(result.error); return; }
+                applyStructureEdit(result);
 
                 setEditingSectionId(null);
                 setEditingSectionTitle("");
-                setStructureConfirmed(false);
+                setEditingSectionDescription("");
               }}
               className="rounded-md bg-black px-3 py-1.5 text-xs font-medium text-white"
             >
@@ -1583,6 +1805,7 @@ setProfile({
               onClick={() => {
                 setEditingSectionId(null);
                 setEditingSectionTitle("");
+                setEditingSectionDescription("");
               }}
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-900"
             >
@@ -1608,11 +1831,12 @@ setProfile({
             onClick={() => {
               setEditingSectionId(section.id);
               setEditingSectionTitle(section.displayTitle);
+              setEditingSectionDescription(section.description);
               setStructureConfirmed(false);
             }}
             className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 hover:border-gray-900"
           >
-            Edit
+            Edit {section.displayTitle}
           </button>
         </div>
       )}
@@ -1633,29 +1857,19 @@ setProfile({
       }
 
       const newSection: ProfileSection = {
-        id: `custom-${Date.now()}`,
+        id: createStableCustomSectionId(
+          title.trim(),
+          profileStructure.recommendedSections.map((section) => section.id),
+        ),
         displayTitle: title.trim(),
         description: "Custom section added by you.",
       };
 
-      setProfileStructure((current) => {
-        if (!current) {
-          return current;
-        }
-
-        return {
-          ...current,
-          recommendedSections: [
-            ...current.recommendedSections,
-            newSection,
-          ],
-        };
-      });
-
-      setSelectedSectionIds((current) => [
-        ...current,
-        newSection.id,
-      ]);
+      const nextIds = [...selectedSectionIds, newSection.id];
+      const nextStructure = { ...profileStructure, recommendedSections: [...profileStructure.recommendedSections, newSection] };
+      setProfileStructure(nextStructure);
+      setSelectedSectionIds(nextIds);
+      persistStructureSnapshot(nextStructure, nextIds);
 
       setStructureConfirmed(false);
     }}
@@ -1700,7 +1914,7 @@ setProfile({
   </div>
 )}
           {errorMessage && (
-            <p className="mt-6 text-sm text-red-600">{errorMessage}</p>
+            <p id="structure-error" role="alert" aria-live="assertive" className="mt-6 text-sm text-red-600">{errorMessage}</p>
           )}
 
           {profile && (

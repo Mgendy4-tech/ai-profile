@@ -5,6 +5,7 @@ import type { EditorialInteriorsV1DocumentInput } from "./content";
 import {
   EDITORIAL_INTERIORS_V1_PAGE_ORDER,
   editorialInteriorsV1Pack,
+  editorialInteriorsSparseNarrativeTemplate,
   prepareEditorialInteriorsV1Document,
   renderPreparedEditorialInteriorsV1Document,
 } from "./index";
@@ -129,6 +130,14 @@ assert(
     aureliaPrepared.document.consumedContentIds.length === 4,
   "Every page content ID must be consumed exactly once.",
 );
+
+const sparsePrepared = prepareEditorialInteriorsV1Document(createSparseFixture());
+assert(sparsePrepared.compatible, "Explicit sparse narrative fixture must prepare.");
+if (!sparsePrepared.compatible) throw new Error("Expected sparse narrative preparation.");
+assert(sparsePrepared.document.instances[1].templateId === editorialInteriorsSparseNarrativeTemplate.id, "Sparse narrative content must select the explicit sparse authored state.");
+assert(!("callout" in sparsePrepared.document.instances[1].preparedSlots) && !("secondaryBody" in sparsePrepared.document.instances[1].preparedSlots), "Sparse narrative preflight must contain only its authored title/body slots.");
+const sparseRender = renderPreparedEditorialInteriorsV1Document(sparsePrepared.document);
+assert(sparseRender.audits[1].templateId === editorialInteriorsSparseNarrativeTemplate.id, "Sparse narrative renderer must preserve the selected template identity.");
 
 const duplicateFixture = createAureliaFixture();
 duplicateFixture.narrative.contentId = duplicateFixture.cover.contentId;

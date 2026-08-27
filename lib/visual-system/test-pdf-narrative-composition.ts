@@ -133,8 +133,73 @@ const preparedSparse = prepareNarrativePage(
   false,
   designTokens
 );
+const collisionPage = structuredClone(resolved.composition.pages[0]);
+collisionPage.sections = [
+  { sectionId: "spaces", treatment: "lead" },
+  { sectionId: "approach", treatment: "body" },
+];
+collisionPage.hierarchy.primarySectionId = "spaces";
+collisionPage.visualAssignments = [];
+const collisionActivation = getNarrativePageActivation(collisionPage);
+const collisionPrepared = prepareNarrativePage(
+  new jsPDF({ unit: "mm", format: "a4" }),
+  collisionActivation!,
+  [
+    {
+      id: "spaces",
+      title: "Spaces We Design",
+      content:
+        "We create carefully considered residential interiors, hospitality spaces, and environments that connect material character with everyday use. Each space is planned around proportion, movement, light, and the practical rhythms of the people who inhabit it.",
+      items: [],
+    },
+    {
+      id: "approach",
+      title: "The Aurelia Approach",
+      content:
+        "Our approach brings research, spatial planning, material direction, and detailed coordination into one coherent process. Every decision is tested against the original brief so the finished interior remains calm, useful, and distinctly connected to its setting.",
+      items: [],
+    },
+  ],
+  false,
+  designTokens
+);
 assert(Boolean(preparedSplit), "narrative_split should preflight successfully.");
+assert(Boolean(collisionPrepared), "The Aurelia two-section typography page must preflight safely.");
+assert(
+  collisionPrepared!.sections[0].bottom + 5 <=
+    collisionPrepared!.sections[1].headingBounds.top,
+  "The second display heading must clear the preceding body block."
+);
+for (let index = 1; index < collisionPrepared!.sections.length; index += 1) {
+  assert(
+    collisionPrepared!.sections[index - 1].bottom <
+      collisionPrepared!.sections[index].headingBounds.top,
+    "Every rendered text block must have positive clearance from the next block."
+  );
+}
+const collisionSpan =
+  collisionPrepared!.sections.at(-1)!.bottom -
+  collisionPrepared!.sections[0].headingBounds.top;
+assert(
+  collisionSpan >= collisionPrepared!.layout.textArea.height * 0.55,
+  "A sparse two-section typography page must use an intentional share of A4 height."
+);
+assert(
+  collisionPrepared!.sections.every(
+    (section) => section.headingBounds.top >= 0 && section.bottom <= 297
+  ),
+  "The corrected multi-section composition must remain inside A4."
+);
 assert(Boolean(preparedStack), "narrative_stack should preflight successfully.");
+assert(
+  preparedSplit!.sections.every((section) => section.contentFontSize >= 9.5) &&
+    preparedStack!.sections.every((section) => section.contentFontSize >= 9.5),
+  "Narrative body type must remain at or above the approved minimum."
+);
+assert(
+  preparedSplit!.sections[0].titleY > preparedSplit!.layout.textArea.y + 35,
+  "Image-led narrative text must be optically anchored as a measured group."
+);
 assert(
   preparedSplit?.consumedSectionIds.join(",") === "about" &&
     preparedStack?.consumedSectionIds.join(",") === "services,experience",
@@ -166,6 +231,32 @@ assert(
   preparedSparse?.sections[0].contentLines.join(" ") === content[0].content,
   "Narrative utilization must preserve every word without invention."
 );
+[
+  ...(preparedSparse?.sections ?? []),
+  ...(preparedStack?.sections ?? []),
+].forEach((section) => {
+  assert(
+    section.headingBounds.bottom < section.ruleY,
+    "Narrative rule must clear the heading glyph bounds."
+  );
+  if (section.bodyBounds) {
+    assert(
+      section.ruleY < section.bodyBounds.top,
+      "Narrative rule must clear body glyph bounds."
+    );
+  }
+  assert(
+    section.headingBounds.top >= 0 && section.bottom <= 297,
+    "Narrative text bounds must remain inside the physical A4 page."
+  );
+});
+assert(
+  preparedSparse?.layout.artDirection.compositionFamily ===
+    "typography_manifesto" &&
+    preparedStack?.layout.artDirection.compositionFamily ===
+      "structural_interstitial",
+  "Image-free content amount should select manifesto and interstitial families."
+);
 
 const imageLayout = createNarrativePageLayout(splitActivation!, true);
 const imageFreeLayout = createNarrativePageLayout(stackActivation!, false);
@@ -192,6 +283,13 @@ assert(
     Boolean(splitRight.mediaArea) &&
     splitRight.textArea.x < splitRight.mediaArea!.x,
   "Consecutive split pages should alternate media from left to right."
+);
+assert(
+  imageLayout?.artDirection.compositionFamily === "architectural_split" &&
+    imageLayout.mediaArea?.x === 0 &&
+    imageLayout.mediaArea.y === 0 &&
+    imageLayout.mediaArea.height === 297,
+  "Architectural Split media should own a physical A4 edge."
 );
 
 const isWithinA4 = (area: ResolvedArea) =>

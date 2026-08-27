@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
+    ,"readiness": "npx tsx --env-file=.env.local lib/check-production-readiness.ts"
+    ,"smoke:post-deploy": "node lib/browser-three-family-go-live.cjs"
   },
   "dependencies": {
     "jspdf": "^4.2.1",

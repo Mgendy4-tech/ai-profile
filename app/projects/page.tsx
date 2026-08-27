@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { dataUrlDecodedBytes, PRODUCTION_V1_LIMITS } from "@/lib/production-limits";
 
 type Project = {
   id: string;
@@ -19,6 +20,23 @@ const readImageFile = (file: File) =>
     reader.onerror = () => reject(new Error("Could not read image file"));
     reader.readAsDataURL(file);
   });
+
+const validateImageFile = async (file: File) => {
+  if (!/image\/(png|jpeg)/i.test(file.type)) throw new Error("Please select a PNG or JPEG image.");
+  if (file.size > PRODUCTION_V1_LIMITS.imageBytes) throw new Error("Each project image must be 3 MB or smaller.");
+  const url = URL.createObjectURL(file);
+  try {
+    const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      image.onerror = () => reject(new Error("The image could not be decoded."));
+      image.src = url;
+    });
+    if (!dimensions.width || !dimensions.height || dimensions.width > PRODUCTION_V1_LIMITS.imageDimensionPx || dimensions.height > PRODUCTION_V1_LIMITS.imageDimensionPx) throw new Error("Images must decode successfully and be no larger than 12,000 pixels on either side.");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+};
 
 export default function ProjectsPage() {
   const [projectName, setProjectName] = useState("");
@@ -79,6 +97,11 @@ if (!trimmedProjectName || !trimmedDescription || !trimmedImageUrl) {
   setSuccessMessage("");
   return;
 }
+if (!editingProjectId && projects.length >= PRODUCTION_V1_LIMITS.projects) {
+  setErrorMessage(`V1 supports at most ${PRODUCTION_V1_LIMITS.projects} projects.`);
+  setSuccessMessage("");
+  return;
+}
 
     const updatedProjects = editingProjectId
   ? projects.map((project) =>
@@ -95,7 +118,7 @@ if (!trimmedProjectName || !trimmedDescription || !trimmedImageUrl) {
   : [
       ...projects,
       {
-        id: `${Date.now()}-${projectName}`,
+        id: `project:${crypto.randomUUID()}`,
         name: projectName.trim(),
         category: category.trim(),
         description: description.trim(),
@@ -125,20 +148,17 @@ setSuccessMessage(
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
-      setErrorMessage("Please select an image file.");
-      setSuccessMessage("");
-      return;
-    }
-
     try {
+      await validateImageFile(file);
+      const existingBytes = projects.reduce((total, project) => total + dataUrlDecodedBytes(project.imageUrl), 0);
+      if (existingBytes + file.size > PRODUCTION_V1_LIMITS.browserPersistedImageBytes) throw new Error("Combined project images must be 3 MB or smaller for safe browser storage. Remove or replace an image before adding another.");
       const imageData = await readImageFile(file);
       setImageUrl(imageData);
       setImagePreview(imageData);
       setErrorMessage("");
       setSuccessMessage("");
-    } catch {
-      setErrorMessage("We could not read that image. Please try another file.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "We could not read that image. Please try another file.");
       setSuccessMessage("");
     }
   };
@@ -148,13 +168,10 @@ setSuccessMessage(
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
-      setErrorMessage("Please select an image file.");
-      setSuccessMessage("");
-      return;
-    }
-
     try {
+      await validateImageFile(file);
+      const existingBytes = projects.reduce((total, project) => total + (project.id === projectId ? 0 : dataUrlDecodedBytes(project.imageUrl)), 0);
+      if (existingBytes + file.size > PRODUCTION_V1_LIMITS.browserPersistedImageBytes) throw new Error("Combined project images must be 3 MB or smaller for safe browser storage. Remove or replace another image first.");
       const imageData = await readImageFile(file);
       const updatedProjects = projects.map((project) =>
         project.id === projectId ? { ...project, imageUrl: imageData } : project,
@@ -164,8 +181,8 @@ setSuccessMessage(
       localStorage.setItem("projectsData", JSON.stringify(updatedProjects));
       setErrorMessage("");
       setSuccessMessage("Project image updated successfully.");
-    } catch {
-      setErrorMessage("We could not read that image. Please try another file.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "We could not read that image. Please try another file.");
       setSuccessMessage("");
     }
   };
@@ -203,7 +220,7 @@ setSuccessMessage(
           </div>
 
           <div>
-            <label className="text-sm font-medium text-gray-900">
+            <label htmlFor="project-name" className="text-sm font-medium text-gray-900">
               Project Name
             </label>
 
@@ -222,12 +239,13 @@ setSuccessMessage(
           </div>
 
           <div className="mt-6">
-            <label className="text-sm font-medium text-gray-900">
+            <label htmlFor="project-category" className="text-sm font-medium text-gray-900">
               Project Type / Category <span className="font-normal text-gray-500">(optional)</span>
             </label>
 
             <input
               type="text"
+              id="project-category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               placeholder="e.g. Residential, Commercial"
@@ -236,7 +254,7 @@ setSuccessMessage(
           </div>
 
           <div className="mt-6">
-            <label className="text-sm font-medium text-gray-900">
+            <label htmlFor="project-description" className="text-sm font-medium text-gray-900">
               Project Description
             </label>
 
@@ -245,6 +263,7 @@ setSuccessMessage(
             </p>
 
             <textarea
+              id="project-description"
               value={description}
               onChange={(e) => {
                 setDescription(e.target.value);
@@ -258,14 +277,15 @@ setSuccessMessage(
           </div>
 
           <div className="mt-6 rounded-xl bg-gray-50 p-4">
-            <label className="text-sm font-medium text-gray-900">
+            <label htmlFor="project-image" className="text-sm font-medium text-gray-900">
               Upload Project Image <span className="font-normal text-gray-500">(required)</span>
             </label>
 
             <input
               key={projects.length}
               type="file"
-              accept="image/*"
+              id="project-image"
+              accept="image/png,image/jpeg"
               onChange={(event) => handleImageSelect(event.target.files?.[0])}
               className="mt-2 block w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:font-medium file:text-gray-900"
             />
@@ -286,8 +306,8 @@ setSuccessMessage(
             Save Project
           </button>
 
-          {errorMessage && <p className="mt-4 text-sm text-red-600">{errorMessage}</p>}
-          {successMessage && <p className="mt-4 text-sm text-green-600">{successMessage}</p>}
+          {errorMessage && <p role="alert" className="mt-4 text-sm text-red-600">{errorMessage}</p>}
+          {successMessage && <p role="status" className="mt-4 text-sm text-green-600">{successMessage}</p>}
         </form>
 
         <section className="mt-8">
@@ -334,7 +354,8 @@ setSuccessMessage(
                     Replace Image
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/png,image/jpeg"
+                      aria-label={`Replace image for ${project.name}`}
                       onChange={(event) => handleReplaceImage(project.id, event.target.files?.[0])}
                       className="hidden"
                     />

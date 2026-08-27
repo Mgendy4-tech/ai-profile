@@ -4,6 +4,7 @@ import { validateAuthoredDocumentPlan } from "./document-plan";
 import type { AuthoredDocumentPlan, CoverageIssue, NormalizedContentUnit } from "./library-types";
 import type { AuthoredPageTemplate, ContractIssue, TemplateInstance, TemplateRenderAudit } from "./types";
 import { editorialInteriorsV1Pack } from "./packs/editorial-interiors-v1";
+import { selectEditorialInteriorsNarrativeTemplate } from "./packs/editorial-interiors-v1/narrative";
 import type { CapabilitiesContent, CoverContent, NarrativeContent, ProjectFeatureContent } from "./packs/editorial-interiors-v1/content";
 import type { PortfolioProjectContent, PortfolioProjectPageContent } from "./packs/editorial-interiors-v1/portfolio-project-pages";
 
@@ -48,7 +49,7 @@ export const createVisualPortfolioDocumentPlan = (
       ...(company ? [{ contentId: company.id, mode: "consume" as const, slotId: "companyName" }] : []),
       { contentId: input.projects[0].contentId, mode: "reference", slotId: "hero" },
     ] },
-    { pageId: "narrative", templateId: "editorial-interiors-v1.narrative", pageRole: "narrative", candidate: input.narrative, claims: narrative ? [{ contentId: narrative.id, mode: "consume", slotId: "body" }] : [] },
+    { pageId: "narrative", templateId: selectEditorialInteriorsNarrativeTemplate(input.narrative).id, pageRole: "narrative", candidate: input.narrative, claims: narrative ? [{ contentId: narrative.id, mode: "consume", slotId: "body" }] : [] },
     { pageId: "capabilities", templateId: "editorial-interiors-v1.capabilities", pageRole: "capabilities", candidate: input.capabilities, claims: services.map((service, index) => ({ contentId: service.id, mode: "consume", slotId: `capabilities.${index}` })) },
   ];
 

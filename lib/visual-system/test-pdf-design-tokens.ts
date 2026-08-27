@@ -10,6 +10,7 @@ import {
   type PDFPageMode,
 } from "./pdf-design-tokens";
 import type { BrandAnalysis, PageCompositionDensity } from "./types";
+import { PDF_EDITORIAL_TYPE_CONSTRAINTS } from "./pdf-editorial-typesetting";
 
 const assert = (condition: boolean, message: string) => {
   if (!condition) throw new Error(message);
@@ -66,6 +67,19 @@ assert(
     tokens.typography.body.fontSize > tokens.typography.caption.fontSize,
   "Typography roles must form a coherent hierarchy."
 );
+assert(
+  tokens.typography.display.fontSize >= 44 &&
+    tokens.typography.display.fontSize <= 72 &&
+    tokens.typography.h1.fontSize >= 30 &&
+    tokens.typography.h1.fontSize <= 42 &&
+    tokens.typography.h2.fontSize >= 16 &&
+    tokens.typography.h2.fontSize <= 21 &&
+    tokens.typography.body.fontSize >= 9.5 &&
+    tokens.typography.body.fontSize <= 10.5 &&
+    tokens.typography.caption.fontSize >= 7.5 &&
+    tokens.typography.caption.fontSize <= 8.5,
+  "Editorial typography tokens must stay inside approved safe steps."
+);
 
 const densities: PageCompositionDensity[] = ["minimal", "balanced", "rich"];
 densities.forEach((density) => {
@@ -79,6 +93,13 @@ densities.forEach((density) => {
       spacing.sectionGap > 0 &&
       adjustments.mediaRatioScale > 0,
     `${density} density must resolve valid deterministic adjustments.`
+  );
+  const leadingRatio = typography.body.lineHeight / (typography.body.fontSize * 0.352778);
+  assert(
+    typography.body.fontSize >= PDF_EDITORIAL_TYPE_CONSTRAINTS.minimumBodyFontSize &&
+      leadingRatio >= PDF_EDITORIAL_TYPE_CONSTRAINTS.paragraphLeading.min &&
+      leadingRatio <= PDF_EDITORIAL_TYPE_CONSTRAINTS.paragraphLeading.max,
+    `${density} body typography must remain in the readable editorial range.`
   );
 });
 assert(

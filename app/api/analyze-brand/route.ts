@@ -108,7 +108,7 @@ Return exactly this structure:
 
     return NextResponse.json(analysis);
   } catch (error) {
-    console.error("Brand analysis failed:", error);
+    console.error("Brand analysis failed", { name: error instanceof Error ? error.name : "UnknownError" });
 
     return NextResponse.json(
       { error: "Failed to analyze brand." },

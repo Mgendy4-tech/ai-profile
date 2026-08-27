@@ -28,6 +28,7 @@ assert(JSON.stringify(facts) === JSON.stringify({
   narrativeSectionCount: 1,
   narrativeCharacterCount: "Exact narrative.".length,
   serviceCount: 2,
+  corporateDetailCount: 0,
   productFeatureCount: 0,
   useCaseCount: 0,
   productTechSignal: false,

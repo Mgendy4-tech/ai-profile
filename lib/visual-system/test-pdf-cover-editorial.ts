@@ -2,6 +2,7 @@ import {
   createCoverEditorialLayout,
   drawCoverEditorial,
   getCoverEditorialActivation,
+  prepareCoverTypography,
 } from "./pdf-cover-editorial";
 import { resolvePageComposition, type ResolvedArea } from "./composition-resolver";
 import type { PageCompositionPlan, SelectedContextualVisual } from "./types";
@@ -86,7 +87,9 @@ assert(
   imageFreeLayout?.mode === "image_free" &&
     imageFreeLayout.variant === "typographic_hero" &&
     imageFreeLayout.heroArea === null &&
-    imageFreeLayout.usesPlaceholderPanel === false,
+    imageFreeLayout.usesPlaceholderPanel === false &&
+    imageFreeLayout.usesInsetFrame === false &&
+    imageFreeLayout.artDirection.compositionFamily === "cover_typographic",
   "Missing image data should choose an intentional typographic cover."
 );
 assert(
@@ -128,6 +131,12 @@ assert(
     "asymmetric_split",
   "Non-wide selected imagery should use the asymmetric split variant."
 );
+assert(
+  imageLayout?.heroArea?.x === 0 &&
+    imageLayout.heroArea.y === 0 &&
+    imageLayout.heroArea.width === 210,
+  "Bleed cover imagery should touch the physical top, left, and right edges."
+);
 
 const withoutImage = resolve([]);
 assert(withoutImage.ok, "Missing optional hero should still resolve safely.");
@@ -155,6 +164,23 @@ assert(
 
 const pdf = new jsPDF({ unit: "mm", format: "a4" });
 const designTokens = createPDFDesignTokens(null);
+const coverTypography = prepareCoverTypography(
+  pdf,
+  imageFreeLayout!,
+  "Aurelia Interior Studio",
+  designTokens
+);
+assert(
+  Boolean(coverTypography) &&
+    coverTypography!.eyebrowBounds.bottom < coverTypography!.ruleY &&
+    coverTypography!.ruleY < coverTypography!.titleBounds.top,
+  "Cover rule must clear both overline and display glyph bounds."
+);
+assert(
+  imageFreeLayout!.logoArea.height >= 28 &&
+    imageFreeLayout!.logoArea.width >= imageFreeLayout!.titleArea.width * 0.45,
+  "The image-free cover logo must have a deliberate proportional relationship to the title field."
+);
 const imageFreeResult = drawCoverEditorial({
   pdf,
   page: activation!.page,

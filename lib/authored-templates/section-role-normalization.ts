@@ -1,4 +1,4 @@
-export type ProductionSectionRole = "narrative" | "services" | "projects" | "features" | "use_cases";
+export type ProductionSectionRole = "narrative" | "services" | "expertise" | "approach" | "supporting_narrative" | "projects" | "features" | "use_cases";
 
 export type ProductionSectionForNormalization = {
   id: string;
@@ -27,7 +27,10 @@ export type SectionRoleNormalizationResult = {
 
 const ROLE_TOKENS: Readonly<Record<ProductionSectionRole, readonly string[]>> = {
   narrative: ["about", "overview", "companyprofile", "ourstory"],
-  services: ["services", "capabilities", "expertise", "mainactivities", "activities"],
+  services: ["services", "capabilities", "mainactivities", "activities"],
+  expertise: ["expertise", "focusareas", "areasoffocus"],
+  approach: ["howitworks", "approach", "process", "methodology"],
+  supporting_narrative: ["solutions", "supportingnarrative"],
   projects: ["projects", "portfolio", "featuredprojects", "casestudies"],
   features: ["features", "productfeatures", "platformfeatures", "functionality"],
   use_cases: ["usecases", "applications", "productapplications"],
@@ -42,12 +45,13 @@ export const isProductTechCompanyType = (companyType: string) => {
     normalized.includes("product") &&
     !SERVICE_BUSINESS_TYPE_TOKENS.some((token) => normalized.includes(token));
 };
+export const isCorporateServicesCompanyType = (companyType: string) => SERVICE_BUSINESS_TYPE_TOKENS.some((token) => normalizeId(companyType).includes(token));
 
 const normalizeId = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
 export const normalizeProductionSectionRoles = (
   sections: readonly ProductionSectionForNormalization[],
-  options: { productTech?: boolean } = {},
+  options: { productTech?: boolean; corporateServices?: boolean } = {},
 ): SectionRoleNormalizationResult => {
   const normalized: { section: ProductionSectionForNormalization; role: ProductionSectionRole }[] = [];
   const diagnostics: SectionRoleDiagnostic[] = [];
@@ -66,7 +70,11 @@ export const normalizeProductionSectionRoles = (
       diagnostics.push({ code: "ambiguous_semantic_role", path: `sections.${index}.id`, sectionId: section.id, role: null });
       return;
     }
-    const role = options.productTech && matches[0] === "services" ? "features" : matches[0];
+    if (!options.corporateServices && (matches[0] === "approach" || matches[0] === "supporting_narrative")) {
+      diagnostics.push({ code: "unknown_semantic_role", path: `sections.${index}.id`, sectionId: section.id, role: null });
+      return;
+    }
+    const role = options.productTech && (matches[0] === "services" || matches[0] === "expertise") ? "features" : !options.corporateServices && matches[0] === "expertise" ? "services" : matches[0];
     if (roleOwners.has(role)) {
       diagnostics.push({ code: "duplicate_role_candidate", path: `sections.${index}.id`, sectionId: section.id, role });
       return;

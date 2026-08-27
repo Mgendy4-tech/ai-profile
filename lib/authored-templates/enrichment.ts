@@ -9,6 +9,7 @@ import type {
   ProductionProjectVisual,
   SupportedAuthoredPageRole,
 } from "./adapter";
+import { PRODUCTION_V1_LIMITS } from "../production-limits";
 
 export type AuthoredFieldCategory =
   | "DIRECT"
@@ -185,8 +186,8 @@ export const enrichProductionContentForAuthoredTemplates = async (
       ));
       continue;
     }
-    if (!Number.isFinite(dimensions.width) || !Number.isFinite(dimensions.height) || dimensions.width <= 0 || dimensions.height <= 0) {
-      diagnostics.push(diagnostic("image_dimensions_invalid", path, null, "Decoded image dimensions must be finite positive numbers."));
+    if (!Number.isFinite(dimensions.width) || !Number.isFinite(dimensions.height) || dimensions.width <= 0 || dimensions.height <= 0 || dimensions.width > PRODUCTION_V1_LIMITS.imageDimensionPx || dimensions.height > PRODUCTION_V1_LIMITS.imageDimensionPx) {
+      diagnostics.push(diagnostic("image_dimensions_invalid", path, null, `Decoded image dimensions must be finite, positive, and no larger than ${PRODUCTION_V1_LIMITS.imageDimensionPx}px per side.`));
       continue;
     }
     projectVisuals.push({

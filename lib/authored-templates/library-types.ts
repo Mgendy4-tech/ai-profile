@@ -6,6 +6,9 @@ export type NormalizedContentKind =
   | "company_identity"
   | "narrative_section"
   | "service_capability"
+  | "corporate_expertise"
+  | "corporate_approach"
+  | "corporate_supporting_narrative"
   | "project"
   | "product_feature"
   | "use_case";
@@ -23,6 +26,7 @@ export type NormalizedContentUnit =
   | (NormalizedContentUnitBase & { kind: "company_identity" })
   | (NormalizedContentUnitBase & { kind: "narrative_section"; characterCount: number })
   | (NormalizedContentUnitBase & { kind: "service_capability" })
+  | (NormalizedContentUnitBase & { kind: "corporate_expertise" | "corporate_approach" | "corporate_supporting_narrative"; characterCount: number })
   | (NormalizedContentUnitBase & { kind: "project"; hasAuthenticImage: boolean })
   | (NormalizedContentUnitBase & { kind: "product_feature" })
   | (NormalizedContentUnitBase & { kind: "use_case" });
@@ -31,6 +35,7 @@ export type DeterministicContentFacts = {
   narrativeSectionCount: number;
   narrativeCharacterCount: number;
   serviceCount: number;
+  corporateDetailCount: number;
   productFeatureCount: number;
   useCaseCount: number;
   productTechSignal: boolean;
@@ -67,6 +72,14 @@ export type FamilyEvaluation = {
   score: number;
   priority: number;
   reasons: readonly FamilyEvaluationReason[];
+  hardReason: string | null;
+};
+
+export type FamilyRankingExplanation = {
+  evaluations: readonly FamilyEvaluation[];
+  eligibleFamilies: readonly FamilyEvaluation[];
+  rejectedFamilies: readonly FamilyEvaluation[];
+  selectedFamilyId: TemplateFamilyId | null;
 };
 
 export type FamilyEvaluationInput = {

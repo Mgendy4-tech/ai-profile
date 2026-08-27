@@ -4,15 +4,24 @@ import type { AuthoredPageTemplate, ContentEnvelope, TemplateRenderAudit } from 
 import type { CorporateNarrativeContent } from "./content";
 import { corporateServicesV1VisualSystem as v, createCorporateMeasurementContext, paintCorporatePaper, preparedCorporateText } from "./visual-system";
 
-const createNarrativeTemplate = (variant: "standard" | "dense", maxLines: number): AuthoredPageTemplate<CorporateNarrativeContent> => {
+export const CORPORATE_SPARSE_NARRATIVE_BODY_REGION = {
+  x: 70,
+  y: 123,
+  width: 112,
+  maxLines: 10,
+  lineHeightFactor: 1.55,
+  fontSize: 9.5,
+} as const;
+
+const createNarrativeTemplate = (variant: "sparse" | "standard" | "dense", maxLines: number): AuthoredPageTemplate<CorporateNarrativeContent> => {
   const envelope: ContentEnvelope = { slots: [
     { id: "title", path: "title", kind: "text", required: true, fontFamily: "times", fontStyle: "bold", fontSize: 29, widthMm: 126, maxLines: 3 },
     { id: "supportingLine", path: "supportingLine", kind: "text", required: false, fontFamily: "helvetica", fontStyle: "normal", fontSize: 9.5, widthMm: 51, maxLines: 7 },
-    { id: "body", path: "body", kind: "text", required: true, fontFamily: "helvetica", fontStyle: "normal", fontSize: 9.5, widthMm: variant === "standard" ? 112 : 50, maxLines },
+    { id: "body", path: "body", kind: "text", required: true, fontFamily: "helvetica", fontStyle: "normal", fontSize: 9.5, widthMm: variant === "dense" ? 50 : 112, maxLines },
   ] };
   const id = `corporate-services-v1.narrative-${variant}`;
   return {
-    id, pageRole: "narrative", family: "corporate_narrative", priority: variant === "standard" ? 100 : 90, envelope,
+    id, pageRole: "narrative", family: "corporate_narrative", priority: variant === "sparse" ? 110 : variant === "standard" ? 100 : 90, envelope,
     prepare: (input) => evaluateContentEnvelope(id, envelope, input, createCorporateMeasurementContext(), [input.contentId]),
     render: (pdf: jsPDF, instance): TemplateRenderAudit => {
       paintCorporatePaper(pdf);
@@ -26,7 +35,7 @@ const createNarrativeTemplate = (variant: "standard" | "dense", maxLines: number
       pdf.setDrawColor(...v.palette.cobalt); pdf.setLineWidth(0.8); pdf.line(70, 102, 100, 102);
       const body = preparedCorporateText(instance, "body");
       pdf.setTextColor(...v.palette.ink); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.5); pdf.setLineHeightFactor(1.55);
-      if (variant === "standard") pdf.text([...body.lines], 70, 123);
+      if (variant !== "dense") pdf.text([...body.lines], CORPORATE_SPARSE_NARRATIVE_BODY_REGION.x, CORPORATE_SPARSE_NARRATIVE_BODY_REGION.y);
       else {
         const split = Math.ceil(body.lines.length / 2);
         pdf.text([...body.lines.slice(0, split)], 70, 123);
@@ -40,3 +49,4 @@ const createNarrativeTemplate = (variant: "standard" | "dense", maxLines: number
 
 export const corporateServicesNarrativeStandardTemplate = createNarrativeTemplate("standard", 24);
 export const corporateServicesNarrativeDenseTemplate = createNarrativeTemplate("dense", 56);
+export const corporateServicesNarrativeSparseTemplate = createNarrativeTemplate("sparse", 10);

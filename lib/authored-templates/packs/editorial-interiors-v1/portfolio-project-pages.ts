@@ -22,7 +22,7 @@ const coverCrop = (frame: Cell["image"], sourceAspectRatio: number) => {
 
 const definitions = {
   projectGrid2: { id: "editorial-interiors-v1.project-grid-2", role: "project_grid", label: "04 / SELECTED WORK", count: 2, cells: [
-    { image: { x: 0, y: 0, width: 128, height: 150 }, title: { x: 19, y: 174, width: 102 }, description: { x: 19, y: 186, width: 94 }, titleSize: 21, descriptionLines: 6 },
+    { image: { x: 0, y: 0, width: 128, height: 150 }, title: { x: 19, y: 174, width: 102 }, description: { x: 19, y: 190, width: 94 }, titleSize: 21, descriptionLines: 6 },
     { image: { x: 142, y: 28, width: 68, height: 95 }, title: { x: 142, y: 139, width: 49 }, description: { x: 142, y: 151, width: 49 }, titleSize: 14, descriptionLines: 8 },
   ] },
   projectGrid3: { id: "editorial-interiors-v1.project-grid-3", role: "project_grid", label: "04 / SELECTED WORK", count: 3, cells: [
@@ -40,11 +40,11 @@ const definitions = {
     { image: { x: 0, y: 0, width: 130, height: 210 }, title: { x: 145, y: 104, width: 46 }, description: { x: 145, y: 120, width: 46 }, titleSize: 17, descriptionLines: 12 },
   ] },
   continuation2: { id: "editorial-interiors-v1.portfolio-continuation-2", role: "continuation", label: "PORTFOLIO / CONTINUED", count: 2, cells: [
-    { image: { x: 0, y: 0, width: 122, height: 145 }, title: { x: 19, y: 166, width: 94 }, description: { x: 19, y: 178, width: 94 }, titleSize: 18, descriptionLines: 6 },
+    { image: { x: 0, y: 0, width: 122, height: 145 }, title: { x: 19, y: 166, width: 94 }, description: { x: 19, y: 180, width: 94 }, titleSize: 18, descriptionLines: 6 },
     { image: { x: 130, y: 152, width: 80, height: 100 }, title: { x: 130, y: 268, width: 61 }, description: { x: 130, y: 278, width: 61 }, titleSize: 13, descriptionLines: 3 },
   ] },
   continuation3: { id: "editorial-interiors-v1.portfolio-continuation-3", role: "continuation", label: "PORTFOLIO / CONTINUED", count: 3, cells: [
-    { image: { x: 0, y: 0, width: 120, height: 150 }, title: { x: 19, y: 170, width: 92 }, description: { x: 19, y: 182, width: 92 }, titleSize: 18, descriptionLines: 6 },
+    { image: { x: 0, y: 0, width: 120, height: 150 }, title: { x: 19, y: 170, width: 92 }, description: { x: 19, y: 184, width: 92 }, titleSize: 18, descriptionLines: 6 },
     { image: { x: 130, y: 28, width: 80, height: 82 }, title: { x: 130, y: 124, width: 61 }, description: { x: 130, y: 134, width: 61 }, titleSize: 12, descriptionLines: 4 },
     { image: { x: 110, y: 190, width: 100, height: 70 }, title: { x: 110, y: 274, width: 81 }, description: { x: 110, y: 284, width: 81 }, titleSize: 12, descriptionLines: 2 },
   ] },
@@ -56,11 +56,17 @@ const definitions = {
   ] },
 } as const satisfies Record<string, FixedDefinition>;
 
+const TITLE_MAX_LINES = 2;
+const TITLE_LINE_HEIGHT_FACTOR = 1.08;
+const DESCRIPTION_FONT_SIZE = 8;
+const titleDescriptionClearance = (cell: Cell) => cell.description.y - (cell.title.y + (TITLE_MAX_LINES - 1) * cell.titleSize * 0.352778 * TITLE_LINE_HEIGHT_FACTOR + cell.titleSize * 0.352778 * 0.25 + DESCRIPTION_FONT_SIZE * 0.352778 * 0.75);
+export const editorialInteriorsProjectTextGeometry = Object.fromEntries(Object.values(definitions).map((definition) => [definition.id, definition.cells.map((cell) => ({ title: cell.title, description: cell.description, titleSize: cell.titleSize, titleMaxLines: TITLE_MAX_LINES, titleLineHeightFactor: TITLE_LINE_HEIGHT_FACTOR, descriptionFontSize: DESCRIPTION_FONT_SIZE, descriptionMaxLines: cell.descriptionLines, clearanceMm: titleDescriptionClearance(cell) }))]));
+
 const envelopeFor = (definition: FixedDefinition): ContentEnvelope => ({ slots: [
   { id: "projects", path: "projects", kind: "collection", required: true, minItems: definition.count, maxItems: definition.count },
   ...definition.cells.flatMap((cell, index) => [
-    { id: `project${index}Name`, path: `projects.${index}.name`, kind: "text" as const, required: true, fontFamily: "times", fontStyle: "bold" as const, fontSize: cell.titleSize, widthMm: cell.title.width, maxLines: 2 },
-    { id: `project${index}Description`, path: `projects.${index}.description`, kind: "text" as const, required: true, fontFamily: "helvetica", fontStyle: "normal" as const, fontSize: 8, widthMm: cell.description.width, maxLines: cell.descriptionLines },
+    { id: `project${index}Name`, path: `projects.${index}.name`, kind: "text" as const, required: true, fontFamily: "times", fontStyle: "bold" as const, fontSize: cell.titleSize, widthMm: cell.title.width, maxLines: TITLE_MAX_LINES },
+    { id: `project${index}Description`, path: `projects.${index}.description`, kind: "text" as const, required: true, fontFamily: "helvetica", fontStyle: "normal" as const, fontSize: DESCRIPTION_FONT_SIZE, widthMm: cell.description.width, maxLines: cell.descriptionLines },
     { id: `project${index}Image`, path: `projects.${index}.image`, kind: "image" as const, required: true, allowedRoles: ["project_image"] as const, allowedProvenances: ["user_upload"] as const, minimumAspectRatio: 0.5, maximumAspectRatio: 2 },
   ]),
 ] });
@@ -83,8 +89,8 @@ const templateFor = (definition: FixedDefinition): AuthoredPageTemplate<Portfoli
       const image = getPreparedImage(instance, `project${index}Image`);
       clipAndDrawImage(pdf, image.source.source, image.source.format, cell.image, coverCrop(cell.image, image.aspectRatio));
       const title = getPreparedText(instance, `project${index}Name`); const description = getPreparedText(instance, `project${index}Description`);
-      pdf.setTextColor(...visual.palette.charcoal); pdf.setFont("times", "bold"); pdf.setFontSize(cell.titleSize); pdf.text([...title.lines], cell.title.x, cell.title.y); renderedTextBySlot[`project${index}Name`] = title.lines;
-      pdf.setTextColor(...visual.palette.secondary); pdf.setFont("helvetica", "normal"); pdf.setFontSize(8); pdf.setLineHeightFactor(1.35); pdf.text([...description.lines], cell.description.x, cell.description.y); renderedTextBySlot[`project${index}Description`] = description.lines;
+      pdf.setTextColor(...visual.palette.charcoal); pdf.setFont("times", "bold"); pdf.setFontSize(cell.titleSize); pdf.setLineHeightFactor(TITLE_LINE_HEIGHT_FACTOR); pdf.text([...title.lines], cell.title.x, cell.title.y); renderedTextBySlot[`project${index}Name`] = title.lines;
+      pdf.setTextColor(...visual.palette.secondary); pdf.setFont("helvetica", "normal"); pdf.setFontSize(DESCRIPTION_FONT_SIZE); pdf.setLineHeightFactor(1.35); pdf.text([...description.lines], cell.description.x, cell.description.y); renderedTextBySlot[`project${index}Description`] = description.lines;
     });
     return { templateId: definition.id, renderedTextBySlot };
   };

@@ -1,7 +1,7 @@
 export type ExportOutcome = "authored_success" | "standard_success";
 export type ExportFailureCategory = "pdf_export_failed";
 export type ExportFallbackDiagnostic = {
-  stage: "normalization" | "enrichment" | "ranking" | "planning" | "compatibility";
+  stage: "operational" | "normalization" | "enrichment" | "ranking" | "planning" | "compatibility";
   code: string;
   pageRole: string | null;
 };
