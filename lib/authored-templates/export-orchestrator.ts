@@ -8,7 +8,7 @@ import type { ContractIssue, PageRole } from "./types";
 import { createVisualPortfolioDocumentPlan, prepareVisualPortfolioDocumentPlan, renderPreparedVisualPortfolioPlan, type VisualPortfolioPlanningIssue } from "./visual-portfolio-planner";
 import { createCorporateServicesDocumentPlan, prepareCorporateServicesDocumentPlan, renderPreparedCorporateServicesPlan, type CorporateServicesPlanningIssue } from "./corporate-services-planner";
 import { createProductTechDocumentPlan, prepareProductTechDocumentPlan, renderPreparedProductTechPlan, type ProductTechPlanningIssue } from "./product-tech-planner";
-import { validateProjectOperationalLimits, validateRenderedDocumentLimits } from "../production-limits";
+import { validateAuthoredImageOperationalLimits, validateRenderedDocumentLimits } from "../production-limits";
 import type { FamilyRankingExplanation } from "./library-types";
 
 export type AuthoredExportFallbackReason = { stage: "operational" | "normalization" | "enrichment" | "ranking" | "planning" | "compatibility"; code: string; path: string; pageRole: PageRole | null };
@@ -32,7 +32,7 @@ const compatibilityReason = (issue: ContractIssue): AuthoredExportFallbackReason
 const renderedLimitReasons = (pdf: jsPDF): AuthoredExportFallbackReason[] => validateRenderedDocumentLimits(pdf.getNumberOfPages(), pdf.output("arraybuffer").byteLength).map((issue) => ({ stage: "operational", code: issue.code, path: issue.path, pageRole: null }));
 
 export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmentInput, decodeDimensions?: ImageMetadataDecoder): Promise<AuthoredExportDecision> => {
-  const operationalIssues = validateProjectOperationalLimits(input.projects);
+  const operationalIssues = validateAuthoredImageOperationalLimits(input.company, input.projects);
   if (operationalIssues.length) return fallback(operationalIssues.map((issue) => ({ stage: "operational", code: issue.code, path: issue.path, pageRole: null })));
   const productTechSignal = isProductTechCompanyType(input.profile.companyType);
   const normalizedRoles = normalizeProductionSectionRoles(input.profile.sections, { productTech: productTechSignal && input.projects.length === 0, corporateServices: isCorporateServicesCompanyType(input.profile.companyType) });
@@ -50,6 +50,8 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
   if (projectsEntry && (projectsEntry.section.items.length !== input.projects.length || projectsEntry.section.items.some((item, index) => item.name !== input.projects[index]?.name))) return fallback([{ stage: "planning", code: "project_source_mismatch", path: `profile.sections.${input.profile.sections.indexOf(projectsEntry.section)}.items`, pageRole: "project_grid" }]);
 
   const enriched = await enrichProductionContentForAuthoredTemplates(input, decodeDimensions);
+  const logoDiagnostics = enriched.diagnostics.filter((issue) => issue.path === "company.logoUrl");
+  if (logoDiagnostics.length) return fallback(logoDiagnostics.map(enrichmentReason));
   const visualByProjectId = new Map(enriched.adapterInput.projectVisuals.map((visual) => [visual.projectId, visual]));
   const units = normalizeAuthoredContentUnits({ company: {}, sections: [
     { id: narrativeEntry.section.id, role: "narrative", content: narrativeEntry.section.content },
@@ -65,7 +67,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
   if (selectedFamily === "product-tech") {
     if (!featuresEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
     const planning = createProductTechDocumentPlan({ units,
-      cover: { contentId: "company", documentLabel: "PRODUCT PROFILE", companyName: input.company.name, companyType: input.profile.companyType },
+      cover: { contentId: "company", documentLabel: "PRODUCT PROFILE", companyName: input.company.name, companyType: input.profile.companyType, ...(enriched.adapterInput.company.logo ? { logo: enriched.adapterInput.company.logo } : {}) },
       overview: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, supportingLine: narrativeEntry.section.description },
       featuresHeading: featuresEntry.section.title, featuresSupportingLine: featuresEntry.section.description,
       features: featuresEntry.section.items.map((item, index) => ({ contentId: `${featuresEntry.section.id}:item:${index}`, index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description })),
@@ -79,7 +81,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     if (!servicesEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
     const planning = createCorporateServicesDocumentPlan({
       units,
-      cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: input.company.name, companyType: input.profile.companyType },
+      cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: input.company.name, companyType: input.profile.companyType, ...(enriched.adapterInput.company.logo ? { logo: enriched.adapterInput.company.logo } : {}) },
       narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, supportingLine: narrativeEntry.section.description },
       ...(corporateDetailEntries.some((entry) => entry.role === "approach") ? {} : input.company.activities && input.company.experience ? { approach: { contentId: "company", heading: "Business approach", activities: input.company.activities, experience: input.company.experience } } : {}),
       servicesHeading: servicesEntry.section.title,
@@ -111,7 +113,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
   };
   const planning = createVisualPortfolioDocumentPlan({
     units,
-    cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: input.company.name, hero: toImage(firstProject.id) },
+    cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: input.company.name, hero: toImage(firstProject.id), ...(enriched.adapterInput.company.logo ? { logo: enriched.adapterInput.company.logo } : {}) },
     narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, ...(narrativeEntry.section.items[0] ? { secondaryBlock: { title: narrativeEntry.section.items[0].name, body: narrativeEntry.section.items[0].description } } : {}) },
     capabilities: { contentId: servicesEntry.section.id, eyebrow: "02 / CAPABILITIES", heading: servicesEntry.section.title, supportingLine: servicesEntry.section.description, capabilities: servicesEntry.section.items.map((item, index) => ({ index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as unknown as readonly [
       { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] },

@@ -1,4 +1,6 @@
-export type ProductTechCoverContent = { contentId: string; documentLabel: string; companyName: string; companyType: string };
+import type { ImageSlotValue } from "../../types";
+
+export type ProductTechCoverContent = { contentId: string; documentLabel: string; companyName: string; companyType: string; logo?: ImageSlotValue };
 export type ProductOverviewContent = { contentId: string; title: string; body: string; supportingLine: string };
 export type ProductFeature = { contentId: string; index: string; title: string; description: string };
 export type ProductFeaturesPageContent = { contentId: string; heading: string; supportingLine: string; features: readonly ProductFeature[] };

@@ -11,11 +11,12 @@ const assert = (condition: unknown, message: string) => {
 
 const PNG = "data:image/png;base64,production-png-payload";
 const JPEG = "data:image/jpeg;base64,production-jpeg-payload";
+const LOGO = "data:image/png;base64,logo";
 
 const input = (): ProductionEnrichmentInput => ({
   company: {
     name: "Aurelia Interior Studio",
-    logoUrl: "data:image/png;base64,logo",
+    logoUrl: LOGO,
     about: " About source bytes remain exact. ",
     activities: "Activities source bytes remain exact.",
     experience: "Experience source bytes remain exact.",
@@ -59,7 +60,7 @@ const sourceBefore = JSON.stringify(source);
 const decodedSources: string[] = [];
 const result = await enrichProductionContentForAuthoredTemplates(source, async (imageSource) => {
   decodedSources.push(imageSource);
-  return imageSource === PNG ? { width: 1200, height: 1600 } : { width: 1800, height: 1200 };
+  return imageSource === LOGO ? { width: 600, height: 200 } : imageSource === PNG ? { width: 1200, height: 1600 } : { width: 1800, height: 1200 };
 });
 
 assert(JSON.stringify(source) === sourceBefore, "Enrichment must not mutate or freeze caller-owned values.");
@@ -70,7 +71,8 @@ assert(result.adapterInput.company.about === " About source bytes remain exact. 
 assert(result.adapterInput.sections[0].id === "about", "Existing section IDs must be preserved.");
 assert(result.adapterInput.sections[0].items[0].id === "about:item:0", "Missing generated-item IDs must be derived deterministically from source identity and position.");
 assert(result.adapterInput.projects[0].id === "project-1", "Project associations and IDs must be preserved.");
-assert(decodedSources.join("|") === `${PNG}|${JPEG}`, "Every supported authentic project image must be decoded exactly once in source order.");
+assert(decodedSources.join("|") === `${LOGO}|${PNG}|${JPEG}`, "The optional logo and every authentic project image must be decoded exactly once in deterministic source order.");
+assert(result.adapterInput.company.logo?.role === "company_logo" && result.adapterInput.company.logo.provenance === "user_upload" && result.adapterInput.company.logo.width === 600 && result.adapterInput.company.logo.height === 200, "A valid logo must retain explicit user-upload provenance and decoded dimensions.");
 
 const png = result.adapterInput.projectVisuals[0];
 const jpeg = result.adapterInput.projectVisuals[1];

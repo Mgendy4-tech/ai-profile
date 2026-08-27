@@ -36,6 +36,26 @@ export const validateProjectOperationalLimits = (projects: readonly { imageUrl: 
   return issues;
 };
 
+export const validateAuthoredImageOperationalLimits = (
+  company: { logoUrl?: string },
+  projects: readonly { imageUrl: string }[],
+): readonly OperationalLimitIssue[] => {
+  const issues = [...validateProjectOperationalLimits(projects)];
+  if (!company.logoUrl) return issues;
+  if (!/^data:image\/(png|jpe?g);base64,/i.test(company.logoUrl)) {
+    issues.push({ code: "image_format_limit", path: "company.logoUrl", message: "Company logos must be PNG or JPEG files." });
+  }
+  const logoBytes = dataUrlDecodedBytes(company.logoUrl);
+  if (logoBytes > PRODUCTION_V1_LIMITS.imageBytes) {
+    issues.push({ code: "image_byte_limit", path: "company.logoUrl", message: "The company logo must be 3 MB or smaller." });
+  }
+  const projectBytes = projects.reduce((total, project) => total + (project.imageUrl ? dataUrlDecodedBytes(project.imageUrl) : 0), 0);
+  if (logoBytes + projectBytes > PRODUCTION_V1_LIMITS.totalImageBytes && !issues.some((entry) => entry.code === "total_image_byte_limit")) {
+    issues.push({ code: "total_image_byte_limit", path: "company.logoUrl", message: "Combined embedded logo and project images must be 8 MB or smaller." });
+  }
+  return issues;
+};
+
 export const validateGenerationRequestSize = (value: unknown): OperationalLimitIssue | null => new TextEncoder().encode(JSON.stringify(value)).byteLength > PRODUCTION_V1_LIMITS.generationRequestBytes ? { code: "generation_request_limit", path: "request", message: "This profile is too large to generate safely. Shorten the source content or remove optional sections." } : null;
 
 export const validateRenderedDocumentLimits = (pageCount: number, pdfBytes: number): readonly OperationalLimitIssue[] => [

@@ -106,8 +106,8 @@ export default function CompanyPage() {
       return;
     }
 
-    if (!['image/png', 'image/jpeg', 'image/svg+xml'].includes(file.type)) {
-      setErrorMessage('Please select a PNG, JPG, or SVG logo file.');
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setErrorMessage('Please select a PNG or JPG logo file.');
       setSuccessMessage('');
       return;
     }
@@ -276,7 +276,7 @@ setTimeout(() => {
             <input
               ref={logoInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/svg+xml"
+              accept="image/png,image/jpeg"
               onChange={(event) => handleLogoSelect(event.target.files?.[0])}
               className="mt-2 block w-full rounded-lg border border-gray-300 p-3 text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:font-medium file:text-gray-900"
             />

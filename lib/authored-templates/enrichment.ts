@@ -164,6 +164,31 @@ export const enrichProductionContentForAuthoredTemplates = async (
 ): Promise<ProductionEnrichmentResult> => {
   const diagnostics: EnrichmentDiagnostic[] = [];
   const projectVisuals: ProductionProjectVisual[] = [];
+  let companyLogo: import("./types").ImageSlotValue | undefined;
+
+  if (input.company.logoUrl) {
+    const path = "company.logoUrl";
+    const format = detectDataUrlFormat(input.company.logoUrl);
+    if (!format) {
+      diagnostics.push(diagnostic("image_format_unknown", path, "cover", "Company logos must be explicit PNG/JPEG data URLs."));
+    } else {
+      try {
+        const dimensions = await decodeDimensions(input.company.logoUrl);
+        if (!Number.isFinite(dimensions.width) || !Number.isFinite(dimensions.height) || dimensions.width <= 0 || dimensions.height <= 0 || dimensions.width > PRODUCTION_V1_LIMITS.imageDimensionPx || dimensions.height > PRODUCTION_V1_LIMITS.imageDimensionPx) {
+          diagnostics.push(diagnostic("image_dimensions_invalid", path, "cover", `Decoded logo dimensions must be finite, positive, and no larger than ${PRODUCTION_V1_LIMITS.imageDimensionPx}px per side.`));
+        } else {
+          companyLogo = { role: "company_logo", provenance: "user_upload", format, width: dimensions.width, height: dimensions.height, source: input.company.logoUrl };
+        }
+      } catch (error) {
+        diagnostics.push(diagnostic(
+          typeof Image === "undefined" && decodeDimensions === decodeBrowserImageDimensions ? "image_decode_unavailable" : "image_decode_failed",
+          path,
+          "cover",
+          error instanceof Error ? error.message : "Logo metadata could not be decoded.",
+        ));
+      }
+    }
+  }
 
   for (let index = 0; index < input.projects.length; index += 1) {
     const project = input.projects[index];
@@ -295,6 +320,7 @@ export const enrichProductionContentForAuthoredTemplates = async (
       about: input.company.about,
       activities: input.company.activities,
       experience: input.company.experience,
+      ...(companyLogo ? { logo: companyLogo } : {}),
     },
     sections: normalizedSections,
     projects: input.projects.map((project) => ({ id: project.id, name: project.name, description: project.description })),

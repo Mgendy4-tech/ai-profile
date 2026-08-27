@@ -5,6 +5,7 @@ export type CoverContent = {
   documentLabel: string;
   companyName: string;
   hero: ImageSlotValue;
+  logo?: ImageSlotValue;
 };
 
 export type NarrativeContent = {

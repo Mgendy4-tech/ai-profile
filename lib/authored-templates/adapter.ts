@@ -23,6 +23,7 @@ export type ProductionCompanyContent = {
   about: string;
   activities: string;
   experience: string;
+  logo?: ImageSlotValue;
 };
 
 export type ProductionGeneratedItem = {

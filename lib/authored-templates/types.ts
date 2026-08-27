@@ -12,7 +12,7 @@ export type TemplateFontStyle =
   | "italic"
   | "bolditalic";
 
-export type ImageRole = "contextual_stock" | "project_image";
+export type ImageRole = "contextual_stock" | "project_image" | "company_logo";
 
 export type ImageProvenance =
   | "pexels"

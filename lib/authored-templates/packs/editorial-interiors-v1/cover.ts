@@ -7,6 +7,7 @@ import type {
   TemplateRenderAudit,
 } from "../../types";
 import type { CoverContent } from "./content";
+import { drawContainedOptionalLogo, preparedOptionalLogo } from "../logo";
 import {
   clipAndDrawImage,
   createEditorialInteriorsMeasurementContext,
@@ -50,6 +51,14 @@ export const coverEnvelope: ContentEnvelope = {
       minimumAspectRatio: visual.crops.cover.sourceAspectRange.minimum,
       maximumAspectRatio: visual.crops.cover.sourceAspectRange.maximum,
     },
+    {
+      id: "logo",
+      path: "logo",
+      kind: "image",
+      required: false,
+      allowedRoles: ["company_logo"],
+      allowedProvenances: ["user_upload"],
+    },
   ],
 };
 
@@ -68,6 +77,7 @@ const render = (
   paintPaper(pdf);
   const hero = getPreparedImage(instance, "hero");
   clipAndDrawImage(pdf, hero.source.source, hero.source.format, visual.crops.cover.frame, visual.crops.cover.image);
+  drawContainedOptionalLogo(pdf, preparedOptionalLogo(instance), { x: 139, y: 18, width: 53, height: 14 }, visual.palette.paper);
 
   const documentLabel = getPreparedText(instance, "documentLabel");
   pdf.setTextColor(...visual.palette.secondary);

@@ -1,4 +1,6 @@
-export type CorporateCoverContent = { contentId: string; documentLabel: string; companyName: string; companyType: string };
+import type { ImageSlotValue } from "../../types";
+
+export type CorporateCoverContent = { contentId: string; documentLabel: string; companyName: string; companyType: string; logo?: ImageSlotValue };
 export type CorporateNarrativeContent = { contentId: string; title: string; body: string; supportingLine: string };
 export type CorporateApproachContent = { contentId: string; heading: string; activities: string; experience: string };
 export type CorporateService = { contentId: string; index: string; title: string; description: string };
