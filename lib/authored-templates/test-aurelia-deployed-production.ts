@@ -11,6 +11,7 @@ import { createVisualPortfolioDocumentPlan, prepareVisualPortfolioDocumentPlan }
 import { authoredTemplateFamilies } from "./registry";
 import { normalizeProductionSectionRoles } from "./section-role-normalization";
 import { editorialInteriorsV1Pack } from "./packs/editorial-interiors-v1";
+import { selectAuthoredCover } from "./cover-library";
 
 const assert: (condition: unknown, message: string) => asserts condition = (condition, message) => { if (!condition) throw new Error(message); };
 const fixtureBytes = readFileSync(resolve("lib/test-fixtures/visual/aurelia-browser-upload.jpg"));
@@ -69,10 +70,12 @@ const main = async () => {
   ], projects: [{ id: project.id, hasAuthenticImage: true }] });
   const ranking = explainAuthoredTemplateFamilyRanking(authoredTemplateFamilies, createContentShape(units));
   assert(ranking.selectedFamilyId === "visual-portfolio", `Visual must rank first: ${JSON.stringify(ranking)}`);
+  const coverSelection = selectAuthoredCover({ familyId: "visual-portfolio", companyName: company.name, companyType: profile.companyType, hasLogo: false });
+  assert(coverSelection.compatible && coverSelection.templateId === "authored-cover-v1.editorial-warm", "Aurelia must select the image-free editorial cover.");
   const image = { role: visual.role, provenance: visual.provenance, format: visual.format, width: visual.width, height: visual.height, source: visual.imageUrl, projectId: project.id } as const;
   const planning = createVisualPortfolioDocumentPlan({
     units,
-    cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: company.name, hero: image },
+    cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: company.name, companyType: profile.companyType, paletteId: coverSelection.paletteId }, coverTemplateId: coverSelection.templateId,
     narrative: { contentId: "about", title: generated[0].title, body: generated[0].content },
     capabilities: { contentId: "services", eyebrow: "02 / CAPABILITIES", heading: generated[1].title, supportingLine: generated[1].description, capabilities: generated[1].items.slice(0, 4).map((item, index) => ({ index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as never },
     capabilitiesSupporting: { contentId: "services:supporting", eyebrow: "CAPABILITIES / CONTINUED", heading: "Crafted around every interior.", capabilities: generated[1].items.slice(4).map((item, index) => ({ index: String(index + 5).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as never, detail: { contentId: "expertise", title: generated[2].title, body: generated[2].content }, featuredProjectTitle: project.name },
@@ -83,6 +86,7 @@ const main = async () => {
   const coverage = validateDocumentCoverage(units, planning.plan);
   assert(coverage.complete, `Coverage failed: ${JSON.stringify(coverage.issues)}`);
   assert(coverage.consumedContentIds.filter((id) => id === project.id).length === 1, "Project must be consumed exactly once.");
+  assert(planning.plan.pages[0].claims.every((claim) => claim.contentId !== project.id), "Riverside must not be referenced by the cover.");
   const prepared = prepareVisualPortfolioDocumentPlan(planning.plan);
   assert(prepared.compatible, `Preflight failed: ${JSON.stringify(prepared.issues)}`);
   assert(planning.plan.pages.length === 5 && planning.plan.pages[3].templateId === "editorial-interiors-v1.capabilities-supporting-2", "Six-service Aurelia must use the intentional fixed five-page composition.");

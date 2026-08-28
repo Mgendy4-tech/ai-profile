@@ -5,8 +5,9 @@ import type { AuthoredDocumentPlan, CoverageIssue, NormalizedContentUnit } from 
 import { productTechV1Pack } from "./packs/product-tech-v1";
 import type { ProductFeature, ProductFeaturesPageContent, ProductOverviewContent, ProductTechCoverContent, ProductUseCase, ProductUseCasesPageContent } from "./packs/product-tech-v1/content";
 import type { AuthoredPageTemplate, ContractIssue, TemplateInstance, TemplateRenderAudit } from "./types";
+import type { AuthoredCoverContent, CoverTemplateId } from "./cover-library";
 
-export type ProductTechPlanningInput = { units: readonly NormalizedContentUnit[]; cover: ProductTechCoverContent; overview: ProductOverviewContent; featuresHeading: string; featuresSupportingLine: string; features: readonly ProductFeature[]; useCases?: { heading: string; supportingLine: string; items: readonly ProductUseCase[] } };
+export type ProductTechPlanningInput = { units: readonly NormalizedContentUnit[]; cover: AuthoredCoverContent | ProductTechCoverContent; coverTemplateId?: CoverTemplateId; overview: ProductOverviewContent; featuresHeading: string; featuresSupportingLine: string; features: readonly ProductFeature[]; useCases?: { heading: string; supportingLine: string; items: readonly ProductUseCase[] } };
 export type ProductTechPlanningIssue = CoverageIssue | { code: "feature_count_unsupported" | "normalized_feature_mismatch" | "normalized_use_case_mismatch" | "project_content_unsupported" | "service_content_unsupported" | "invalid_document_plan"; path: string; message: string };
 export type ProductTechPlanResult = { compatible: true; plan: AuthoredDocumentPlan; issues: [] } | { compatible: false; plan: null; issues: readonly ProductTechPlanningIssue[] };
 
@@ -20,7 +21,7 @@ export const createProductTechDocumentPlan = (input: ProductTechPlanningInput): 
   if (normalizedUseCases.length !== useCases.length || normalizedUseCases.some((unit, index) => unit.id !== useCases[index].contentId)) return { compatible: false, plan: null, issues: [{ code: "normalized_use_case_mismatch", path: "useCases", message: "Normalized use-case units must match candidate use cases in source order." }] };
   const company = input.units.find((unit) => unit.kind === "company_identity"); const narrative = input.units.find((unit) => unit.kind === "narrative_section");
   const pages: AuthoredDocumentPlan["pages"][number][] = [
-    { pageId: "cover", templateId: "product-tech-v1.cover", pageRole: "cover", candidate: input.cover, claims: company ? [{ contentId: company.id, mode: "consume", slotId: "companyName" }] : [] },
+    { pageId: "cover", templateId: input.coverTemplateId ?? "product-tech-v1.cover", pageRole: "cover", candidate: input.cover, claims: company ? [{ contentId: company.id, mode: "consume", slotId: "companyName" }] : [] },
     { pageId: "overview", templateId: "product-tech-v1.overview", pageRole: "narrative", candidate: input.overview, claims: narrative ? [{ contentId: narrative.id, mode: "consume", slotId: "body" }] : [] },
   ];
   const addChunks = <T extends ProductFeature | ProductUseCase>(items: readonly T[], limit: number, primaryPrefix: string, continuationPrefix: string, kind: "features" | "useCases") => {

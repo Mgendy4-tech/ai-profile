@@ -79,6 +79,7 @@ const main = async () => {
   assert(product?.score === 8 && corporate?.score === 1 && ranking.selectedFamilyId === "product-tech", `Unexpected WinX ranking: ${JSON.stringify(ranking)}`);
   const decision = await routeEditorialInteriorsV1Export({ company, profile: { companyName: company.name, companyType: "Sales Technology Company", sections: boundary.sections }, projects: [] }, async () => ({ width: 640, height: 640 }));
   assert(decision.mode === "authored" && decision.familyId === "product-tech" && decision.packId === "product-tech-v1", `WinX authored routing failed: ${JSON.stringify(decision.reasons)}`);
+  assert(decision.pageOrder[0] === "authored-cover-v1.dynamic-bold", "WinX must select the deterministic technical cover.");
   const pdf = Buffer.from(decision.pdf.output("arraybuffer")).toString("latin1"); assert(!/pexels|image credits/i.test(pdf), "WinX unexpectedly reached legacy image rendering.");
   console.log(JSON.stringify({ ids: boundary.sections.map((section) => section.id), normalization: normalized.sections.map((entry) => ({ id: entry.section.id, role: entry.role })), ranking: { corporate: corporate?.score, productTech: product?.score, selected: ranking.selectedFamilyId }, decision: { mode: decision.mode, familyId: decision.familyId, packId: decision.packId } }));
 };

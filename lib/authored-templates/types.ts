@@ -152,6 +152,7 @@ export type TemplateFamily =
   | "corporate_narrative"
   | "corporate_services"
   | "product_cover"
+  | "authored_cover_library"
   | "product_overview"
   | "product_features"
   | "product_use_cases";

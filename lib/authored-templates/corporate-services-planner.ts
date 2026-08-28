@@ -5,10 +5,12 @@ import type { AuthoredDocumentPlan, CoverageIssue, NormalizedContentUnit } from 
 import { corporateServicesV1Pack } from "./packs/corporate-services-v1";
 import type { CorporateApproachContent, CorporateCoverContent, CorporateNarrativeContent, CorporateProject, CorporateProjectsPageContent, CorporateService, CorporateServicesPageContent } from "./packs/corporate-services-v1/content";
 import type { AuthoredPageTemplate, ContractIssue, TemplateInstance, TemplateRenderAudit } from "./types";
+import type { AuthoredCoverContent, CoverTemplateId } from "./cover-library";
 
 export type CorporateServicesPlanningInput = {
   units: readonly NormalizedContentUnit[];
-  cover: CorporateCoverContent;
+  cover: AuthoredCoverContent | CorporateCoverContent;
+  coverTemplateId?: CoverTemplateId;
   narrative: CorporateNarrativeContent;
   approach?: CorporateApproachContent;
   servicesHeading: string;
@@ -39,7 +41,7 @@ export const createCorporateServicesDocumentPlan = (input: CorporateServicesPlan
   const narrativeLength = narrative?.characterCount ?? 0;
   const narrativeTemplateId = narrativeLength <= 300 ? "corporate-services-v1.narrative-sparse" : narrativeLength <= 900 ? "corporate-services-v1.narrative-standard" : "corporate-services-v1.narrative-dense";
   const pages: AuthoredDocumentPlan["pages"][number][] = [
-    { pageId: "cover", templateId: "corporate-services-v1.cover", pageRole: "cover", candidate: input.cover, claims: company ? [{ contentId: company.id, mode: "consume", slotId: "companyName" }] : [] },
+    { pageId: "cover", templateId: input.coverTemplateId ?? "corporate-services-v1.cover", pageRole: "cover", candidate: input.cover, claims: company ? [{ contentId: company.id, mode: "consume", slotId: "companyName" }] : [] },
     { pageId: "narrative", templateId: narrativeTemplateId, pageRole: "narrative", candidate: input.narrative, claims: narrative ? [{ contentId: narrative.id, mode: "consume", slotId: "body" }] : [] },
   ];
   let offset = 0; let sequence = 0;

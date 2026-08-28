@@ -9,6 +9,7 @@ import { routeEditorialInteriorsV1Export } from "./export-orchestrator";
 import { rankAuthoredTemplateFamilies } from "./family-ranking";
 import { authoredTemplateFamilies } from "./registry";
 import { isCorporateServicesCompanyType, normalizeProductionSectionRoles } from "./section-role-normalization";
+import { selectAuthoredCover } from "./cover-library";
 
 const assert: (condition: unknown, message: string) => asserts condition = (condition, message) => { if (!condition) throw new Error(message); };
 
@@ -60,9 +61,11 @@ const units = normalizeAuthoredContentUnits({ company: {}, sections: [
 ], projects: [] });
 const ranking = rankAuthoredTemplateFamilies(authoredTemplateFamilies, createContentShape(units, null, false));
 assert(ranking[0]?.familyId === "corporate-services", `Corporate must rank first: ${JSON.stringify(ranking)}`);
+const coverSelection = selectAuthoredCover({ familyId: "corporate-services", companyName: company.name, companyType: profile.companyType, hasLogo: false });
+assert(coverSelection.compatible && coverSelection.templateId === "authored-cover-v1.corporate-clean", "Northbridge must select the clean authored cover.");
 const planning = createCorporateServicesDocumentPlan({
   units,
-  cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: company.name, companyType: profile.companyType },
+  cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: company.name, companyType: profile.companyType, paletteId: coverSelection.paletteId }, coverTemplateId: coverSelection.templateId,
   narrative: { contentId: narrative.section.id, title: narrative.section.title, body: narrative.section.content, supportingLine: narrative.section.description },
   servicesHeading: services.section.title,
   servicesSupportingLine: services.section.description,
@@ -86,7 +89,7 @@ const firstBytes = Buffer.from(first.pdf.output("arraybuffer"));
 const secondBytes = Buffer.from(second.pdf.output("arraybuffer"));
 assert(firstBytes.equals(secondBytes), "Identical Northbridge inputs must produce byte-identical PDFs.");
 const rawPdf = firstBytes.toString("latin1");
-assert(rawPdf.includes("CORPORATE / SERVICES"), "PDF must contain the Corporate authored marker.");
+assert(rawPdf.includes("Northbridge Advisory") && first.pageOrder[0] === "authored-cover-v1.corporate-clean", "PDF must contain Northbridge identity and the selected Corporate authored cover.");
 assert(!/pexels|image credits/i.test(rawPdf), "PDF must not contain legacy Pexels or image-credit markers.");
 const outputPath = resolve("artifacts/manual-review/corporate-services-v1-northbridge-live-production-review.pdf");
 mkdirSync(dirname(outputPath), { recursive: true });

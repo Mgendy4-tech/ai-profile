@@ -7,10 +7,12 @@ import { editorialInteriorsV1Pack } from "./packs/editorial-interiors-v1";
 import { selectEditorialInteriorsNarrativeTemplate } from "./packs/editorial-interiors-v1/narrative";
 import type { CapabilitiesContent, CapabilitiesSupportingContent, CoverContent, NarrativeContent, ProjectFeatureContent } from "./packs/editorial-interiors-v1/content";
 import type { PortfolioProjectContent, PortfolioProjectPageContent } from "./packs/editorial-interiors-v1/portfolio-project-pages";
+import type { AuthoredCoverContent, CoverTemplateId } from "./cover-library";
 
 export type VisualPortfolioPlanningInput = {
   units: readonly NormalizedContentUnit[];
-  cover: CoverContent;
+  cover: AuthoredCoverContent | CoverContent;
+  coverTemplateId?: CoverTemplateId;
   narrative: NarrativeContent;
   capabilities: CapabilitiesContent;
   capabilitiesSupporting?: CapabilitiesSupportingContent;
@@ -53,9 +55,8 @@ export const createVisualPortfolioDocumentPlan = (
     return { compatible: false, plan: null, issues: [{ code: "normalized_detail_mismatch", path: "units", message: "Normalized detail units must match candidate details exactly in source order." }] };
   }
   const pages: AuthoredDocumentPlan["pages"][number][] = [
-    { pageId: "cover", templateId: "editorial-interiors-v1.cover", pageRole: "cover", candidate: input.cover, claims: [
+    { pageId: "cover", templateId: input.coverTemplateId ?? "editorial-interiors-v1.cover", pageRole: "cover", candidate: input.cover, claims: [
       ...(company ? [{ contentId: company.id, mode: "consume" as const, slotId: "companyName" }] : []),
-      { contentId: input.projects[0].contentId, mode: "reference", slotId: "hero" },
     ] },
     { pageId: "narrative", templateId: selectEditorialInteriorsNarrativeTemplate(input.narrative).id, pageRole: "narrative", candidate: input.narrative, claims: narrative ? [{ contentId: narrative.id, mode: "consume", slotId: "body" }] : [] },
     { pageId: "capabilities", templateId: "editorial-interiors-v1.capabilities", pageRole: "capabilities", candidate: input.capabilities, claims: services.slice(0, 4).map((service, index) => ({ contentId: service.id, mode: "consume", slotId: `capabilities.${index}` })) },

@@ -4,11 +4,12 @@ import { productFeatureContinuationTemplates, productFeaturePrimaryTemplates } f
 import { productTechOverviewTemplate } from "./overview";
 import { productUseCaseContinuationTemplates, productUseCasePrimaryTemplates } from "./use-cases";
 import { productTechV1VisualSystem } from "./visual-system";
+import { authoredCoverTemplates } from "../../cover-library";
 
 export const productTechV1Pack = {
   id: "product-tech-v1", version: 1,
   pageOrder: [productTechCoverTemplate.id, productTechOverviewTemplate.id, productFeaturePrimaryTemplates[3].id],
   visualSystem: productTechV1VisualSystem,
-  templates: [productTechCoverTemplate, productTechOverviewTemplate, ...productFeaturePrimaryTemplates, ...productFeatureContinuationTemplates, ...productUseCasePrimaryTemplates, ...productUseCaseContinuationTemplates],
+  templates: [productTechCoverTemplate, productTechOverviewTemplate, ...productFeaturePrimaryTemplates, ...productFeatureContinuationTemplates, ...productUseCasePrimaryTemplates, ...productUseCaseContinuationTemplates, ...authoredCoverTemplates],
 } as const satisfies TemplatePack;
 export * from "./content";

@@ -76,7 +76,8 @@ const run = async () => {
   assert(valid.mode === "authored", "Fully compatible production input must select authored mode.");
   if (valid.mode !== "authored") throw new Error("Expected authored decision.");
   assert(valid.pdf.getNumberOfPages() === 4, "Authored export must contain exactly four pages.");
-  const expectedSparsePageOrder = [...EDITORIAL_INTERIORS_V1_PAGE_ORDER];
+  const expectedSparsePageOrder: string[] = [...EDITORIAL_INTERIORS_V1_PAGE_ORDER];
+  expectedSparsePageOrder[0] = "authored-cover-v1.editorial-warm";
   expectedSparsePageOrder[1] = editorialInteriorsSparseNarrativeTemplate.id;
   assert(valid.pageOrder.join("|") === expectedSparsePageOrder.join("|"), "Authored export must preserve the exact approved sparse narrative page order.");
   for (let page = 1; page <= 4; page += 1) {
@@ -141,13 +142,12 @@ const run = async () => {
     if (sourceAspect >= frameAspect) { const width = frame.height * sourceAspect; return { x: frame.x - (width - frame.width) / 2, y: frame.y, width, height: frame.height }; }
     const height = frame.width / sourceAspect; return { x: frame.x, y: frame.y - (height - frame.height) / 2, width: frame.width, height };
   };
-  assertCropIsVisuallyNonBlack(raster, { x: 0, y: 0, width: 122, height: 297 }, { x: -35.6, y: 0, width: 210.16, height: 297 }, "Cover image region");
   const firstProjectFrame = { x: 0, y: 0, width: 128, height: 150 };
   const secondProjectFrame = { x: 142, y: 28, width: 68, height: 95 };
   assertCropIsVisuallyNonBlack(raster, firstProjectFrame, projectCrop(firstProjectFrame), "Project 01 image region");
   assertCropIsVisuallyNonBlack(raster, secondProjectFrame, projectCrop(secondProjectFrame), "Project 02 image region");
   const imageDrawCount = (multipleProjectsDecision.pdf.output() as string).match(/\/I0 Do/g)?.length ?? 0;
-  assert(imageDrawCount === 3, "Cover, Project 01, and Project 02 must each draw the validated image XObject.");
+  assert(imageDrawCount === 2, "Project 01 and Project 02 must draw the validated image XObject exactly once each; the cover must remain image-free.");
   const multiRepeated = await routeEditorialInteriorsV1Export(multipleProjects, decode);
   assert(multiRepeated.mode === "authored" && Buffer.from(multipleProjectsDecision.pdf.output("arraybuffer")).equals(Buffer.from(multiRepeated.pdf.output("arraybuffer"))), "Production-shaped multi-project output must be byte deterministic.");
   const productionReviewPath = resolve("artifacts", "manual-review", "visual-portfolio-production-aurelia-2-project-review-fixed.pdf");

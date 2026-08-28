@@ -10,6 +10,7 @@ import { createCorporateServicesDocumentPlan, prepareCorporateServicesDocumentPl
 import { createProductTechDocumentPlan, prepareProductTechDocumentPlan, renderPreparedProductTechPlan, type ProductTechPlanningIssue } from "./product-tech-planner";
 import { validateAuthoredEmbeddedImageLimits, validateAuthoredImageOperationalLimits, validateRenderedDocumentLimits } from "../production-limits";
 import type { FamilyRankingExplanation } from "./library-types";
+import { selectAuthoredCover, type AuthoredCoverContent, type CurrentFamilyId } from "./cover-library";
 
 export type AuthoredExportFallbackReason = { stage: "operational" | "normalization" | "enrichment" | "ranking" | "planning" | "compatibility"; code: string; path: string; pageRole: PageRole | null };
 export type AuthoredFallbackCategory = "expected_unsupported_content_shape" | "missing_authentic_asset" | "authored_capacity_incompatibility" | "ambiguous_semantic_normalization" | "runtime_system_error";
@@ -65,11 +66,14 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
   const ranking = explainAuthoredTemplateFamilyRanking(authoredTemplateFamilies, createContentShape(units, null, productTechSignal));
   const selectedFamily = ranking.selectedFamilyId;
   if (!selectedFamily) return fallback([{ stage: "ranking", code: "no_eligible_authored_family", path: "contentShape", pageRole: null }], ranking);
+  const coverSelection = selectAuthoredCover({ familyId: selectedFamily as CurrentFamilyId, companyName: input.company.name, companyType: input.profile.companyType, hasLogo: Boolean(enriched.adapterInput.company.logo) });
+  if (!coverSelection.compatible) return fallback([{ stage: "compatibility", code: "cover_name_capacity_unsupported", path: "company.name", pageRole: "cover" }], ranking);
+  const cover: AuthoredCoverContent = { contentId: "company", documentLabel: selectedFamily === "product-tech" ? "PRODUCT SYSTEM / 01" : selectedFamily === "corporate-services" ? "CORPORATE / SERVICES" : "COMPANY PROFILE", companyName: input.company.name, companyType: input.profile.companyType, paletteId: coverSelection.paletteId, ...(enriched.adapterInput.company.logo ? { logo: enriched.adapterInput.company.logo } : {}) };
 
   if (selectedFamily === "product-tech") {
     if (!featuresEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
     const planning = createProductTechDocumentPlan({ units,
-      cover: { contentId: "company", documentLabel: "PRODUCT PROFILE", companyName: input.company.name, companyType: input.profile.companyType, ...(enriched.adapterInput.company.logo ? { logo: enriched.adapterInput.company.logo } : {}) },
+      cover, coverTemplateId: coverSelection.templateId,
       overview: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, supportingLine: narrativeEntry.section.description },
       featuresHeading: featuresEntry.section.title, featuresSupportingLine: featuresEntry.section.description,
       features: featuresEntry.section.items.map((item, index) => ({ contentId: `${featuresEntry.section.id}:item:${index}`, index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description })),
@@ -83,7 +87,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     if (!servicesEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
     const planning = createCorporateServicesDocumentPlan({
       units,
-      cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: input.company.name, companyType: input.profile.companyType, ...(enriched.adapterInput.company.logo ? { logo: enriched.adapterInput.company.logo } : {}) },
+      cover, coverTemplateId: coverSelection.templateId,
       narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, supportingLine: narrativeEntry.section.description },
       ...(corporateDetailEntries.some((entry) => entry.role === "approach") ? {} : input.company.activities && input.company.experience ? { approach: { contentId: "company", heading: "Business approach", activities: input.company.activities, experience: input.company.experience } } : {}),
       servicesHeading: servicesEntry.section.title,
@@ -115,7 +119,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
   };
   const planning = createVisualPortfolioDocumentPlan({
     units,
-    cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: input.company.name, hero: toImage(firstProject.id), ...(enriched.adapterInput.company.logo ? { logo: enriched.adapterInput.company.logo } : {}) },
+    cover, coverTemplateId: coverSelection.templateId,
     narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, ...(narrativeEntry.section.items[0] ? { secondaryBlock: { title: narrativeEntry.section.items[0].name, body: narrativeEntry.section.items[0].description } } : {}) },
     capabilities: { contentId: servicesEntry.section.id, eyebrow: "02 / CAPABILITIES", heading: servicesEntry.section.title, supportingLine: servicesEntry.section.description, capabilities: servicesEntry.section.items.slice(0, 4).map((item, index) => ({ index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as unknown as readonly [
       { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] },
