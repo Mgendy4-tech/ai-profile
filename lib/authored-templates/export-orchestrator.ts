@@ -100,7 +100,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
 
   if (!servicesEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
   if (narrativeEntry.section.items.length > 1) return fallback([{ stage: "planning", code: "source_content_not_covered", path: `profile.sections.${input.profile.sections.indexOf(narrativeEntry.section)}.items`, pageRole: "narrative" }], ranking);
-  if (servicesEntry.section.items.length !== 4) return fallback([{ stage: "planning", code: "capability_count_unsupported", path: `profile.sections.${input.profile.sections.indexOf(servicesEntry.section)}.items`, pageRole: "capabilities" }], ranking);
+  if (servicesEntry.section.items.length !== 4 && !(servicesEntry.section.items.length === 6 && corporateDetailEntries.length > 0)) return fallback([{ stage: "planning", code: "capability_count_unsupported", path: `profile.sections.${input.profile.sections.indexOf(servicesEntry.section)}.items`, pageRole: "capabilities" }], ranking);
   const imageDiagnostics = enriched.diagnostics.filter((issue) => issue.code.startsWith("image_") || issue.code === "authentic_project_image_metadata_missing");
   if (imageDiagnostics.length > 0) return fallback(imageDiagnostics.map(enrichmentReason), ranking);
   const missingVisuals: AuthoredExportFallbackReason[] = input.projects.flatMap((project, index) => visualByProjectId.has(project.id) ? [] : [{ stage: "enrichment", code: "authentic_project_image_metadata_missing", path: `projects.${index}.imageUrl`, pageRole: "project_grid" }]);
@@ -117,9 +117,15 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     units,
     cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: input.company.name, hero: toImage(firstProject.id), ...(enriched.adapterInput.company.logo ? { logo: enriched.adapterInput.company.logo } : {}) },
     narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, ...(narrativeEntry.section.items[0] ? { secondaryBlock: { title: narrativeEntry.section.items[0].name, body: narrativeEntry.section.items[0].description } } : {}) },
-    capabilities: { contentId: servicesEntry.section.id, eyebrow: "02 / CAPABILITIES", heading: servicesEntry.section.title, supportingLine: servicesEntry.section.description, capabilities: servicesEntry.section.items.map((item, index) => ({ index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as unknown as readonly [
+    capabilities: { contentId: servicesEntry.section.id, eyebrow: "02 / CAPABILITIES", heading: servicesEntry.section.title, supportingLine: servicesEntry.section.description, capabilities: servicesEntry.section.items.slice(0, 4).map((item, index) => ({ index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as unknown as readonly [
       { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] },
     ] },
+    ...(servicesEntry.section.items.length === 6 ? { capabilitiesSupporting: {
+      contentId: `${servicesEntry.section.id}:supporting`, eyebrow: "CAPABILITIES / CONTINUED", heading: "Crafted around every interior.",
+      capabilities: servicesEntry.section.items.slice(4).map((item, index) => ({ index: String(index + 5).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as never,
+      detail: { contentId: corporateDetailEntries[0].section.id, title: corporateDetailEntries[0].section.title, body: corporateDetailEntries[0].section.content },
+      featuredProjectTitle: firstProject.name,
+    } } : {}),
     details: corporateDetailEntries.map((entry) => ({ contentId: entry.section.id, title: entry.section.title, body: entry.section.content })),
     projects: input.projects.map((project) => ({ contentId: project.id, name: project.name, description: project.description, image: toImage(project.id) })),
   });

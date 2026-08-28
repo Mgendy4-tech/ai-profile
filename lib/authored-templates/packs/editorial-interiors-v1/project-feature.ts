@@ -101,7 +101,7 @@ const render = (
     hero.source.source,
     hero.source.format,
     visual.crops.projectFeature.frame,
-    hero.aspectRatio <= 0.8 ? visual.crops.projectFeature.image : coverCrop(visual.crops.projectFeature.frame, hero.aspectRatio),
+    coverCrop(visual.crops.projectFeature.frame, hero.aspectRatio),
   );
 
   const renderedTextBySlot: Record<string, readonly string[]> = {};

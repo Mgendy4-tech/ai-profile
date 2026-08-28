@@ -837,6 +837,10 @@ setProfile({
           optimizedEmbeddedBytes: [...uniqueOptimizedSources].reduce((total, source) => total + dataUrlDecodedBytes(source), 0),
           uniqueProjectImages: projectOptimization.images.length,
           projectReferences: optimizedAuthoredProjects.length,
+          images: [
+            ...(logoOptimization ? [{ purpose: "company_logo", provenance: "user_upload", originalFormat: /^data:image\/png/i.test(companyData.logoUrl ?? "") ? "PNG" : "JPEG", originalWidth: logoOptimization.originalWidth, originalHeight: logoOptimization.originalHeight, originalBytes: logoOptimization.originalBytes, optimizedFormat: logoOptimization.format, optimizedWidth: logoOptimization.width, optimizedHeight: logoOptimization.height, optimizedBytes: logoOptimization.optimizedBytes, pdfUsages: 1, deduplicated: true, passedAuthoredOptimization: true }] : []),
+            ...projectOptimization.images.map((image, index) => ({ purpose: index === 0 ? "project_image_and_cover_reference" : "project_image", provenance: "user_upload", originalFormat: /^data:image\/png/i.test(authoredProjects[index]?.imageUrl ?? "") ? "PNG" : "JPEG", originalWidth: image.originalWidth, originalHeight: image.originalHeight, originalBytes: image.originalBytes, optimizedFormat: image.format, optimizedWidth: image.width, optimizedHeight: image.height, optimizedBytes: image.optimizedBytes, pdfUsages: index === 0 ? 2 : 1, deduplicated: true, passedAuthoredOptimization: true })),
+          ],
           optimizationMs: Math.round(optimizationMs),
           authoredEnrichmentPlanRenderMs: Math.round(authoredMs),
         }));

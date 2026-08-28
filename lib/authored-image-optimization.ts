@@ -1,7 +1,8 @@
 import { PRODUCTION_V1_LIMITS } from "./production-limits";
 
 export const AUTHORED_PROJECT_IMAGE_MAX_EDGE_PX = 1800;
-export const AUTHORED_LOGO_IMAGE_MAX_EDGE_PX = 800;
+// The largest V1 authored logo box is under 40 mm; 400 px remains above 250 effective DPI.
+export const AUTHORED_LOGO_IMAGE_MAX_EDGE_PX = 400;
 export const AUTHORED_PROJECT_JPEG_QUALITY = 0.82;
 
 export type AuthoredImageOptimization = Readonly<{

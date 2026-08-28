@@ -5,7 +5,7 @@ import type { AuthoredDocumentPlan, CoverageIssue, NormalizedContentUnit } from 
 import type { AuthoredPageTemplate, ContractIssue, TemplateInstance, TemplateRenderAudit } from "./types";
 import { editorialInteriorsV1Pack } from "./packs/editorial-interiors-v1";
 import { selectEditorialInteriorsNarrativeTemplate } from "./packs/editorial-interiors-v1/narrative";
-import type { CapabilitiesContent, CoverContent, NarrativeContent, ProjectFeatureContent } from "./packs/editorial-interiors-v1/content";
+import type { CapabilitiesContent, CapabilitiesSupportingContent, CoverContent, NarrativeContent, ProjectFeatureContent } from "./packs/editorial-interiors-v1/content";
 import type { PortfolioProjectContent, PortfolioProjectPageContent } from "./packs/editorial-interiors-v1/portfolio-project-pages";
 
 export type VisualPortfolioPlanningInput = {
@@ -13,6 +13,7 @@ export type VisualPortfolioPlanningInput = {
   cover: CoverContent;
   narrative: NarrativeContent;
   capabilities: CapabilitiesContent;
+  capabilitiesSupporting?: CapabilitiesSupportingContent;
   details?: readonly NarrativeContent[];
   projects: readonly PortfolioProjectContent[];
 };
@@ -57,8 +58,13 @@ export const createVisualPortfolioDocumentPlan = (
       { contentId: input.projects[0].contentId, mode: "reference", slotId: "hero" },
     ] },
     { pageId: "narrative", templateId: selectEditorialInteriorsNarrativeTemplate(input.narrative).id, pageRole: "narrative", candidate: input.narrative, claims: narrative ? [{ contentId: narrative.id, mode: "consume", slotId: "body" }] : [] },
-    { pageId: "capabilities", templateId: "editorial-interiors-v1.capabilities", pageRole: "capabilities", candidate: input.capabilities, claims: services.map((service, index) => ({ contentId: service.id, mode: "consume", slotId: `capabilities.${index}` })) },
-    ...details.map((detail, index) => ({ pageId: `detail:${index}`, templateId: selectEditorialInteriorsNarrativeTemplate(detail).id, pageRole: "narrative" as const, candidate: detail, claims: [{ contentId: detail.contentId, mode: "consume" as const, slotId: "body" }] })),
+    { pageId: "capabilities", templateId: "editorial-interiors-v1.capabilities", pageRole: "capabilities", candidate: input.capabilities, claims: services.slice(0, 4).map((service, index) => ({ contentId: service.id, mode: "consume", slotId: `capabilities.${index}` })) },
+    ...(input.capabilitiesSupporting ? [{ pageId: "capabilities:supporting", templateId: "editorial-interiors-v1.capabilities-supporting-2", pageRole: "continuation" as const, candidate: input.capabilitiesSupporting, claims: [
+      ...services.slice(4, 6).map((service, index) => ({ contentId: service.id, mode: "consume" as const, slotId: `capabilities.${index}` })),
+      { contentId: input.capabilitiesSupporting.detail.contentId, mode: "consume" as const, slotId: "detail.body" },
+      { contentId: input.projects[0].contentId, mode: "reference" as const, slotId: "featuredProjectTitle" },
+    ] }] : []),
+    ...details.slice(input.capabilitiesSupporting ? 1 : 0).map((detail, index) => ({ pageId: `detail:${index}`, templateId: selectEditorialInteriorsNarrativeTemplate(detail).id, pageRole: "narrative" as const, candidate: detail, claims: [{ contentId: detail.contentId, mode: "consume" as const, slotId: "body" }] })),
   ];
 
   const addProjectPage = (templateId: string, pageRole: "project_feature" | "project_grid" | "continuation", projects: readonly PortfolioProjectContent[], sequence: number) => {

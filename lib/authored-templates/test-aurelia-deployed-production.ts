@@ -10,6 +10,7 @@ import { explainAuthoredTemplateFamilyRanking } from "./family-ranking";
 import { createVisualPortfolioDocumentPlan, prepareVisualPortfolioDocumentPlan } from "./visual-portfolio-planner";
 import { authoredTemplateFamilies } from "./registry";
 import { normalizeProductionSectionRoles } from "./section-role-normalization";
+import { editorialInteriorsV1Pack } from "./packs/editorial-interiors-v1";
 
 const assert: (condition: unknown, message: string) => asserts condition = (condition, message) => { if (!condition) throw new Error(message); };
 const fixtureBytes = readFileSync(resolve("lib/test-fixtures/visual/aurelia-browser-upload.jpg"));
@@ -38,15 +39,17 @@ const generated: GeneratedProfileSection[] = [
   { id: "services", title: selected[1].displayTitle, description: selected[1].description, content: company.activities, items: [
     { id: "services:service:1", name: "Interior Design", description: "Interior design for refined residential and commercial spaces.", sourceEvidence: "Interior design" },
     { id: "services:service:2", name: "Space Planning", description: "Space planning that balances functional planning and practical use.", sourceEvidence: "space planning" },
-    { id: "services:service:3", name: "Material Selection", description: "Material selection with a focus on material quality.", sourceEvidence: "material selection" },
-    { id: "services:service:4", name: "Project Styling", description: "Project styling for contemporary residential and commercial interiors.", sourceEvidence: "project styling" },
+    { id: "services:service:3", name: "Interior Styling", description: "Interior styling for contemporary residential and commercial interiors.", sourceEvidence: "interior styling" },
+    { id: "services:service:4", name: "Material Selection", description: "Material selection with a focus on material quality.", sourceEvidence: "material selection" },
+    { id: "services:service:5", name: "Custom Furniture Design", description: "Custom furniture design tailored to residential and commercial interiors.", sourceEvidence: "custom furniture" },
+    { id: "services:service:6", name: "Project Coordination", description: "Project coordination for practical interior delivery.", sourceEvidence: "project coordination" },
   ] },
   { id: "expertise", title: selected[2].displayTitle, description: selected[2].description, content: "Aurelia Interiors creates tailored residential and commercial interiors that balance aesthetics, comfort, functional planning, and practical use.", items: [] },
   { id: "projects", title: selected[3].displayTitle, description: selected[3].description, content: "Riverside Residence is a contemporary residential interior focused on warm materials, natural light, and functional open-plan living.", items: [{ id: project.id, name: project.name, description: project.description, imageUrl }] },
 ];
 
 const main = async () => {
-  const boundary = validateGeneratedProfileSections(selected, generated, { serviceSourceMaterial: [company.about, company.activities] });
+  const boundary = validateGeneratedProfileSections(selected, generated, { serviceSourceMaterial: [company.about, company.activities, "Interior styling, custom furniture, project coordination"] });
   assert(boundary.valid, `Generated-profile boundary failed: ${JSON.stringify(boundary.diagnostics)}`);
   const profile = { companyName: company.name, companyType: "Interior design studio", sections: boundary.sections };
   const normalized = normalizeProductionSectionRoles(profile.sections);
@@ -71,7 +74,8 @@ const main = async () => {
     units,
     cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: company.name, hero: image },
     narrative: { contentId: "about", title: generated[0].title, body: generated[0].content },
-    capabilities: { contentId: "services", eyebrow: "02 / CAPABILITIES", heading: generated[1].title, supportingLine: generated[1].description, capabilities: generated[1].items.map((item, index) => ({ index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as never },
+    capabilities: { contentId: "services", eyebrow: "02 / CAPABILITIES", heading: generated[1].title, supportingLine: generated[1].description, capabilities: generated[1].items.slice(0, 4).map((item, index) => ({ index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as never },
+    capabilitiesSupporting: { contentId: "services:supporting", eyebrow: "CAPABILITIES / CONTINUED", heading: "Crafted around every interior.", capabilities: generated[1].items.slice(4).map((item, index) => ({ index: String(index + 5).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as never, detail: { contentId: "expertise", title: generated[2].title, body: generated[2].content }, featuredProjectTitle: project.name },
     details: [{ contentId: "expertise", title: generated[2].title, body: generated[2].content }],
     projects: [{ contentId: project.id, name: project.name, description: project.description, image }],
   });
@@ -81,6 +85,9 @@ const main = async () => {
   assert(coverage.consumedContentIds.filter((id) => id === project.id).length === 1, "Project must be consumed exactly once.");
   const prepared = prepareVisualPortfolioDocumentPlan(planning.plan);
   assert(prepared.compatible, `Preflight failed: ${JSON.stringify(prepared.issues)}`);
+  assert(planning.plan.pages.length === 5 && planning.plan.pages[3].templateId === "editorial-interiors-v1.capabilities-supporting-2", "Six-service Aurelia must use the intentional fixed five-page composition.");
+  const capabilityTemplates = planning.plan.pages.slice(2, 4).map((page) => editorialInteriorsV1Pack.templates.find((template) => template.id === page.templateId));
+  assert(capabilityTemplates.every((template) => template && template.envelope.slots.every((slot) => slot.kind !== "image")), "No-media capability variants must not expose an empty image placeholder.");
 
   const first = await routeEditorialInteriorsV1Export(input, async () => ({ width: 1600, height: 1200 }));
   const second = await routeEditorialInteriorsV1Export(input, async () => ({ width: 1600, height: 1200 }));

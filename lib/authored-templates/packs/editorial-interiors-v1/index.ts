@@ -6,6 +6,7 @@ import type {
   TemplateRenderAudit,
 } from "../../types";
 import { editorialInteriorsCapabilitiesTemplate } from "./capabilities";
+import { editorialInteriorsCapabilitiesSupportingTemplate } from "./capabilities-supporting";
 import type {
   CapabilitiesContent,
   CoverContent,
@@ -37,6 +38,7 @@ export const editorialInteriorsV1Pack = {
     editorialInteriorsCapabilitiesTemplate,
     editorialInteriorsProjectFeatureTemplate,
     editorialInteriorsSparseNarrativeTemplate,
+    editorialInteriorsCapabilitiesSupportingTemplate,
     ...editorialInteriorsMultiProjectTemplates,
   ],
 } as const satisfies TemplatePack;

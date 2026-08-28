@@ -267,13 +267,13 @@ export const enrichProductionContentForAuthoredTemplates = async (
         } : {}),
       },
     } : {}),
-    ...(capabilitiesSection?.items.length === 4 ? {
+    ...(capabilitiesSection && (capabilitiesSection.items.length === 4 || capabilitiesSection.items.length === 6) ? {
       capabilities: {
         contentId: capabilitiesSection.id,
         eyebrow: "02 / CAPABILITIES",
         heading: capabilitiesSection.title,
         supportingLine: capabilitiesSection.description,
-        capabilities: capabilitiesSection.items.map((item, index) => ({
+        capabilities: capabilitiesSection.items.slice(0, 4).map((item, index) => ({
           index: String(index + 1).padStart(2, "0"),
           title: item.name,
           description: item.description,
@@ -295,7 +295,7 @@ export const enrichProductionContentForAuthoredTemplates = async (
   const roleReadiness = roles.map(([pageRole, key]): EnrichmentRoleReadiness => {
     const source = authoredPages[key];
     if (!source) {
-      const code = pageRole === "capabilities" && capabilitiesSection && capabilitiesSection.items.length !== 4
+      const code = pageRole === "capabilities" && capabilitiesSection && capabilitiesSection.items.length !== 4 && capabilitiesSection.items.length !== 6
         ? "capability_count_unsupported"
         : "source_content_unavailable";
       diagnostics.push(diagnostic(code, `authoredPages.${key}`, pageRole, `Current production source content cannot construct ${pageRole} for this document.`));

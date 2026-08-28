@@ -36,6 +36,15 @@ export type CapabilitiesContent = {
   ];
 };
 
+export type CapabilitiesSupportingContent = {
+  contentId: string;
+  eyebrow: string;
+  heading: string;
+  capabilities: readonly [CapabilityContent, CapabilityContent];
+  detail: { contentId: string; title: string; body: string };
+  featuredProjectTitle: string;
+};
+
 export type ProjectFeatureContent = {
   contentId: string;
   title: string;

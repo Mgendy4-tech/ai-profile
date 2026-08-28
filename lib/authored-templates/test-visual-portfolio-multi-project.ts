@@ -7,13 +7,21 @@ import type { AuthoredDocumentPlan } from "./library-types";
 import type { ImageSlotValue } from "./types";
 import { prepareEditorialInteriorsV1Document, renderPreparedEditorialInteriorsV1Document } from "./packs/editorial-interiors-v1";
 import type { EditorialInteriorsV1DocumentInput } from "./packs/editorial-interiors-v1/content";
-import { editorialInteriorsProjectTextGeometry, type PortfolioProjectContent } from "./packs/editorial-interiors-v1/portfolio-project-pages";
+import { coverCrop, editorialInteriorsProjectTextGeometry, type PortfolioProjectContent } from "./packs/editorial-interiors-v1/portfolio-project-pages";
 import { createVisualPortfolioDocumentPlan, prepareVisualPortfolioDocumentPlan, renderPreparedVisualPortfolioPlan } from "./visual-portfolio-planner";
 
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
 const REVIEW_IMAGE_BUFFER = readFileSync(resolve("lib", "test-fixtures", "visual", "aurelia-user-upload.png"));
 const REVIEW_IMAGE = `data:image/png;base64,${REVIEW_IMAGE_BUFFER.toString("base64")}`;
 const image = (projectId: string): ImageSlotValue & { projectId: string } => ({ role: "project_image", provenance: "user_upload", format: "PNG", width: REVIEW_IMAGE_BUFFER.readUInt32BE(16), height: REVIEW_IMAGE_BUFFER.readUInt32BE(20), source: REVIEW_IMAGE, projectId });
+
+for (const aspectRatio of [2, 4 / 3, 3 / 4, 0.3]) {
+  const frame = { x: 0, y: 0, width: 210, height: 150 };
+  const crop = coverCrop(frame, aspectRatio);
+  assert(Math.abs(crop.width / crop.height - aspectRatio) < 0.000001, `Cover crop distorted ${aspectRatio}.`);
+  assert(crop.width >= frame.width && crop.height >= frame.height, `Cover crop left letterboxing for ${aspectRatio}.`);
+  assert(crop.x <= frame.x && crop.y <= frame.y && crop.x + crop.width >= frame.x + frame.width && crop.y + crop.height >= frame.y + frame.height, `Cover crop did not fill the authored frame for ${aspectRatio}.`);
+}
 
 const base = () => ({
   cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: "Aurelia Interior Studio", hero: image("project:1") },
