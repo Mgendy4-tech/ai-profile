@@ -15,7 +15,7 @@ import type {
   ProjectFeatureContent,
 } from "./content";
 import { editorialInteriorsCoverTemplate } from "./cover";
-import { editorialInteriorsNarrativeTemplate, editorialInteriorsSparseNarrativeTemplate, selectEditorialInteriorsNarrativeTemplate } from "./narrative";
+import { editorialInteriorsNarrativeTemplate, editorialInteriorsSparseNarrativeFacts2Template, editorialInteriorsSparseNarrativeFacts3Template, editorialInteriorsSparseNarrativeTemplate, selectEditorialInteriorsNarrativeTemplate } from "./narrative";
 import { editorialInteriorsProjectFeatureTemplate } from "./project-feature";
 import { editorialInteriorsMultiProjectTemplates } from "./portfolio-project-pages";
 import { editorialInteriorsV1VisualSystem } from "./visual-system";
@@ -39,6 +39,8 @@ export const editorialInteriorsV1Pack = {
     editorialInteriorsCapabilitiesTemplate,
     editorialInteriorsProjectFeatureTemplate,
     editorialInteriorsSparseNarrativeTemplate,
+    editorialInteriorsSparseNarrativeFacts2Template,
+    editorialInteriorsSparseNarrativeFacts3Template,
     editorialInteriorsCapabilitiesSupportingTemplate,
     ...editorialInteriorsMultiProjectTemplates,
     ...authoredCoverTemplates,

@@ -27,7 +27,11 @@ const company = {
   name: "Aurelia Interiors",
   about: "Aurelia Interiors is an interior design studio creating refined residential and commercial spaces with a focus on material quality, functional planning, and contemporary visual identity. The studio develops tailored design solutions that balance aesthetics, comfort, and practical use.",
   activities: "Interior design, space planning, residential interiors, commercial interiors, material selection, and project styling.",
-  experience: "",
+  companyType: "Interior design studio",
+  industry: "Interior Design & Architecture",
+  customerType: "Residential & Commercial",
+  servicesProducts: "Interior design and space planning",
+  experience: "8",
 };
 const selected: SelectedProfileSection[] = [
   { id: "about", displayTitle: "About Aurelia Interiors", description: "Introduce the studio and its approach to refined, functional, and contemporary interior design." },
@@ -76,9 +80,13 @@ const main = async () => {
   const planning = createVisualPortfolioDocumentPlan({
     units,
     cover: { contentId: "company", documentLabel: "COMPANY PROFILE", companyName: company.name, companyType: profile.companyType, paletteId: coverSelection.paletteId }, coverTemplateId: coverSelection.templateId,
-    narrative: { contentId: "about", title: generated[0].title, body: generated[0].content },
+    narrative: { contentId: "about", title: generated[0].title, body: generated[0].content, facts: [
+      { value: "8 YEARS", label: "EXPERIENCE" },
+      { value: "INTERIOR DESIGN & ARCHITECTURE", label: "INDUSTRY" },
+      { value: "RESIDENTIAL & COMMERCIAL", label: "CLIENT FOCUS" },
+    ] },
     capabilities: { contentId: "services", eyebrow: "02 / CAPABILITIES", heading: generated[1].title, supportingLine: generated[1].description, capabilities: generated[1].items.slice(0, 4).map((item, index) => ({ index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as never },
-    capabilitiesSupporting: { contentId: "services:supporting", eyebrow: "CAPABILITIES / CONTINUED", heading: "Crafted around every interior.", capabilities: generated[1].items.slice(4).map((item, index) => ({ index: String(index + 5).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as never, detail: { contentId: "expertise", title: generated[2].title, body: generated[2].content }, featuredProjectTitle: project.name },
+    capabilitiesSupporting: { contentId: "services:supporting", eyebrow: "CAPABILITIES / CONTINUED", heading: "Crafted around every interior.", capabilities: generated[1].items.slice(4).map((item, index) => ({ index: String(index + 5).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as never, detail: { contentId: "expertise", title: generated[2].title, body: generated[2].content } },
     details: [{ contentId: "expertise", title: generated[2].title, body: generated[2].content }],
     projects: [{ contentId: project.id, name: project.name, description: project.description, image }],
   });
@@ -89,7 +97,8 @@ const main = async () => {
   assert(planning.plan.pages[0].claims.every((claim) => claim.contentId !== project.id), "Riverside must not be referenced by the cover.");
   const prepared = prepareVisualPortfolioDocumentPlan(planning.plan);
   assert(prepared.compatible, `Preflight failed: ${JSON.stringify(prepared.issues)}`);
-  assert(planning.plan.pages.length === 5 && planning.plan.pages[3].templateId === "editorial-interiors-v1.capabilities-supporting-2", "Six-service Aurelia must use the intentional fixed five-page composition.");
+  assert(planning.plan.pages.length === 5 && planning.plan.pages[1].templateId === "editorial-interiors-v1.narrative-sparse-facts-3" && planning.plan.pages[3].templateId === "editorial-interiors-v1.capabilities-supporting-2", "Six-service Aurelia must use the intentional fixed five-page composition with the three-fact sparse About state.");
+  assert(planning.plan.pages[3].claims.some((claim) => claim.contentId === project.id && claim.mode === "reference"), "Page 4 must reference the next project without consuming it.");
   const capabilityTemplates = planning.plan.pages.slice(2, 4).map((page) => editorialInteriorsV1Pack.templates.find((template) => template.id === page.templateId));
   assert(capabilityTemplates.every((template) => template && template.envelope.slots.every((slot) => slot.kind !== "image")), "No-media capability variants must not expose an empty image placeholder.");
 
@@ -103,8 +112,12 @@ const main = async () => {
   assert(rawPdf.includes("COMPANY PROFILE") && rawPdf.includes("Riverside Residence"), "Authored Visual markers are missing.");
   assert(!/pexels|image credits/i.test(rawPdf), "Legacy Pexels/image-credit marker found.");
   const outputPath = resolve("artifacts/manual-review/visual-portfolio-v1-deployed-aurelia-fixed-review.pdf");
+  const polishOutputPath = resolve("artifacts/manual-review/visual-v1-about-transition-polish-review.pdf");
+  const finalTransitionOutputPath = resolve("artifacts/manual-review/visual-v1-final-page4-transition-review.pdf");
   mkdirSync(dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, bytes);
+  writeFileSync(polishOutputPath, bytes);
+  writeFileSync(finalTransitionOutputPath, bytes);
   console.log(JSON.stringify({
     generation: { inputIds: selected.map((section) => section.id), outputIds: boundary.sections.map((section) => section.id), diagnostics: boundary.diagnostics },
     projects: { count: 1, ids: [project.id], visual: { provenance: visual.provenance, role: visual.role, projectId: visual.projectId, width: visual.width, height: visual.height } },
@@ -115,7 +128,7 @@ const main = async () => {
     coverage,
     preflight: { compatible: prepared.compatible, pageCount: prepared.prepared.instances.length },
     decision: { mode: first.mode, familyId: first.familyId, packId: first.packId, pageOrder: first.pageOrder, reasons: first.reasons },
-    pdf: { path: outputPath, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), byteIdentical: true, legacyMarkers: false },
+    pdf: { path: finalTransitionOutputPath, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), byteIdentical: true, legacyMarkers: false },
   }, null, 2));
 };
 

@@ -44,6 +44,10 @@ export type PersistedCompanyInput = {
   name: string;
   logoUrl?: string;
   about: string;
+  companyType?: string;
+  industry?: string;
+  customerType?: string;
+  servicesProducts?: string;
   activities: string;
   experience: string;
 };

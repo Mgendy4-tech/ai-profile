@@ -11,6 +11,7 @@ import { createProductTechDocumentPlan, prepareProductTechDocumentPlan, renderPr
 import { validateAuthoredEmbeddedImageLimits, validateAuthoredImageOperationalLimits, validateRenderedDocumentLimits } from "../production-limits";
 import type { FamilyRankingExplanation } from "./library-types";
 import { selectAuthoredCover, type AuthoredCoverContent, type CurrentFamilyId } from "./cover-library";
+import { extractVisualNarrativeFacts } from "./visual-narrative-facts";
 
 export type AuthoredExportFallbackReason = { stage: "operational" | "normalization" | "enrichment" | "ranking" | "planning" | "compatibility"; code: string; path: string; pageRole: PageRole | null };
 export type AuthoredFallbackCategory = "expected_unsupported_content_shape" | "missing_authentic_asset" | "authored_capacity_incompatibility" | "ambiguous_semantic_normalization" | "runtime_system_error";
@@ -120,7 +121,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
   const planning = createVisualPortfolioDocumentPlan({
     units,
     cover, coverTemplateId: coverSelection.templateId,
-    narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, ...(narrativeEntry.section.items[0] ? { secondaryBlock: { title: narrativeEntry.section.items[0].name, body: narrativeEntry.section.items[0].description } } : {}) },
+    narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, facts: extractVisualNarrativeFacts(input.company), ...(narrativeEntry.section.items[0] ? { secondaryBlock: { title: narrativeEntry.section.items[0].name, body: narrativeEntry.section.items[0].description } } : {}) },
     capabilities: { contentId: servicesEntry.section.id, eyebrow: "02 / CAPABILITIES", heading: servicesEntry.section.title, supportingLine: servicesEntry.section.description, capabilities: servicesEntry.section.items.slice(0, 4).map((item, index) => ({ index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as unknown as readonly [
       { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] },
     ] },
@@ -128,7 +129,6 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
       contentId: `${servicesEntry.section.id}:supporting`, eyebrow: "CAPABILITIES / CONTINUED", heading: "Crafted around every interior.",
       capabilities: servicesEntry.section.items.slice(4).map((item, index) => ({ index: String(index + 5).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as never,
       detail: { contentId: corporateDetailEntries[0].section.id, title: corporateDetailEntries[0].section.title, body: corporateDetailEntries[0].section.content },
-      featuredProjectTitle: firstProject.name,
     } } : {}),
     details: corporateDetailEntries.map((entry) => ({ contentId: entry.section.id, title: entry.section.title, body: entry.section.content })),
     projects: input.projects.map((project) => ({ contentId: project.id, name: project.name, description: project.description, image: toImage(project.id) })),

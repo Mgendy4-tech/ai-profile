@@ -34,6 +34,24 @@ export type VisualPortfolioPlanResult =
 const continuationTemplateId = (count: number) => `editorial-interiors-v1.portfolio-continuation-${count}`;
 const gridTemplateId = (count: number) => `editorial-interiors-v1.project-grid-${count}`;
 
+export const deriveNextProjectTransitionFromPlan = (
+  pages: AuthoredDocumentPlan["pages"],
+  fromPageIndex: number,
+): CapabilitiesSupportingContent["projectTransition"] => {
+  const nextPage = pages.slice(fromPageIndex + 1).find((page) => page.pageRole === "project_feature" || page.pageRole === "project_grid" || (page.pageRole === "continuation" && page.pageId.startsWith("projects:")));
+  if (!nextPage) return undefined;
+  const candidateProjects: readonly { contentId: string; title: string }[] = nextPage.pageRole === "project_feature"
+    ? [{ contentId: (nextPage.candidate as ProjectFeatureContent).contentId, title: (nextPage.candidate as ProjectFeatureContent).title }]
+    : (nextPage.candidate as PortfolioProjectPageContent).projects.map((project) => ({ contentId: project.contentId, title: project.name }));
+  const byId = new Map(candidateProjects.map((project) => [project.contentId, project]));
+  const projects = nextPage.claims.filter((claim) => claim.mode === "consume").map((claim) => byId.get(claim.contentId));
+  if (projects.some((project) => !project) || projects.length !== candidateProjects.length) throw new Error(`Project transition source mismatch on ${nextPage.pageId}.`);
+  return {
+    label: projects.length === 1 ? "NEXT / FEATURED PROJECT" : "NEXT / SELECTED WORK",
+    projects: projects as readonly { contentId: string; title: string }[],
+  };
+};
+
 export const createVisualPortfolioDocumentPlan = (
   input: VisualPortfolioPlanningInput,
 ): VisualPortfolioPlanResult => {
@@ -63,7 +81,6 @@ export const createVisualPortfolioDocumentPlan = (
     ...(input.capabilitiesSupporting ? [{ pageId: "capabilities:supporting", templateId: "editorial-interiors-v1.capabilities-supporting-2", pageRole: "continuation" as const, candidate: input.capabilitiesSupporting, claims: [
       ...services.slice(4, 6).map((service, index) => ({ contentId: service.id, mode: "consume" as const, slotId: `capabilities.${index}` })),
       { contentId: input.capabilitiesSupporting.detail.contentId, mode: "consume" as const, slotId: "detail.body" },
-      { contentId: input.projects[0].contentId, mode: "reference" as const, slotId: "featuredProjectTitle" },
     ] }] : []),
     ...details.slice(input.capabilitiesSupporting ? 1 : 0).map((detail, index) => ({ pageId: `detail:${index}`, templateId: selectEditorialInteriorsNarrativeTemplate(detail).id, pageRole: "narrative" as const, candidate: detail, claims: [{ contentId: detail.contentId, mode: "consume" as const, slotId: "body" }] })),
   ];
@@ -89,6 +106,20 @@ export const createVisualPortfolioDocumentPlan = (
       offset += count;
       sequence += 1;
     }
+  }
+
+  const supportingPageIndex = pages.findIndex((page) => page.pageId === "capabilities:supporting");
+  if (supportingPageIndex >= 0 && input.capabilitiesSupporting) {
+    const projectTransition = deriveNextProjectTransitionFromPlan(pages, supportingPageIndex);
+    const supportingPage = pages[supportingPageIndex];
+    pages[supportingPageIndex] = {
+      ...supportingPage,
+      candidate: { ...input.capabilitiesSupporting, ...(projectTransition ? { projectTransition } : {}) },
+      claims: [
+        ...supportingPage.claims,
+        ...(projectTransition?.projects.map((project, index) => ({ contentId: project.contentId, mode: "reference" as const, slotId: `projectTransition.projects.${index}` })) ?? []),
+      ],
+    };
   }
 
   const plan: AuthoredDocumentPlan = { familyId: "visual-portfolio", packId: editorialInteriorsV1Pack.id, pages };

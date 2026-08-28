@@ -12,9 +12,12 @@ export type NarrativeContent = {
   contentId: string;
   title: string;
   body: string;
+  facts?: readonly NarrativeFact[];
   secondaryBlock?: { title?: string; body: string };
   callout?: { text: string; label?: string };
 };
+
+export type NarrativeFact = { value: string; label: string };
 
 export type CapabilityContent = {
   index: string;
@@ -42,7 +45,10 @@ export type CapabilitiesSupportingContent = {
   heading: string;
   capabilities: readonly [CapabilityContent, CapabilityContent];
   detail: { contentId: string; title: string; body: string };
-  featuredProjectTitle: string;
+  projectTransition?: {
+    label: "NEXT / FEATURED PROJECT" | "NEXT / SELECTED WORK";
+    projects: readonly { contentId: string; title: string }[];
+  };
 };
 
 export type ProjectFeatureContent = {
