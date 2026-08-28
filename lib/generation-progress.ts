@@ -25,3 +25,15 @@ export const createGenerationAttemptGuard = () => {
     isActive: () => active,
   };
 };
+
+const exportMessages = [
+  "Preparing images…",
+  "Optimizing document assets…",
+  "Building your PDF…",
+  "Finalizing your document…",
+] as const;
+
+export const exportProgressMessage = (elapsedSeconds: number) => {
+  if (elapsedSeconds >= 120) return "Almost there — your PDF is being finalized.";
+  return exportMessages[Math.min(exportMessages.length - 1, Math.floor(Math.max(0, elapsedSeconds) / 30))];
+};

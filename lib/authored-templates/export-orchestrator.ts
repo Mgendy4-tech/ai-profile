@@ -8,7 +8,7 @@ import type { ContractIssue, PageRole } from "./types";
 import { createVisualPortfolioDocumentPlan, prepareVisualPortfolioDocumentPlan, renderPreparedVisualPortfolioPlan, type VisualPortfolioPlanningIssue } from "./visual-portfolio-planner";
 import { createCorporateServicesDocumentPlan, prepareCorporateServicesDocumentPlan, renderPreparedCorporateServicesPlan, type CorporateServicesPlanningIssue } from "./corporate-services-planner";
 import { createProductTechDocumentPlan, prepareProductTechDocumentPlan, renderPreparedProductTechPlan, type ProductTechPlanningIssue } from "./product-tech-planner";
-import { validateAuthoredImageOperationalLimits, validateRenderedDocumentLimits } from "../production-limits";
+import { validateAuthoredEmbeddedImageLimits, validateAuthoredImageOperationalLimits, validateRenderedDocumentLimits } from "../production-limits";
 import type { FamilyRankingExplanation } from "./library-types";
 
 export type AuthoredExportFallbackReason = { stage: "operational" | "normalization" | "enrichment" | "ranking" | "planning" | "compatibility"; code: string; path: string; pageRole: PageRole | null };
@@ -31,8 +31,10 @@ const planningReason = (issue: VisualPortfolioPlanningIssue | CorporateServicesP
 const compatibilityReason = (issue: ContractIssue): AuthoredExportFallbackReason => ({ stage: "compatibility", code: issue.code, path: issue.path, pageRole: null });
 const renderedLimitReasons = (pdf: jsPDF): AuthoredExportFallbackReason[] => validateRenderedDocumentLimits(pdf.getNumberOfPages(), pdf.output("arraybuffer").byteLength).map((issue) => ({ stage: "operational", code: issue.code, path: issue.path, pageRole: null }));
 
-export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmentInput, decodeDimensions?: ImageMetadataDecoder): Promise<AuthoredExportDecision> => {
-  const operationalIssues = validateAuthoredImageOperationalLimits(input.company, input.projects);
+export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmentInput, decodeDimensions?: ImageMetadataDecoder, imageBoundary: "source" | "optimized_embed" = "source"): Promise<AuthoredExportDecision> => {
+  const operationalIssues = imageBoundary === "optimized_embed"
+    ? validateAuthoredEmbeddedImageLimits(input.company, input.projects)
+    : validateAuthoredImageOperationalLimits(input.company, input.projects);
   if (operationalIssues.length) return fallback(operationalIssues.map((issue) => ({ stage: "operational", code: issue.code, path: issue.path, pageRole: null })));
   const productTechSignal = isProductTechCompanyType(input.profile.companyType);
   const normalizedRoles = normalizeProductionSectionRoles(input.profile.sections, { productTech: productTechSignal && input.projects.length === 0, corporateServices: isCorporateServicesCompanyType(input.profile.companyType) });

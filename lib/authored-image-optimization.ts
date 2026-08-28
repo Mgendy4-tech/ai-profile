@@ -1,4 +1,7 @@
+import { PRODUCTION_V1_LIMITS } from "./production-limits";
+
 export const AUTHORED_PROJECT_IMAGE_MAX_EDGE_PX = 1800;
+export const AUTHORED_LOGO_IMAGE_MAX_EDGE_PX = 800;
 export const AUTHORED_PROJECT_JPEG_QUALITY = 0.82;
 
 export type AuthoredImageOptimization = Readonly<{
@@ -33,15 +36,17 @@ const canvasHasTransparency = (context: CanvasRenderingContext2D, width: number,
 
 const cache = new Map<string, Promise<AuthoredImageOptimization>>();
 
-export const optimizeAuthoredProjectImage = (source: string): Promise<AuthoredImageOptimization> => {
-  const cached = cache.get(source);
+const optimizeAuthoredImage = (source: string, maximumEdge: number): Promise<AuthoredImageOptimization> => {
+  const cacheKey = `${maximumEdge}:${source}`;
+  const cached = cache.get(cacheKey);
   if (cached) return cached;
   const pending = (async () => {
     const image = await loadImage(source);
     const originalWidth = image.naturalWidth;
     const originalHeight = image.naturalHeight;
     if (!originalWidth || !originalHeight) throw new Error("Authored project image has invalid dimensions.");
-    const scale = Math.min(1, AUTHORED_PROJECT_IMAGE_MAX_EDGE_PX / Math.max(originalWidth, originalHeight));
+    if (originalWidth > PRODUCTION_V1_LIMITS.imageDimensionPx || originalHeight > PRODUCTION_V1_LIMITS.imageDimensionPx) throw new Error("image_dimension_limit");
+    const scale = Math.min(1, maximumEdge / Math.max(originalWidth, originalHeight));
     const width = Math.max(1, Math.round(originalWidth * scale));
     const height = Math.max(1, Math.round(originalHeight * scale));
     const canvas = document.createElement("canvas");
@@ -69,9 +74,12 @@ export const optimizeAuthoredProjectImage = (source: string): Promise<AuthoredIm
       transparencyPreserved,
     };
   })();
-  cache.set(source, pending);
+  cache.set(cacheKey, pending);
   return pending;
 };
+
+export const optimizeAuthoredProjectImage = (source: string) => optimizeAuthoredImage(source, AUTHORED_PROJECT_IMAGE_MAX_EDGE_PX);
+export const optimizeAuthoredLogoImage = (source: string) => optimizeAuthoredImage(source, AUTHORED_LOGO_IMAGE_MAX_EDGE_PX);
 
 export const optimizeAuthoredProjectImages = async <T extends { imageUrl: string }>(projects: readonly T[]) => {
   const optimizedBySource = new Map<string, AuthoredImageOptimization>();

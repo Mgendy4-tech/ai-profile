@@ -5,6 +5,7 @@ import {
   PRODUCTION_V1_LIMITS,
   createProfileGenerationModelPayload,
   createStructureAnalysisModelPayload,
+  validateAuthoredEmbeddedImageLimits,
   validateAuthoredImageOperationalLimits,
   validateGenerationRequestSize,
 } from "./production-limits";
@@ -43,6 +44,9 @@ assert(validateAuthoredImageOperationalLimits({ logoUrl: mobileLogo }, []).lengt
 const oversizedImage = `data:image/png;base64,${Buffer.alloc(PRODUCTION_V1_LIMITS.imageBytes + 1).toString("base64")}`;
 assert(validateAuthoredImageOperationalLimits({ logoUrl: oversizedImage }, []).some((issue) => issue.code === "image_byte_limit"), "The independent per-image limit must remain enforced.");
 assert(validateAuthoredImageOperationalLimits({}, [{ imageUrl: oversizedImage }]).some((issue) => issue.code === "image_byte_limit"), "Project images must retain the independent per-image limit.");
+const repeatedOptimized = `data:image/jpeg;base64,${"A".repeat(4000)}`;
+assert(validateAuthoredEmbeddedImageLimits({}, [{ imageUrl: repeatedOptimized }, { imageUrl: repeatedOptimized }]).length === 0, "Repeated optimized image references must be counted once at the embedded-image boundary.");
+assert(validateAuthoredEmbeddedImageLimits({}, [{ imageUrl: `data:image/jpeg;base64,${"A".repeat(12_000_000)}` }]).some((issue) => issue.code === "embedded_image_byte_limit"), "Oversized optimized embedded images must fail with a distinct diagnostic.");
 
 const main = async () => {
   const profile = { companyName: company.name, companyType: "Business consulting services", sections: [

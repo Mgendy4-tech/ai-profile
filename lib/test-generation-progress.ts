@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { createGenerationAttemptGuard, generationProgressMessage } from "./generation-progress";
+import { createGenerationAttemptGuard, exportProgressMessage, generationProgressMessage } from "./generation-progress";
 
 assert.equal(generationProgressMessage("analysis", 0), "Analyzing your company information…");
 assert.equal(generationProgressMessage("generation", 0), "Analyzing your company information…");
@@ -8,6 +8,11 @@ assert.equal(generationProgressMessage("generation", 61), "Generating profession
 assert.equal(generationProgressMessage("generation", 91), "Preparing the best document layout…");
 assert.equal(generationProgressMessage("generation", 121), "Finalizing your profile…");
 assert.equal(generationProgressMessage("generation", 151), "Almost there — your profile is being finalized.");
+assert.equal(exportProgressMessage(0), "Preparing images…");
+assert.equal(exportProgressMessage(31), "Optimizing document assets…");
+assert.equal(exportProgressMessage(61), "Building your PDF…");
+assert.equal(exportProgressMessage(91), "Finalizing your document…");
+assert.equal(exportProgressMessage(121), "Almost there — your PDF is being finalized.");
 const guard = createGenerationAttemptGuard();
 assert.equal(guard.tryStart(), true);
 assert.equal(guard.tryStart(), false, "A second generation attempt must be rejected while the first is active.");

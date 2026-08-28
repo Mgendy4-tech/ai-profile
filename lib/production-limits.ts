@@ -7,12 +7,13 @@ export const PRODUCTION_V1_LIMITS = Object.freeze({
   imageBytes: 3 * 1024 * 1024,
   browserPersistedImageBytes: 3 * 1024 * 1024,
   totalImageBytes: 8 * 1024 * 1024,
+  embeddedImageBytes: 8 * 1024 * 1024,
   imageDimensionPx: 12_000,
   generationRequestBytes: 256 * 1024,
   pdfBytes: 25 * 1024 * 1024,
 });
 
-export type OperationalLimitCode = "project_count_limit" | "image_format_limit" | "image_byte_limit" | "total_image_byte_limit" | "image_dimension_limit" | "generation_request_limit" | "page_count_limit" | "pdf_byte_limit";
+export type OperationalLimitCode = "project_count_limit" | "image_format_limit" | "image_byte_limit" | "total_image_byte_limit" | "embedded_image_byte_limit" | "image_optimization_failed" | "image_dimension_limit" | "generation_request_limit" | "page_count_limit" | "pdf_byte_limit";
 export type OperationalLimitIssue = { code: OperationalLimitCode; path: string; message: string };
 
 export const dataUrlDecodedBytes = (source: string) => {
@@ -32,7 +33,7 @@ export const validateProjectOperationalLimits = (projects: readonly { imageUrl: 
     const bytes = dataUrlDecodedBytes(project.imageUrl); total += bytes;
     if (bytes > PRODUCTION_V1_LIMITS.imageBytes) issues.push({ code: "image_byte_limit", path: `projects.${index}.imageUrl`, message: "Each project image must be 3 MB or smaller." });
   });
-  if (total > PRODUCTION_V1_LIMITS.totalImageBytes) issues.push({ code: "total_image_byte_limit", path: "projects", message: "Combined embedded project images must be 8 MB or smaller." });
+  if (total > PRODUCTION_V1_LIMITS.totalImageBytes) issues.push({ code: "total_image_byte_limit", path: "projects", message: "Combined source project images must be 8 MB or smaller." });
   return issues;
 };
 
@@ -51,9 +52,24 @@ export const validateAuthoredImageOperationalLimits = (
   }
   const projectBytes = projects.reduce((total, project) => total + (project.imageUrl ? dataUrlDecodedBytes(project.imageUrl) : 0), 0);
   if (logoBytes + projectBytes > PRODUCTION_V1_LIMITS.totalImageBytes && !issues.some((entry) => entry.code === "total_image_byte_limit")) {
-    issues.push({ code: "total_image_byte_limit", path: "company.logoUrl", message: "Combined embedded logo and project images must be 8 MB or smaller." });
+    issues.push({ code: "total_image_byte_limit", path: "company.logoUrl", message: "Combined source logo and project images must be 8 MB or smaller." });
   }
   return issues;
+};
+
+/** Counts the unique optimized data URLs that will actually be offered to jsPDF. Source/persistence limits are validated separately before optimization. */
+export const validateAuthoredEmbeddedImageLimits = (
+  company: { logoUrl?: string },
+  projects: readonly { imageUrl: string }[],
+): readonly OperationalLimitIssue[] => {
+  const uniqueSources = new Set([
+    ...(company.logoUrl ? [company.logoUrl] : []),
+    ...projects.map((project) => project.imageUrl).filter(Boolean),
+  ]);
+  const embeddedBytes = [...uniqueSources].reduce((total, source) => total + dataUrlDecodedBytes(source), 0);
+  return embeddedBytes > PRODUCTION_V1_LIMITS.embeddedImageBytes
+    ? [{ code: "embedded_image_byte_limit", path: "document.images", message: "Optimized embedded images exceed the 8 MB export limit." }]
+    : [];
 };
 
 export const validateGenerationRequestSize = (value: unknown): OperationalLimitIssue | null => new TextEncoder().encode(JSON.stringify(value)).byteLength > PRODUCTION_V1_LIMITS.generationRequestBytes ? { code: "generation_request_limit", path: "request", message: "This profile is too large to generate safely. Shorten the source content or remove optional sections." } : null;

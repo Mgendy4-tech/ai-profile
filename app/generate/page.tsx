@@ -41,7 +41,7 @@ import {
 } from "@/lib/visual-system/pdf-project-composition";
 import type { PDFCompositionFamily } from "@/lib/visual-system/pdf-art-direction";
 import { resolvePDFCreditPlacement } from "@/lib/visual-system/pdf-image-credits";
-import { validateAuthoredImageOperationalLimits, validateRenderedDocumentLimits } from "@/lib/production-limits";
+import { dataUrlDecodedBytes, validateAuthoredEmbeddedImageLimits, validateAuthoredImageOperationalLimits, validateRenderedDocumentLimits } from "@/lib/production-limits";
 import { classifyAuthoredFallbackReason, routeEditorialInteriorsV1Export } from "@/lib/authored-templates/export-orchestrator";
 import { emitProductionTelemetry } from "@/lib/production-telemetry";
 import {
@@ -79,8 +79,8 @@ import {
 import { analyzedStructureErrorMessage, validateAnalyzedProfileStructure } from "@/lib/profile-structure-boundary";
 import { companySemanticText, companySourceMaterial, normalizeCompanyData, type CompanyData } from "@/lib/company-data";
 import { resolveExportCompanyState } from "@/lib/profile-state-isolation";
-import { createGenerationAttemptGuard, generationProgressMessage, type GenerationOperation } from "@/lib/generation-progress";
-import { optimizeAuthoredProjectImages } from "@/lib/authored-image-optimization";
+import { createGenerationAttemptGuard, exportProgressMessage, generationProgressMessage, type GenerationOperation } from "@/lib/generation-progress";
+import { optimizeAuthoredLogoImage, optimizeAuthoredProjectImages } from "@/lib/authored-image-optimization";
 
 type Project = {
   id?: string;
@@ -252,6 +252,17 @@ const getPdfImageSource = (image: HTMLImageElement) => {
   return canvas.toDataURL("image/png");
 };
 
+const downloadPdfBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+};
+
 const getAspectFillPdfImageSource = (
   image: HTMLImageElement,
   frameWidth: number,
@@ -403,6 +414,7 @@ const [loading, setLoading] = useState(false);
   const [loadingElapsedSeconds, setLoadingElapsedSeconds] = useState(0);
   const generationAttemptGuard = useRef(createGenerationAttemptGuard());
   const [isExporting, setIsExporting] = useState(false);
+  const [exportElapsedSeconds, setExportElapsedSeconds] = useState(0);
   const exportAttemptGuard = useRef(createExportAttemptGuard());
   const [errorMessage, setErrorMessage] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
@@ -415,6 +427,13 @@ useEffect(() => {
   const timer = window.setInterval(() => setLoadingElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
   return () => window.clearInterval(timer);
 }, [loading, loadingOperation]);
+
+useEffect(() => {
+  if (!isExporting) return;
+  const startedAt = Date.now();
+  const timer = window.setInterval(() => setExportElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+  return () => window.clearInterval(timer);
+}, [isExporting]);
 
 const persistStructureSnapshot = (structure: ProfileStructure, sectionIds: readonly string[] = selectedSectionIds) => {
   const rawCompany = localStorage.getItem("companyData");
@@ -700,6 +719,7 @@ setProfile({
     const exportStartedAt = Date.now();
     let fallbackDiagnostics: readonly ExportFallbackDiagnostic[] = [];
     emitExportStarted(exportEventSink, exportEventId, exportStartedAt);
+    setExportElapsedSeconds(0);
     setIsExporting(true);
     setExportMessageTone("status");
     setExportMessage("Creating your company profile…");
@@ -763,16 +783,38 @@ setProfile({
       }
 
       const originalImageIssues = validateAuthoredImageOperationalLimits(companyData, authoredProjects);
-      const optimizedAuthoredProjects = originalImageIssues.length === 0
-        ? (await optimizeAuthoredProjectImages(authoredProjects)).projects
-        : authoredProjects;
+      if (originalImageIssues.length) {
+        const issue = originalImageIssues[0];
+        throw new Error(issue.code);
+      }
+      const optimizationStartedAt = performance.now();
+      const optimization = await (async () => {
+        try {
+          return {
+            projects: await optimizeAuthoredProjectImages(authoredProjects),
+            logo: typeof companyData.logoUrl === "string" && companyData.logoUrl
+              ? await optimizeAuthoredLogoImage(companyData.logoUrl)
+              : null,
+          };
+        } catch (error) {
+          throw new Error(error instanceof Error && error.message === "image_dimension_limit" ? "image_dimension_limit" : "image_optimization_failed");
+        }
+      })();
+      const projectOptimization = optimization.projects;
+      const logoOptimization = optimization.logo;
+      const optimizedCompanyData = { ...companyData, logoUrl: logoOptimization?.source ?? companyData.logoUrl };
+      const optimizedAuthoredProjects = projectOptimization.projects;
+      const optimizationMs = performance.now() - optimizationStartedAt;
+      const embeddedIssues = validateAuthoredEmbeddedImageLimits(optimizedCompanyData, optimizedAuthoredProjects);
+      if (embeddedIssues.length) throw new Error(embeddedIssues[0].code);
+      const authoredStartedAt = performance.now();
       const authoredDecision = await routeEditorialInteriorsV1Export({
         company: {
-          name: typeof companyData.name === "string" ? companyData.name : profile.companyName,
-          logoUrl: typeof companyData.logoUrl === "string" ? companyData.logoUrl : profile.logoUrl,
-          about: typeof companyData.about === "string" ? companyData.about : profile.about,
-          activities: typeof companyData.activities === "string" ? companyData.activities : profile.expertise.join("\n"),
-          experience: typeof companyData.experience === "string" ? companyData.experience : profile.experience,
+          name: typeof optimizedCompanyData.name === "string" ? optimizedCompanyData.name : profile.companyName,
+          logoUrl: typeof optimizedCompanyData.logoUrl === "string" ? optimizedCompanyData.logoUrl : profile.logoUrl,
+          about: typeof optimizedCompanyData.about === "string" ? optimizedCompanyData.about : profile.about,
+          activities: typeof optimizedCompanyData.activities === "string" ? optimizedCompanyData.activities : profile.expertise.join("\n"),
+          experience: typeof optimizedCompanyData.experience === "string" ? optimizedCompanyData.experience : profile.experience,
         },
         profile: {
           companyName: profile.companyName,
@@ -780,8 +822,24 @@ setProfile({
           sections: profile.sections,
         },
         projects: optimizedAuthoredProjects,
-      });
+      }, undefined, "optimized_embed");
+      const authoredMs = performance.now() - authoredStartedAt;
       if (process.env.NODE_ENV !== "production") {
+        const uniqueOptimizedSources = new Set([
+          ...(logoOptimization ? [logoOptimization.source] : []),
+          ...optimizedAuthoredProjects.map((project) => project.imageUrl),
+        ]);
+        console.debug("[authored-export-accounting]", JSON.stringify({
+          sourceProjectBytes: authoredProjects.reduce((total, project) => total + dataUrlDecodedBytes(project.imageUrl), 0),
+          sourceLogoBytes: typeof companyData.logoUrl === "string" && companyData.logoUrl ? dataUrlDecodedBytes(companyData.logoUrl) : 0,
+          optimizedUniqueProjectBytes: projectOptimization.images.reduce((total, image) => total + image.optimizedBytes, 0),
+          optimizedLogoBytes: logoOptimization?.optimizedBytes ?? 0,
+          optimizedEmbeddedBytes: [...uniqueOptimizedSources].reduce((total, source) => total + dataUrlDecodedBytes(source), 0),
+          uniqueProjectImages: projectOptimization.images.length,
+          projectReferences: optimizedAuthoredProjects.length,
+          optimizationMs: Math.round(optimizationMs),
+          authoredEnrichmentPlanRenderMs: Math.round(authoredMs),
+        }));
         console.debug("[authored-export-decision]", {
           mode: authoredDecision.mode,
           familyId: authoredDecision.familyId,
@@ -795,10 +853,14 @@ setProfile({
         });
       }
       if (authoredDecision.mode === "authored") {
-        const pdfBytes = authoredDecision.pdf.output("arraybuffer").byteLength;
+        const serializationStartedAt = performance.now();
+        const pdfBlob = authoredDecision.pdf.output("blob");
+        const pdfBytes = pdfBlob.size;
+        const serializationMs = performance.now() - serializationStartedAt;
+        if (process.env.NODE_ENV !== "production") console.debug("[authored-export-final]", JSON.stringify({ pageCount: authoredDecision.pdf.getNumberOfPages(), pdfBytes, serializationMs: Math.round(serializationMs) }));
         emitProductionTelemetry({ name: "family_selected", familyId: authoredDecision.familyId, packId: authoredDecision.packId });
         emitProductionTelemetry({ name: "export_succeeded", familyId: authoredDecision.familyId, packId: authoredDecision.packId, latencyMs: Date.now() - exportStartedAt, pdfBytes, pageCount: authoredDecision.pdf.getNumberOfPages() });
-        authoredDecision.pdf.save(`${profile.companyName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "company-profile"}.pdf`);
+        downloadPdfBlob(pdfBlob, `${profile.companyName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "company-profile"}.pdf`);
         emitExportCompleted(exportEventSink, exportEventId, exportStartedAt, Date.now(), "authored_success", authoredDecision.familyId, authoredDecision.pdf.getNumberOfPages());
         setExportMessageTone("success");
         setExportMessage("Your company profile is ready.");
@@ -809,10 +871,7 @@ setProfile({
       emitProductionTelemetry({ name: "expected_fallback", failureClass: fallbackCategory === "authored_capacity_incompatibility" ? "operational_limit" : "expected_authored_incompatibility", category: fallbackCategory, reasonCodes: authoredDecision.reasons.map((reason) => reason.code) });
       const operationalFailure = authoredDecision.reasons.find((reason) => reason.stage === "operational");
       if (operationalFailure) {
-        emitExportFailed(exportEventSink, exportEventId, exportStartedAt, Date.now());
-        setExportMessageTone("error");
-        setExportMessage(operationalFailure.code === "project_count_limit" ? "This profile exceeds the V1 project limit. Keep at most 12 projects and try again." : "One or more project images exceed the safe browser limits. Use PNG or JPEG images up to 3 MB each and keep the combined images within 3 MB.");
-        return;
+        throw new Error(operationalFailure.code);
       }
 
       const visualCompany = {
@@ -1630,18 +1689,29 @@ setProfile({
         pdf.text(`Page ${pageNumber} of ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: "right" });
       }
 
-      const legacyLimits = validateRenderedDocumentLimits(pdf.getNumberOfPages(), pdf.output("arraybuffer").byteLength);
+      const legacyBlob = pdf.output("blob");
+      const legacyLimits = validateRenderedDocumentLimits(pdf.getNumberOfPages(), legacyBlob.size);
       if (legacyLimits.length) throw new Error(legacyLimits[0].code);
-      pdf.save(`${profile.companyName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "company-profile"}.pdf`);
-      emitProductionTelemetry({ name: "export_succeeded", familyId: null, packId: null, latencyMs: Date.now() - exportStartedAt, pdfBytes: pdf.output("arraybuffer").byteLength, pageCount: pdf.getNumberOfPages() });
+      downloadPdfBlob(legacyBlob, `${profile.companyName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "company-profile"}.pdf`);
+      emitProductionTelemetry({ name: "export_succeeded", familyId: null, packId: null, latencyMs: Date.now() - exportStartedAt, pdfBytes: legacyBlob.size, pageCount: pdf.getNumberOfPages() });
       emitExportCompleted(exportEventSink, exportEventId, exportStartedAt, Date.now(), "standard_success", null, pdf.getNumberOfPages(), fallbackDiagnostics);
       setExportMessageTone("success");
       setExportMessage("Your company profile is ready.");
     } catch (error) {
-      emitProductionTelemetry({ name: "export_failed", failureClass: "export_failure", reasonCode: error instanceof Error && (error.message === "page_count_limit" || error.message === "pdf_byte_limit") ? error.message : "pdf_export_failed", latencyMs: Date.now() - exportStartedAt });
+      const reasonCode = error instanceof Error && ["page_count_limit", "pdf_byte_limit", "image_byte_limit", "total_image_byte_limit", "embedded_image_byte_limit", "image_format_limit", "image_dimension_limit", "image_optimization_failed"].includes(error.message) ? error.message : "pdf_export_failed";
+      if (process.env.NODE_ENV !== "production") console.debug("[profile-export-failure]", { reasonCode });
+      emitProductionTelemetry({ name: "export_failed", failureClass: "export_failure", reasonCode, latencyMs: Date.now() - exportStartedAt });
       emitExportFailed(exportEventSink, exportEventId, exportStartedAt, Date.now());
       setExportMessageTone("error");
-      setExportMessage(error instanceof Error && (error.message === "page_count_limit" || error.message === "pdf_byte_limit") ? "This profile exceeds the safe V1 PDF size or page limit. Reduce optional content or image weight and try again." : `We couldn't create your PDF this time. Please try again. Reference: ${exportEventId}`);
+      setExportMessage(reasonCode === "page_count_limit"
+        ? "This profile has too many pages for the current export limit. Reduce optional sections and try again."
+        : reasonCode === "pdf_byte_limit"
+          ? "The finished PDF is too large for the current export limit. Reduce image weight and try again."
+          : reasonCode === "embedded_image_byte_limit"
+            ? "The optimized document images are still too large to export safely. Use lighter images and try again."
+            : ["image_byte_limit", "total_image_byte_limit", "image_format_limit"].includes(reasonCode)
+              ? "One or more source images exceed the safe upload or storage limits. Use supported, smaller images and try again."
+              : `We couldn't create your PDF this time. Please try again. Reference: ${exportEventId}`);
     } finally {
       exportAttemptGuard.current.finish();
       setIsExporting(false);
@@ -1650,7 +1720,7 @@ setProfile({
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6 sm:py-14">
-      {loading && (
+      {(loading || isExporting) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/30 px-4">
           <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-xl">
             <span
@@ -1658,13 +1728,11 @@ setProfile({
               className="mx-auto block h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-900"
             />
             <h2 className="mt-5 text-xl font-semibold text-gray-900">
-              {loadingOperation === "generation" ? "Generating Company Profile" : "Analyzing Company Information"}
+              {isExporting ? "Preparing Your PDF" : loadingOperation === "generation" ? "Generating Company Profile" : "Analyzing Company Information"}
             </h2>
-            <p className="mt-3 text-sm font-medium leading-6 text-gray-700">
-              This usually takes around 2–3 minutes. Please keep this page open.
-            </p>
+            {isExporting && <p className="mt-3 text-sm font-medium leading-6 text-gray-700">Preparing your PDF. This may take a couple of minutes. Please keep this page open.</p>}
             <p role="status" aria-live="polite" aria-atomic="true" className="mt-3 min-h-6 text-sm leading-6 text-gray-600">
-              {generationProgressMessage(loadingOperation, loadingElapsedSeconds)}
+              {isExporting ? exportProgressMessage(exportElapsedSeconds) : generationProgressMessage(loadingOperation, loadingElapsedSeconds)}
             </p>
           </div>
         </div>
