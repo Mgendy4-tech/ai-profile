@@ -62,16 +62,19 @@ import {
 import {
   createStableCustomSectionId,
   generatedSectionsErrorMessage,
+  readPersistedApprovedProfileStructure,
   structuredSectionContract,
   persistApprovedProfileStructure,
   validateGeneratedProfileSections,
 } from "@/lib/generated-profile-boundary";
 import {
   addApprovedStructuredItem,
+  deleteApprovedCustomSection,
   deleteApprovedServiceItem,
   editApprovedSection,
   editApprovedStructuredItem,
   moveApprovedServiceItem,
+  moveApprovedSection,
   validateApprovedStructure,
   type EditableProfileStructure,
   type StructureEditResult,
@@ -81,6 +84,9 @@ import { companySemanticText, companySourceMaterial, normalizeCompanyData, type 
 import { resolveExportCompanyState } from "@/lib/profile-state-isolation";
 import { createGenerationAttemptGuard, exportProgressMessage, generationProgressMessage, type GenerationOperation } from "@/lib/generation-progress";
 import { optimizeAuthoredLogoImage, optimizeAuthoredProjectImages } from "@/lib/authored-image-optimization";
+import { mustBlockLegacyFallback } from "@/lib/authored-export-policy";
+import { reconstructPersistedProjects } from "@/lib/persisted-projects";
+import { authoredDevelopmentFailureMessage, createAuthoredRejectionDiagnostic, type AuthoredExportDevelopmentDiagnostic } from "@/lib/authored-export-diagnostics";
 
 type Project = {
   id?: string;
@@ -409,6 +415,13 @@ const [structureConfirmed, setStructureConfirmed] = useState(false);
 const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
 const [editingSectionTitle, setEditingSectionTitle] = useState("");
 const [editingSectionDescription, setEditingSectionDescription] = useState("");
+const [editingItem, setEditingItem] = useState<{ sectionId: string; itemId: string; title: string; description: string } | null>(null);
+const [addingItemSectionId, setAddingItemSectionId] = useState<string | null>(null);
+const [newItemTitle, setNewItemTitle] = useState("");
+const [newItemDescription, setNewItemDescription] = useState("");
+const [addingCustomSection, setAddingCustomSection] = useState(false);
+const [newSectionTitle, setNewSectionTitle] = useState("");
+const [newSectionDescription, setNewSectionDescription] = useState("");
 const [loading, setLoading] = useState(false);
   const [loadingOperation, setLoadingOperation] = useState<GenerationOperation>("analysis");
   const [loadingElapsedSeconds, setLoadingElapsedSeconds] = useState(0);
@@ -420,6 +433,16 @@ const [loading, setLoading] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
   const [exportMessage, setExportMessage] = useState("");
   const [exportMessageTone, setExportMessageTone] = useState<"status" | "success" | "error">("status");
+
+useEffect(() => {
+  const restore = window.setTimeout(() => {
+    const persisted = readPersistedApprovedProfileStructure(localStorage);
+    if (!persisted || validateApprovedStructure(persisted.structure) !== null) return;
+    setProfileStructure(persisted.structure as ProfileStructure);
+    setSelectedSectionIds(persisted.selectedSectionIds);
+  }, 0);
+  return () => window.clearTimeout(restore);
+}, []);
 
 useEffect(() => {
   if (!loading) return;
@@ -718,6 +741,7 @@ setProfile({
     const exportEventId = createExportReferenceId();
     const exportStartedAt = Date.now();
     let fallbackDiagnostics: readonly ExportFallbackDiagnostic[] = [];
+    let authoredDevelopmentDiagnostic: AuthoredExportDevelopmentDiagnostic | null = null;
     emitExportStarted(exportEventSink, exportEventId, exportStartedAt);
     setExportElapsedSeconds(0);
     setIsExporting(true);
@@ -748,39 +772,20 @@ setProfile({
         }
       }
 
-      const savedProjects = localStorage.getItem("projectsData");
-      let authoredProjects: Array<{
-        id: string;
-        name: string;
-        category?: string;
-        description: string;
-        imageUrl: string;
-      }> = [];
-      if (savedProjects) {
-        try {
-          const parsedProjects: unknown = JSON.parse(savedProjects);
-          if (Array.isArray(parsedProjects)) {
-            authoredProjects = parsedProjects.flatMap((project) => {
-              if (!project || typeof project !== "object") return [];
-              const candidate = project as Record<string, unknown>;
-              return typeof candidate.id === "string" &&
-                typeof candidate.name === "string" &&
-                typeof candidate.description === "string" &&
-                typeof candidate.imageUrl === "string"
-                ? [{
-                    id: candidate.id,
-                    name: candidate.name,
-                    category: typeof candidate.category === "string" ? candidate.category : undefined,
-                    description: candidate.description,
-                    imageUrl: candidate.imageUrl,
-                  }]
-                : [];
-            });
-          }
-        } catch {
-          authoredProjects = [];
-        }
-      }
+      const persistedProjectsDataRaw = localStorage.getItem("projectsData");
+      const persistedProjects = reconstructPersistedProjects(persistedProjectsDataRaw);
+      if (persistedProjects.issues.length) throw new Error("persisted_project_state_invalid");
+      const authoredProjects = persistedProjects.projects;
+      if (process.env.NODE_ENV !== "production") console.debug("[authored-export-runtime]", {
+        persistedProjectsDataRaw,
+        companyName: companyData.name,
+        persistedProjectIds: authoredProjects.map((project) => project.id),
+        persistedProjectCount: persistedProjects.persistedCount,
+        projectImagesPresent: authoredProjects.map((project) => Boolean(project.imageUrl)),
+        approvedStructure: (profileStructure?.recommendedSections ?? []).map((section) => ({ id: section.id, role: section.semanticRole ?? null })),
+        generatedStructure: profile.sections.map((section) => ({ id: section.id, role: (section as GeneratedSection & { semanticRole?: string }).semanticRole ?? null })),
+        projectFallbackGuard: mustBlockLegacyFallback(persistedProjects.persistedCount),
+      });
 
       const originalImageIssues = validateAuthoredImageOperationalLimits(companyData, authoredProjects);
       if (originalImageIssues.length) {
@@ -849,6 +854,8 @@ setProfile({
           authoredEnrichmentPlanRenderMs: Math.round(authoredMs),
         }));
         console.debug("[authored-export-decision]", {
+          selectedFamily: authoredDecision.familyId,
+          authoredRoutingDecision: authoredDecision.mode,
           mode: authoredDecision.mode,
           familyId: authoredDecision.familyId,
           packId: authoredDecision.packId,
@@ -877,6 +884,14 @@ setProfile({
       fallbackDiagnostics = authoredDecision.reasons.map(({ stage, code, pageRole }) => ({ stage, code, pageRole }));
       const fallbackCategory = authoredDecision.reasons[0] ? classifyAuthoredFallbackReason(authoredDecision.reasons[0]) : "expected_unsupported_content_shape";
       emitProductionTelemetry({ name: "expected_fallback", failureClass: fallbackCategory === "authored_capacity_incompatibility" ? "operational_limit" : "expected_authored_incompatibility", category: fallbackCategory, reasonCodes: authoredDecision.reasons.map((reason) => reason.code) });
+      if (mustBlockLegacyFallback(persistedProjects.persistedCount)) {
+        if (process.env.NODE_ENV !== "production") {
+          authoredDevelopmentDiagnostic = createAuthoredRejectionDiagnostic(authoredDecision, authoredProjects);
+          console.error("[authored-export-development-diagnostic]", authoredDevelopmentDiagnostic);
+          void fetch("/api/dev/authored-export-diagnostic", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(authoredDevelopmentDiagnostic) }).catch((diagnosticError) => console.error("[authored-export-development-diagnostic-relay-failed]", diagnosticError));
+        }
+        throw new Error("authored_visual_export_failed");
+      }
       const operationalFailure = authoredDecision.reasons.find((reason) => reason.stage === "operational");
       if (operationalFailure) {
         throw new Error(operationalFailure.code);
@@ -888,6 +903,12 @@ setProfile({
       };
 
       try {
+        if (process.env.NODE_ENV !== "production") console.debug("[contextual-visual-fallback-entry]", {
+          aboutToCall: ["/api/analyze-brand", "/api/visual-direction", "/api/select-visuals", "/api/plan-pdf-layout"],
+          authoredRejectionReasons: fallbackDiagnostics,
+          persistedProjectCount: persistedProjects.persistedCount,
+          projectIds: authoredProjects.map((project) => project.id),
+        });
         const brandAnalysis = await postJsonWithTimeout<BrandAnalysis>(
           "/api/analyze-brand",
           { company: visualCompany },
@@ -1706,7 +1727,7 @@ setProfile({
       setExportMessageTone("success");
       setExportMessage("Your company profile is ready.");
     } catch (error) {
-      const reasonCode = error instanceof Error && ["page_count_limit", "pdf_byte_limit", "image_byte_limit", "total_image_byte_limit", "embedded_image_byte_limit", "image_format_limit", "image_dimension_limit", "image_optimization_failed"].includes(error.message) ? error.message : "pdf_export_failed";
+      const reasonCode = error instanceof Error && ["page_count_limit", "pdf_byte_limit", "image_byte_limit", "total_image_byte_limit", "embedded_image_byte_limit", "image_format_limit", "image_dimension_limit", "image_optimization_failed", "authored_visual_export_failed", "persisted_project_state_invalid"].includes(error.message) ? error.message : "pdf_export_failed";
       if (process.env.NODE_ENV !== "production") console.debug("[profile-export-failure]", { reasonCode });
       emitProductionTelemetry({ name: "export_failed", failureClass: "export_failure", reasonCode, latencyMs: Date.now() - exportStartedAt });
       emitExportFailed(exportEventSink, exportEventId, exportStartedAt, Date.now());
@@ -1719,6 +1740,12 @@ setProfile({
             ? "The optimized document images are still too large to export safely. Use lighter images and try again."
             : ["image_byte_limit", "total_image_byte_limit", "image_format_limit"].includes(reasonCode)
               ? "One or more source images exceed the safe upload or storage limits. Use supported, smaller images and try again."
+              : reasonCode === "authored_visual_export_failed"
+                ? process.env.NODE_ENV !== "production" && authoredDevelopmentDiagnostic
+                  ? authoredDevelopmentFailureMessage(authoredDevelopmentDiagnostic)
+                  : "Your project-based profile could not be rendered safely. Check that every saved project still has its uploaded image, then try again. No fallback PDF was created."
+              : reasonCode === "persisted_project_state_invalid"
+                ? "Your saved project data is incomplete or damaged. Reopen the project, confirm its uploaded image, and save it again. No fallback PDF was created."
               : `We couldn't create your PDF this time. Please try again. Reference: ${exportEventId}`);
     } finally {
       exportAttemptGuard.current.finish();
@@ -1854,26 +1881,30 @@ setProfile({
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Structured items ({section.items?.length ?? 0}/{structuredSectionContract(section)!.max})</p>
               {(section.items ?? []).map((item, itemIndex) => (
                 <div key={item.id} className="rounded-md border border-gray-200 bg-white p-3">
-                  <p className="text-sm font-medium text-gray-900">{item.title}</p>
-                  <p className="mt-1 text-xs leading-5 text-gray-600">{item.description}</p>
+                  {editingItem?.sectionId === section.id && editingItem.itemId === item.id ? <>
+                    <input aria-label={`${item.title} item title`} value={editingItem.title} onChange={(event) => setEditingItem({ ...editingItem, title: event.target.value })} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                    <textarea aria-label={`${item.title} item description`} value={editingItem.description} onChange={(event) => setEditingItem({ ...editingItem, description: event.target.value })} rows={3} className="mt-2 w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                    <div className="mt-2 flex gap-2">
+                      <button type="button" onClick={() => { const result = editApprovedStructuredItem(profileStructure as EditableProfileStructure, section.id, item.id, editingItem); if (result.valid) setEditingItem(null); applyStructureEdit(result); }} className="rounded bg-black px-2 py-1 text-xs text-white">Save item</button>
+                      <button type="button" onClick={() => setEditingItem(null)} className="rounded border border-gray-300 px-2 py-1 text-xs">Cancel</button>
+                    </div>
+                  </> : <>
+                    <p className="text-sm font-medium text-gray-900">{item.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-600">{item.description}</p>
+                  </>}
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => {
-                      const title = window.prompt("Service title:", item.title); if (title === null) return;
-                      const description = window.prompt("Service description:", item.description); if (description === null) return;
-                      applyStructureEdit(editApprovedStructuredItem(profileStructure as EditableProfileStructure, section.id, item.id, { title, description }));
-                    }} aria-label={`Edit ${item.title}`} className="rounded border border-gray-300 px-2 py-1 text-xs">Edit item</button>
+                    <button type="button" onClick={() => setEditingItem({ sectionId: section.id, itemId: item.id, title: item.title, description: item.description })} aria-label={`Edit ${item.title}`} className="rounded border border-gray-300 px-2 py-1 text-xs">Edit item</button>
                     <button type="button" aria-label={`Move ${item.title} up`} disabled={itemIndex === 0} onClick={() => commitStructure((current) => moveApprovedServiceItem(current, section.id, item.id, -1) as ProfileStructure)} className="rounded border border-gray-300 px-2 py-1 text-xs disabled:opacity-40">Move up</button>
                     <button type="button" aria-label={`Move ${item.title} down`} disabled={itemIndex === (section.items?.length ?? 0) - 1} onClick={() => commitStructure((current) => moveApprovedServiceItem(current, section.id, item.id, 1) as ProfileStructure)} className="rounded border border-gray-300 px-2 py-1 text-xs disabled:opacity-40">Move down</button>
                     <button type="button" aria-label={`Delete ${item.title}`} onClick={() => { commitStructure((current) => deleteApprovedServiceItem(current, section.id, item.id) as ProfileStructure); window.setTimeout(() => document.getElementById(`add-item-${section.id}`)?.focus(), 0); }} className="rounded border border-red-200 px-2 py-1 text-xs text-red-700">Delete item</button>
                   </div>
                 </div>
               ))}
-              <button id={`add-item-${section.id}`} type="button" aria-label={`Add item to ${section.displayTitle}`} disabled={(section.items?.length ?? 0) >= structuredSectionContract(section)!.max} onClick={() => {
-                const contract = structuredSectionContract(section)!; if ((section.items?.length ?? 0) >= contract.max) { setErrorMessage(`This section supports at most ${contract.max} items.`); return; }
-                const title = window.prompt("New item title:"); if (!title) return;
-                const description = window.prompt("New item description/instruction:"); if (!description) return;
-                applyStructureEdit(addApprovedStructuredItem(profileStructure as EditableProfileStructure, section.id, { title, description }));
-              }} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium disabled:opacity-40">+ Add structured item</button>
+              {addingItemSectionId === section.id ? <div className="rounded-md border border-gray-300 bg-white p-3">
+                <input aria-label={`New item title for ${section.displayTitle}`} placeholder="Item title" value={newItemTitle} onChange={(event) => setNewItemTitle(event.target.value)} className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <textarea aria-label={`New item description for ${section.displayTitle}`} placeholder="Describe this item" value={newItemDescription} onChange={(event) => setNewItemDescription(event.target.value)} rows={3} className="mt-2 w-full rounded border border-gray-300 px-2 py-1.5 text-sm" />
+                <div className="mt-2 flex gap-2"><button type="button" onClick={() => { const result = addApprovedStructuredItem(profileStructure as EditableProfileStructure, section.id, { title: newItemTitle, description: newItemDescription }); if (result.valid) { setAddingItemSectionId(null); setNewItemTitle(""); setNewItemDescription(""); } applyStructureEdit(result); }} className="rounded bg-black px-2 py-1 text-xs text-white">Add item</button><button type="button" onClick={() => { setAddingItemSectionId(null); setNewItemTitle(""); setNewItemDescription(""); }} className="rounded border border-gray-300 px-2 py-1 text-xs">Cancel</button></div>
+              </div> : <button id={`add-item-${section.id}`} type="button" aria-label={`Add item to ${section.displayTitle}`} disabled={(section.items?.length ?? 0) >= structuredSectionContract(section)!.max} onClick={() => { setAddingItemSectionId(section.id); setNewItemTitle(""); setNewItemDescription(""); }} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium disabled:opacity-40">+ Add item</button>}
             </div>
           )}
 
@@ -1921,10 +1952,11 @@ setProfile({
             </p>
           </div>
 
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => {
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <button type="button" disabled={loading || section === profileStructure.recommendedSections[0]} onClick={() => commitStructure((current) => moveApprovedSection(current, section.id, -1) as ProfileStructure)} className="rounded-md border border-gray-300 px-2 py-1.5 text-xs disabled:opacity-40">Move up</button>
+            <button type="button" disabled={loading || section === profileStructure.recommendedSections[profileStructure.recommendedSections.length - 1]} onClick={() => commitStructure((current) => moveApprovedSection(current, section.id, 1) as ProfileStructure)} className="rounded-md border border-gray-300 px-2 py-1.5 text-xs disabled:opacity-40">Move down</button>
+            <button
+              type="button" disabled={loading} onClick={() => {
               setEditingSectionId(section.id);
               setEditingSectionTitle(section.displayTitle);
               setEditingSectionDescription(section.description);
@@ -1932,9 +1964,9 @@ setProfile({
             }}
             aria-label={`Edit ${section.displayTitle}`}
             className="self-start shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-900 hover:border-gray-900"
-          >
-            Edit
-          </button>
+            >Edit</button>
+            {section.id.startsWith("custom-") && <button type="button" onClick={() => { const result = deleteApprovedCustomSection(profileStructure as EditableProfileStructure, section.id); if (result.valid) setSelectedSectionIds((ids) => ids.filter((id) => id !== section.id)); applyStructureEdit(result); }} className="rounded-md border border-red-200 px-2 py-1.5 text-xs text-red-700">Delete</button>}
+          </div>
         </div>
       )}
     </div>
@@ -1943,37 +1975,17 @@ setProfile({
   );
 })}
 <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-  <button
-    type="button"
-    disabled={loading}
-    onClick={() => {
-      const title = window.prompt("Enter the new section name:");
-
-      if (!title?.trim()) {
-        return;
-      }
-
-      const newSection: ProfileSection = {
-        id: createStableCustomSectionId(
-          title.trim(),
-          profileStructure.recommendedSections.map((section) => section.id),
-        ),
-        displayTitle: title.trim(),
-        description: "Custom section added by you.",
-      };
-
-      const nextIds = [...selectedSectionIds, newSection.id];
-      const nextStructure = { ...profileStructure, recommendedSections: [...profileStructure.recommendedSections, newSection] };
-      setProfileStructure(nextStructure);
-      setSelectedSectionIds(nextIds);
-      persistStructureSnapshot(nextStructure, nextIds);
-
-      setStructureConfirmed(false);
-    }}
-    className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-900 transition hover:border-gray-900 hover:bg-gray-50"
-  >
-    + Add Another Section
-  </button>
+  {addingCustomSection ? <div className="w-full rounded-lg border border-gray-300 bg-white p-4">
+    <label className="block text-sm font-medium text-gray-800">Section title<input value={newSectionTitle} onChange={(event) => setNewSectionTitle(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
+    <label className="mt-3 block text-sm font-medium text-gray-800">What should this section cover?<textarea value={newSectionDescription} onChange={(event) => setNewSectionDescription(event.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2" /></label>
+    <div className="mt-3 flex gap-2"><button type="button" onClick={() => {
+      if (!newSectionTitle.trim() || !newSectionDescription.trim()) { setErrorMessage("Section titles and descriptions are required."); return; }
+      const newSection: ProfileSection = { id: createStableCustomSectionId(newSectionTitle, profileStructure.recommendedSections.map((section) => section.id)), displayTitle: newSectionTitle.trim(), description: newSectionDescription.trim() };
+      const nextIds = [...selectedSectionIds, newSection.id]; const nextStructure = { ...profileStructure, recommendedSections: [...profileStructure.recommendedSections, newSection] };
+      const validation = validateApprovedStructure(nextStructure); if (validation) { setErrorMessage(validation); return; }
+      setProfileStructure(nextStructure); setSelectedSectionIds(nextIds); persistStructureSnapshot(nextStructure, nextIds); setAddingCustomSection(false); setNewSectionTitle(""); setNewSectionDescription(""); setErrorMessage(""); setStructureConfirmed(false);
+    }} className="rounded bg-black px-3 py-1.5 text-sm text-white">Add section</button><button type="button" onClick={() => { setAddingCustomSection(false); setNewSectionTitle(""); setNewSectionDescription(""); }} className="rounded border border-gray-300 px-3 py-1.5 text-sm">Cancel</button></div>
+  </div> : <button type="button" disabled={loading} onClick={() => setAddingCustomSection(true)} className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-900 transition hover:border-gray-900 hover:bg-gray-50">+ Add Another Section</button>}
 
   <button
     type="button"

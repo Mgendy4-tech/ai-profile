@@ -15,6 +15,7 @@ export type AuthoredImageOptimization = Readonly<{
   height: number;
   format: "PNG" | "JPEG";
   transparencyPreserved: boolean;
+  effectiveArtworkBounds: Readonly<{ x: number; y: number; width: number; height: number }> | null;
 }>;
 
 const decodedBytes = (source: string) => {
@@ -33,6 +34,16 @@ const canvasHasTransparency = (context: CanvasRenderingContext2D, width: number,
   const pixels = context.getImageData(0, 0, width, height).data;
   for (let index = 3; index < pixels.length; index += 4) if (pixels[index] < 255) return true;
   return false;
+};
+
+const transparentArtworkBounds = (context: CanvasRenderingContext2D, width: number, height: number) => {
+  const pixels = context.getImageData(0, 0, width, height).data;
+  let left = width; let top = height; let right = -1; let bottom = -1;
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+    if (pixels[(y * width + x) * 4 + 3] < 8) continue;
+    left = Math.min(left, x); top = Math.min(top, y); right = Math.max(right, x); bottom = Math.max(bottom, y);
+  }
+  return right < left ? null : { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
 };
 
 const cache = new Map<string, Promise<AuthoredImageOptimization>>();
@@ -58,21 +69,36 @@ const optimizeAuthoredImage = (source: string, maximumEdge: number): Promise<Aut
     context.drawImage(image, 0, 0, width, height);
     const inputIsPng = /^data:image\/png;base64,/i.test(source);
     const transparencyPreserved = inputIsPng && canvasHasTransparency(context, width, height);
+    const scaledBounds = transparencyPreserved ? transparentArtworkBounds(context, width, height) : null;
+    const safelyTrimmed = scaledBounds && (scaledBounds.x > 0 || scaledBounds.y > 0 || scaledBounds.width < width || scaledBounds.height < height);
+    let outputCanvas = canvas;
+    if (safelyTrimmed) {
+      outputCanvas = document.createElement("canvas"); outputCanvas.width = scaledBounds.width; outputCanvas.height = scaledBounds.height;
+      const outputContext = outputCanvas.getContext("2d", { alpha: true });
+      if (!outputContext) throw new Error("Could not prepare authored logo artwork bounds.");
+      outputContext.drawImage(canvas, scaledBounds.x, scaledBounds.y, scaledBounds.width, scaledBounds.height, 0, 0, scaledBounds.width, scaledBounds.height);
+    }
     const format = transparencyPreserved ? "PNG" as const : "JPEG" as const;
     const originalBytes = decodedBytes(source);
-    const candidate = canvas.toDataURL(transparencyPreserved ? "image/png" : "image/jpeg", AUTHORED_PROJECT_JPEG_QUALITY);
+    const candidate = outputCanvas.toDataURL(transparencyPreserved ? "image/png" : "image/jpeg", AUTHORED_PROJECT_JPEG_QUALITY);
     const optimizedBytes = decodedBytes(candidate);
-    const useCandidate = scale < 1 || optimizedBytes < originalBytes;
+    const useCandidate = scale < 1 || Boolean(safelyTrimmed) || optimizedBytes < originalBytes;
+    const outputWidth = useCandidate ? outputCanvas.width : originalWidth;
+    const outputHeight = useCandidate ? outputCanvas.height : originalHeight;
     return {
       source: useCandidate ? candidate : source,
       originalBytes,
       optimizedBytes: useCandidate ? optimizedBytes : originalBytes,
       originalWidth,
       originalHeight,
-      width: useCandidate ? width : originalWidth,
-      height: useCandidate ? height : originalHeight,
+      width: outputWidth,
+      height: outputHeight,
       format: useCandidate ? format : inputIsPng ? "PNG" : "JPEG",
       transparencyPreserved,
+      effectiveArtworkBounds: scaledBounds ? {
+        x: Math.round(scaledBounds.x / scale), y: Math.round(scaledBounds.y / scale),
+        width: Math.round(scaledBounds.width / scale), height: Math.round(scaledBounds.height / scale),
+      } : null,
     };
   })();
   cache.set(cacheKey, pending);

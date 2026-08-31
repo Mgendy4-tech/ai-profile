@@ -7,6 +7,7 @@ import type {
 } from "../../types";
 import { editorialInteriorsCapabilitiesTemplate } from "./capabilities";
 import { editorialInteriorsCapabilitiesSupportingTemplate } from "./capabilities-supporting";
+import { editorialInteriorsCapabilitiesContinuationTemplates } from "./capabilities-continuation";
 import type {
   CapabilitiesContent,
   CoverContent,
@@ -42,6 +43,7 @@ export const editorialInteriorsV1Pack = {
     editorialInteriorsSparseNarrativeFacts2Template,
     editorialInteriorsSparseNarrativeFacts3Template,
     editorialInteriorsCapabilitiesSupportingTemplate,
+    ...editorialInteriorsCapabilitiesContinuationTemplates,
     ...editorialInteriorsMultiProjectTemplates,
     ...authoredCoverTemplates,
   ],

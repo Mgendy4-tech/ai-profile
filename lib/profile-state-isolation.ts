@@ -26,6 +26,7 @@ export const isolateNewCompanyState = (
   projects: readonly unknown[],
   logoExplicitlySelected: boolean,
   explicitlyEditedFields: ReadonlySet<string> = new Set(),
+  projectsExplicitlyEdited = false,
 ): NewCompanyIsolationResult => {
   const companyChanged = Boolean(previous?.name && identity(previous.name) !== identity(next.name));
   const semanticFields = ["name", "about", "companyType", "industry", "customerType", "servicesProducts", "activities", "experience"] as const;
@@ -37,7 +38,9 @@ export const isolateNewCompanyState = (
       ...Object.fromEntries(["companyType", "industry", "customerType", "servicesProducts"].map((field) => [field, explicitlyEditedFields.has(field) ? next[field] ?? "" : ""])),
       logoUrl: logoExplicitlySelected ? next.logoUrl ?? "" : "",
     },
-    projects: [],
+    // Projects explicitly created after the identity edit belong to the new
+    // company. Only inherited projects are discarded on an identity switch.
+    projects: projectsExplicitlyEdited ? [...projects] : [],
     clearKeys: ["profileStructure", "generatedProfile", "authoredFamilyDecision", "exportDecision", "projectsData"],
     companyChanged: true,
   };

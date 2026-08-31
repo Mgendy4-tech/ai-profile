@@ -1,6 +1,7 @@
 import {
   createStableCustomSectionId,
   persistApprovedProfileStructure,
+  readPersistedApprovedProfileStructure,
   validateGeneratedProfileSections,
   type GeneratedProfileSection,
   type SelectedProfileSection,
@@ -14,7 +15,7 @@ const selected: SelectedProfileSection[] = [
   { id: "custom-who-we-work-with", displayTitle: "Who We Work With", description: "Approved custom description." },
 ];
 const generated = (id: string, title = selected.find((section) => section.id === id)?.displayTitle ?? "Unknown"): GeneratedProfileSection => ({
-  id, title, description: "Generated description.", content: "Source-grounded generated content.", items: id === "services" ? [{ id: "services:service:1", name: "Advisory", description: "Source-grounded business advisory support.", sourceEvidence: "business advisory" }] : [],
+  id, title, description: selected.find((section) => section.id === id)?.description ?? "Unknown description.", content: "Source-grounded generated content.", items: id === "services" ? [{ id: "services:service:1", name: "Advisory", description: "Source-grounded business advisory support.", sourceEvidence: "business advisory" }] : [],
 });
 const sourceContext = { serviceSourceMaterial: ["Northbridge provides business advisory support to leadership teams."] };
 
@@ -44,6 +45,8 @@ const structure = { companyType: "Business advisory", recommendedSections: [...s
 const persistedSelection = persistApprovedProfileStructure({ setItem: (key, value) => { assert(key === "profileStructure", "Approved structure must use the existing persistence key."); persisted = value; } }, { name: "Northbridge Advisory" }, structure, selected.map((section) => section.id));
 const parsed = JSON.parse(persisted) as { analysis: typeof structure; selectedSections: SelectedProfileSection[] };
 assert(persistedSelection[2].id === "custom-who-we-work-with" && parsed.selectedSections[2].id === "custom-who-we-work-with", "A custom selected section must persist before generation.");
+const reconstructed = readPersistedApprovedProfileStructure({ getItem: () => persisted });
+assert(reconstructed?.selectedSectionIds.join("|") === "about|services|custom-who-we-work-with" && reconstructed.structure.recommendedSections[2].id === "custom-who-we-work-with", "Reload reconstruction must preserve approved section identities and selection order.");
 
 const editedStructure = { ...structure, recommendedSections: structure.recommendedSections.map((section) => section.id === "services" ? { ...section, displayTitle: "Edited Advisory Services" } : section) };
 persistApprovedProfileStructure({ setItem: (_key, value) => { persisted = value; } }, {}, editedStructure, selected.map((section) => section.id));

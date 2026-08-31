@@ -49,7 +49,7 @@ STRUCTURED SERVICES CONTRACT:
 - Derive every service name and description only from the company information or the approved service-section intent.
 - "sourceEvidence" must be a short exact quotation copied verbatim from the company information or that approved section's description which supports the service. Include that exact quotation verbatim in the item's description. Do not use general industry knowledge.
 - If the supplied sources do not support at least one service item, do not invent one; the response will be rejected explicitly.
-- When an approved service section already contains an "items" array, return exactly those items in that order, preserve every item "id" and "title" exactly (return "title" as "name"), and use the approved item description as source intent. Do not add or remove approved items.
+- When an approved service section already contains an "items" array, return exactly those items in that order, preserve every item "id", "title" (as "name"), and "description" exactly. Do not add, remove, or rewrite approved items. Use the approved description as sourceEvidence.
 `;
 const productContract = productSections.length === 0 ? "" : `
 
@@ -60,7 +60,7 @@ STRUCTURED PRODUCT CONTRACT:
 - Without approved items, IDs are "<section id>:feature:1" or "<section id>:use-case:1" in returned order.
 - Feature names must be at most 40 characters with no word over 20 characters. Use-case names must be at most 34 characters with no word over 16 characters.
 - Derive titles and descriptions only from supplied company information or approved intent. "sourceEvidence" must be an exact supplied quotation included verbatim in the description.
-- If approved items exist, preserve their IDs, titles (as "name"), count, and order exactly. Do not add or remove them.
+- If approved items exist, preserve their IDs, titles (as "name"), descriptions, count, and order exactly. Do not add, remove, or rewrite them. Use the approved description as sourceEvidence.
 `;
 
 const prompt = `
@@ -97,7 +97,7 @@ IMPORTANT RULES:
 
 4. Use ONLY information explicitly provided in the company data and project data.
 
-5. Section titles must use the approved displayTitle exactly.
+5. Section titles and descriptions must use the approved displayTitle and description exactly.
 
 6. Only recommend or generate a Projects section when actual project data is provided.
 

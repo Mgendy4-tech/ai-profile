@@ -27,8 +27,10 @@ export const CORPORATE_SERVICES_TEXT_GEOMETRY = {
 
 const templateFor = (definition: Definition): AuthoredPageTemplate<CorporateServicesPageContent> => {
   const envelope: ContentEnvelope = { slots: [
-    { id: "heading", path: "heading", kind: "text", required: true, fontFamily: "times", fontStyle: "bold", fontSize: 29, widthMm: 112, maxLines: 2 },
-    { id: "supportingLine", path: "supportingLine", kind: "text", required: false, fontFamily: "helvetica", fontStyle: "normal", fontSize: 9.5, widthMm: 112, maxLines: 3 },
+    ...(!definition.continuation ? [
+      { id: "heading", path: "heading", kind: "text" as const, required: true, fontFamily: "times", fontStyle: "bold" as const, fontSize: 29, widthMm: 112, maxLines: 2 },
+      { id: "supportingLine", path: "supportingLine", kind: "text" as const, required: false, fontFamily: "helvetica", fontStyle: "normal" as const, fontSize: 9.5, widthMm: 112, maxLines: 3 },
+    ] : []),
     { id: "services", path: "services", kind: "collection", required: true, minItems: definition.count, maxItems: definition.count },
     ...Array.from({ length: definition.count }, (_, index) => [
       { id: `service${index}Title`, path: `services.${index}.title`, kind: "text" as const, required: true, fontFamily: "times", fontStyle: "bold" as const, fontSize: 17, widthMm: CORPORATE_SERVICES_TEXT_GEOMETRY.titleWidth, maxLines: 2 },
@@ -43,11 +45,15 @@ const templateFor = (definition: Definition): AuthoredPageTemplate<CorporateServ
       const audit: Record<string, readonly string[]> = {};
       pdf.setFillColor(...v.palette.navy); pdf.rect(0, 0, 210, 36, "F");
       pdf.setTextColor(...v.palette.white); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7.5); pdf.text(definition.continuation ? "SERVICES / CONTINUED" : "02 / SERVICES", 19, 23);
-      const heading = preparedCorporateText(instance, "heading"); audit.heading = heading.lines;
-      pdf.setTextColor(...v.palette.ink); pdf.setFont("times", "bold"); pdf.setFontSize(29); pdf.setLineHeightFactor(1); pdf.text([...heading.lines], 19, 65);
-      const supporting = preparedCorporateText(instance, "supportingLine"); audit.supportingLine = supporting.lines;
-      pdf.setTextColor(...v.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.5); pdf.setLineHeightFactor(1.35); pdf.text([...supporting.lines], 19, 88);
-      definition.count && instance.source.services.forEach((service, index) => {
+      if (definition.continuation) {
+        pdf.setTextColor(...v.palette.ink); pdf.setFont("times", "bold"); pdf.setFontSize(17); pdf.text("Additional Services", 19, 69);
+      } else {
+        const heading = preparedCorporateText(instance, "heading"); audit.heading = heading.lines;
+        pdf.setTextColor(...v.palette.ink); pdf.setFont("times", "bold"); pdf.setFontSize(29); pdf.setLineHeightFactor(1); pdf.text([...heading.lines], 19, 65);
+        const supporting = preparedCorporateText(instance, "supportingLine"); audit.supportingLine = supporting.lines;
+        pdf.setTextColor(...v.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.5); pdf.setLineHeightFactor(1.35); pdf.text([...supporting.lines], 19, 88);
+      }
+      instance.source.services.forEach((service, index) => {
         const y = definition.rowTops[index];
         if (index === 0) pdf.setDrawColor(...v.palette.cobalt); else pdf.setDrawColor(...v.palette.mist); pdf.setLineWidth(index === 0 ? 0.8 : 0.35); pdf.line(19, y, 191, y);
         pdf.setTextColor(...v.palette.cobalt); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8); pdf.text(service.index, CORPORATE_SERVICES_TEXT_GEOMETRY.indexX, y + CORPORATE_SERVICES_TEXT_GEOMETRY.titleYOffset);

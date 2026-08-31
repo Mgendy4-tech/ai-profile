@@ -51,7 +51,9 @@ const run = async () => {
     const count = (templateIndex + 1) as 1 | 2 | 3 | 4; const geometry = PRODUCT_FEATURE_CONTINUATION_GEOMETRY[count];
     const candidate: ProductFeaturesPageContent = { contentId: `continuation:${count}`, heading: "A modular product capability set", supportingLine: "Fictional source-backed feature content for fixed-geometry testing.", features: Array.from({ length: count }, (_, index) => { const item = feature(index, true); return { contentId: `feature:${index}`, index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description }; }) };
     const prepared = template.prepare(candidate); assert(prepared.compatible, `${template.id} must accept its exact-count boundary fixture.`); if (!prepared.compatible) continue;
+    assert(!prepared.instance.preparedSlots.heading && !prepared.instance.preparedSlots.supportingLine, `${template.id} must not prepare the primary section introduction.`);
     const pdf = new jsPDF({ unit: "mm", format: "a4" }); const audit = template.render(pdf, prepared.instance);
+    assert(!audit.renderedTextBySlot.heading && !audit.renderedTextBySlot.supportingLine, `${template.id} must not repeat the section title or description.`);
     assert(geometry.cells.length === count && geometry.horizontalRules.every((y) => y >= 0 && y <= 297) && geometry.verticalRules.every((rule) => rule.x >= 0 && rule.x <= 210 && rule.y1 >= 0 && rule.y2 <= 297), `${template.id} authored geometry must remain inside A4.`);
     geometry.cells.forEach((cell, index) => {
       const titleLines = audit.renderedTextBySlot[`feature${index}Title`]; const descriptionLines = audit.renderedTextBySlot[`feature${index}Description`];

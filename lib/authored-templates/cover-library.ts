@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import { createJsPDFMeasurementContext, evaluateContentEnvelope } from "./content-envelope";
 import type { AuthoredPageTemplate, ContentEnvelope, ImageSlotValue, TemplateInstance } from "./types";
-import { drawContainedOptionalLogo, preparedOptionalLogo } from "./packs/logo";
+import { drawContainedOptionalLogo, preparedOptionalLogo, type AuthoredLogoFrame, type AuthoredLogoPlacementVariant } from "./packs/logo";
 
 export type CoverTemplateId = `authored-cover-v1.${"editorial-warm" | "corporate-clean" | "dynamic-bold" | "architectural-modern" | "premium-dark" | "creative-soft"}`;
 export type CoverPaletteId = "warm-neutral" | "navy-clean" | "charcoal-gold" | "blue-architectural" | "forest-premium" | "soft-lilac" | "tech-electric";
@@ -28,8 +28,21 @@ type Definition = { id: CoverTemplateId; supportedFamilies: readonly CurrentFami
 export type CoverTemplateDefinition = Definition;
 const palette = (id: CoverPaletteId) => authoredCoverPalettes.find((entry) => entry.id === id) ?? authoredCoverPalettes[0];
 const text = (instance: TemplateInstance<AuthoredCoverContent>, id: string) => { const slot = instance.preparedSlots[id]; if (!slot || slot.kind !== "text") throw new Error(`Prepared cover text ${id} unavailable.`); return slot.lines; };
+const LOGO_PLACEMENT_VARIANTS: Readonly<Record<string, AuthoredLogoPlacementVariant>> = {
+  "141,25,43,18": { wide: { x: 137, y: 26, width: 47, height: 15 }, balanced: { x: 151, y: 22, width: 24, height: 24 }, tall: { x: 157, y: 18, width: 17, height: 32 } },
+  "10,71,38,24": { wide: { x: 9, y: 76, width: 40, height: 15 }, balanced: { x: 17, y: 71, width: 24, height: 24 }, tall: { x: 21, y: 66, width: 17, height: 34 } },
+  "145,24,45,18": { wide: { x: 141, y: 26, width: 49, height: 15 }, balanced: { x: 156, y: 22, width: 24, height: 24 }, tall: { x: 161, y: 17, width: 18, height: 34 } },
+  "168,18,38,18": { wide: { x: 168, y: 21, width: 38, height: 14 }, balanced: { x: 176, y: 15, width: 24, height: 24 }, tall: { x: 181, y: 11, width: 16, height: 32 } },
+  "77,35,56,16": { wide: { x: 77, y: 36, width: 56, height: 15 }, balanced: { x: 93, y: 31, width: 24, height: 24 }, tall: { x: 97, y: 26, width: 18, height: 34 } },
+  "142,25,44,18": { wide: { x: 138, y: 27, width: 48, height: 15 }, balanced: { x: 151, y: 22, width: 24, height: 24 }, tall: { x: 156, y: 17, width: 18, height: 34 } },
+};
+const authoredLogoVariants = (frame: AuthoredLogoFrame) => {
+  const variants = LOGO_PLACEMENT_VARIANTS[`${frame.x},${frame.y},${frame.width},${frame.height}`];
+  if (!variants) throw new Error("Authored cover logo region has no bounded shape variants.");
+  return variants;
+};
 const common = (pdf: jsPDF, instance: TemplateInstance<AuthoredCoverContent>, p: CoverPalette, audit: Record<string, readonly string[]>, name: { x: number; y: number; font: "times" | "helvetica"; size: number; color: readonly [number, number, number]; lineHeight?: number }, label: { x: number; y: number; color: readonly [number, number, number] }, type: { x: number; y: number; color: readonly [number, number, number] }, logoBox: { x: number; y: number; width: number; height: number }) => {
-  drawContainedOptionalLogo(pdf, preparedOptionalLogo(instance), logoBox, p.light);
+  drawContainedOptionalLogo(pdf, preparedOptionalLogo(instance), authoredLogoVariants(logoBox), p.light);
   const labelLines = text(instance, "documentLabel"); pdf.setTextColor(...label.color); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7.5); pdf.setCharSpace(0.55); pdf.text([...labelLines], label.x, label.y); pdf.setCharSpace(0); audit.documentLabel = labelLines;
   const nameLines = text(instance, "companyName"); pdf.setTextColor(...name.color); pdf.setFont(name.font, "bold"); pdf.setFontSize(name.size); pdf.setLineHeightFactor(name.lineHeight ?? 0.98); pdf.text([...nameLines], name.x, name.y); audit.companyName = nameLines;
   const typeLines = text(instance, "companyType"); pdf.setTextColor(...type.color); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setLineHeightFactor(1.35); pdf.text([...typeLines], type.x, type.y); audit.companyType = typeLines;

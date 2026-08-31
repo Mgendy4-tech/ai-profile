@@ -78,7 +78,7 @@ const render = (
   paintPaper(pdf);
   const hero = getPreparedImage(instance, "hero");
   clipAndDrawImage(pdf, hero.source.source, hero.source.format, visual.crops.cover.frame, hero.aspectRatio <= 0.8 ? visual.crops.cover.image : coverCrop(visual.crops.cover.frame, hero.aspectRatio));
-  drawContainedOptionalLogo(pdf, preparedOptionalLogo(instance), { x: 139, y: 18, width: 53, height: 14 }, visual.palette.paper);
+  drawContainedOptionalLogo(pdf, preparedOptionalLogo(instance), { wide: { x: 139, y: 18, width: 53, height: 14 }, balanced: { x: 154, y: 13, width: 24, height: 24 }, tall: { x: 158, y: 8, width: 18, height: 34 } }, visual.palette.paper);
 
   const documentLabel = getPreparedText(instance, "documentLabel");
   pdf.setTextColor(...visual.palette.secondary);

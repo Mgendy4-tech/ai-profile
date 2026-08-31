@@ -6,8 +6,10 @@ import { createProductMeasurementContext, paintProductPaper, productTechV1Visual
 type Definition = { count: 1 | 2 | 3; continuation: boolean; id: string };
 const templateFor = (definition: Definition): AuthoredPageTemplate<ProductUseCasesPageContent> => {
   const envelope: ContentEnvelope = { slots: [
-    { id: "heading", path: "heading", kind: "text", required: true, fontFamily: "helvetica", fontStyle: "bold", fontSize: 25, widthMm: 130, maxLines: 2 },
-    { id: "supportingLine", path: "supportingLine", kind: "text", required: false, fontFamily: "helvetica", fontStyle: "normal", fontSize: 9.25, widthMm: 130, maxLines: 3 },
+    ...(!definition.continuation ? [
+      { id: "heading", path: "heading", kind: "text" as const, required: true, fontFamily: "helvetica", fontStyle: "bold" as const, fontSize: 25, widthMm: 130, maxLines: 2 },
+      { id: "supportingLine", path: "supportingLine", kind: "text" as const, required: false, fontFamily: "helvetica", fontStyle: "normal" as const, fontSize: 9.25, widthMm: 130, maxLines: 3 },
+    ] : []),
     { id: "useCases", path: "useCases", kind: "collection", required: true, minItems: definition.count, maxItems: definition.count },
     ...Array.from({ length: definition.count }, (_, index) => [
       { id: `useCase${index}Title`, path: `useCases.${index}.title`, kind: "text" as const, required: true, fontFamily: "helvetica", fontStyle: "bold" as const, fontSize: 15, widthMm: 62, maxLines: 2 },
@@ -20,9 +22,13 @@ const templateFor = (definition: Definition): AuthoredPageTemplate<ProductUseCas
     render: (pdf, instance): TemplateRenderAudit => {
       paintProductPaper(pdf); const audit: Record<string, readonly string[]> = {};
       pdf.setTextColor(...v.palette.electric); pdf.setFont("courier", "bold"); pdf.setFontSize(7.5); pdf.text(definition.continuation ? "USE CASES / CONTINUED" : "03 / USE CASES", 19, 24);
-      const heading = productText(instance, "heading"); const support = productText(instance, "supportingLine"); audit.heading = heading.lines; audit.supportingLine = support.lines;
-      pdf.setTextColor(...v.palette.ink); pdf.setFont("helvetica", "bold"); pdf.setFontSize(25); pdf.setLineHeightFactor(1); pdf.text([...heading.lines], 19, 59);
-      pdf.setTextColor(...v.palette.secondary); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.25); pdf.setLineHeightFactor(1.35); pdf.text([...support.lines], 19, 84);
+      if (definition.continuation) {
+        pdf.setTextColor(...v.palette.ink); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13); pdf.text("ADDITIONAL USE CASES", 19, 64);
+      } else {
+        const heading = productText(instance, "heading"); const support = productText(instance, "supportingLine"); audit.heading = heading.lines; audit.supportingLine = support.lines;
+        pdf.setTextColor(...v.palette.ink); pdf.setFont("helvetica", "bold"); pdf.setFontSize(25); pdf.setLineHeightFactor(1); pdf.text([...heading.lines], 19, 59);
+        pdf.setTextColor(...v.palette.secondary); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.25); pdf.setLineHeightFactor(1.35); pdf.text([...support.lines], 19, 84);
+      }
       const top = 111; const rowHeight = 158 / definition.count;
       instance.source.useCases.forEach((useCase, index) => {
         const y = top + index * rowHeight; if (index === 0) pdf.setDrawColor(...v.palette.electric); else pdf.setDrawColor(...v.palette.line); pdf.setLineWidth(index === 0 ? 0.8 : 0.35); pdf.line(19, y, 191, y);

@@ -30,6 +30,7 @@ export type GeneratedSectionDiagnosticCode =
   | "generated_section_unknown_id"
   | "generated_section_missing_id"
   | "generated_section_title_mismatch"
+  | "generated_section_description_mismatch"
   | "generated_services_items_required"
   | "generated_services_count_unsupported"
   | "generated_service_item_invalid"
@@ -119,7 +120,7 @@ const validateServicesSection = (
     if (item.id) seenIds.add(item.id);
     if (item.id && item.id !== expectedId) diagnostics.push({ code: "generated_service_item_unstable_id", sectionId: section.id, path: `${path}.id` });
     if (serviceItemTitleCapacityError(item.name)) diagnostics.push({ code: "generated_service_item_title_capacity_unsupported", sectionId: section.id, path: `${path}.name` });
-    if (approvedItem && item.name !== approvedItem.title) diagnostics.push({ code: "generated_service_item_invalid", sectionId: section.id, path: `${path}.name` });
+    if (approvedItem && (item.name !== approvedItem.title || item.description !== approvedItem.description)) diagnostics.push({ code: "generated_service_item_invalid", sectionId: section.id, path: item.name !== approvedItem.title ? `${path}.name` : `${path}.description` });
     const evidence = normalizeEvidence(item.sourceEvidence ?? "");
     if (evidence && (!source || !source.includes(evidence) || !normalizeEvidence(item.description).includes(evidence))) diagnostics.push({ code: "generated_service_item_evidence_unsupported", sectionId: section.id, path: `${path}.sourceEvidence` });
   });
@@ -133,7 +134,7 @@ const validateProductItems = (section: GeneratedProfileSection, sectionIndex: nu
   const source = normalizeEvidence(sourceMaterial.filter(Boolean).join("\n"));
   section.items.forEach((item, index) => {
     const path = `sections.${sectionIndex}.items.${index}`; const approved = approvedItems[index]; const expected = approved?.id ?? `${section.id}:${contract.kind}:${index + 1}`;
-    if (!item.id?.trim() || !item.name.trim() || !item.description.trim() || !item.sourceEvidence?.trim() || (approved && item.name !== approved.title)) diagnostics.push({ code: "generated_product_item_invalid", sectionId: section.id, path });
+    if (!item.id?.trim() || !item.name.trim() || !item.description.trim() || !item.sourceEvidence?.trim() || (approved && (item.name !== approved.title || item.description !== approved.description))) diagnostics.push({ code: "generated_product_item_invalid", sectionId: section.id, path });
     if (item.id && seen.has(item.id)) diagnostics.push({ code: "generated_product_item_duplicate_id", sectionId: section.id, path: `${path}.id` }); if (item.id) seen.add(item.id);
     if (item.id && item.id !== expected) diagnostics.push({ code: "generated_product_item_unstable_id", sectionId: section.id, path: `${path}.id` });
     if (item.name.trim().length > contract.titleMax || item.name.trim().split(/\s+/).some((word) => word.length > contract.wordMax)) diagnostics.push({ code: "generated_product_item_title_capacity_unsupported", sectionId: section.id, path: `${path}.name` });
@@ -178,7 +179,10 @@ export const validateGeneratedProfileSections = (
     returnedById.set(section.id, section);
     const selected = selectedById.get(section.id);
     if (!selected) diagnostics.push({ code: "generated_section_unknown_id", sectionId: section.id, path: `sections.${index}.id` });
-    else if (section.title !== selected.displayTitle) diagnostics.push({ code: "generated_section_title_mismatch", sectionId: section.id, path: `sections.${index}.title` });
+    else {
+      if (section.title !== selected.displayTitle) diagnostics.push({ code: "generated_section_title_mismatch", sectionId: section.id, path: `sections.${index}.title` });
+      if (section.description !== selected.description) diagnostics.push({ code: "generated_section_description_mismatch", sectionId: section.id, path: `sections.${index}.description` });
+    }
   });
   selectedSections.forEach((section, index) => {
     if (!returnedById.has(section.id)) diagnostics.push({ code: "generated_section_missing_id", sectionId: section.id, path: `selectedSections.${index}.id` });
@@ -235,6 +239,37 @@ export const createStableCustomSectionId = (title: string, existingIds: readonly
 };
 
 type StorageWriter = { setItem(key: string, value: string): void };
+type StorageReader = { getItem(key: string): string | null };
+
+export type PersistedApprovedProfileStructure = {
+  structure: { companyType: string; recommendedSections: SelectedProfileSection[] };
+  selectedSectionIds: string[];
+};
+
+export const readPersistedApprovedProfileStructure = (storage: StorageReader): PersistedApprovedProfileStructure | null => {
+  try {
+    const raw = storage.getItem("profileStructure");
+    if (!raw) return null;
+    const value = JSON.parse(raw) as { analysis?: unknown; selectedSections?: unknown };
+    if (!value.analysis || typeof value.analysis !== "object" || !Array.isArray(value.selectedSections)) return null;
+    const analysis = value.analysis as { companyType?: unknown; recommendedSections?: unknown };
+    if (typeof analysis.companyType !== "string" || !Array.isArray(analysis.recommendedSections)) return null;
+    const validSection = (section: unknown): section is SelectedProfileSection => {
+      if (!section || typeof section !== "object") return false;
+      const candidate = section as Record<string, unknown>;
+      return typeof candidate.id === "string" && typeof candidate.displayTitle === "string" && typeof candidate.description === "string" &&
+        (candidate.items === undefined || (Array.isArray(candidate.items) && candidate.items.every((item) => item && typeof item === "object" && typeof (item as ApprovedProfileItem).id === "string" && typeof (item as ApprovedProfileItem).title === "string" && typeof (item as ApprovedProfileItem).description === "string")));
+    };
+    if (!analysis.recommendedSections.every(validSection) || !value.selectedSections.every(validSection)) return null;
+    const structure = { companyType: analysis.companyType, recommendedSections: analysis.recommendedSections };
+    const selectedIds = new Set(value.selectedSections.map((section) => section.id));
+    if (new Set(structure.recommendedSections.map((section) => section.id)).size !== structure.recommendedSections.length ||
+      value.selectedSections.some((section) => !structure.recommendedSections.some((candidate) => candidate.id === section.id))) return null;
+    return { structure, selectedSectionIds: structure.recommendedSections.filter((section) => selectedIds.has(section.id)).map((section) => section.id) };
+  } catch {
+    return null;
+  }
+};
 
 export const persistApprovedProfileStructure = (
   storage: StorageWriter,

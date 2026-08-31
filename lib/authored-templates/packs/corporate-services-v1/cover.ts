@@ -19,7 +19,7 @@ export const corporateServicesCoverTemplate: AuthoredPageTemplate<CorporateCover
     paintCorporatePaper(pdf);
     pdf.setFillColor(...v.palette.navy); pdf.rect(0, 0, 72, 297, "F");
     pdf.setFillColor(...v.palette.cobalt); pdf.rect(18, 24, 12, 2.2, "F");
-    drawContainedOptionalLogo(pdf, preparedOptionalLogo(instance), { x: 18, y: 55, width: 36, height: 22 }, v.palette.white);
+    drawContainedOptionalLogo(pdf, preparedOptionalLogo(instance), { wide: { x: 17, y: 59, width: 38, height: 14 }, balanced: { x: 25, y: 54, width: 23, height: 23 }, tall: { x: 29, y: 50, width: 17, height: 31 } }, v.palette.white);
     pdf.setTextColor(...v.palette.white); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7.5); pdf.setCharSpace(0.5); pdf.text(preparedCorporateText(instance, "documentLabel").lines[0], 18, 38); pdf.setCharSpace(0);
     pdf.setDrawColor(255, 255, 255); pdf.setLineWidth(0.25); pdf.line(18, 259, 54, 259);
     pdf.setFont("helvetica", "normal"); pdf.setFontSize(7); pdf.text("CORPORATE / SERVICES", 18, 269);

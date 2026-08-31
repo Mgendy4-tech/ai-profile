@@ -5,7 +5,7 @@ import type { AuthoredDocumentPlan, CoverageIssue, NormalizedContentUnit } from 
 import type { AuthoredPageTemplate, ContractIssue, TemplateInstance, TemplateRenderAudit } from "./types";
 import { editorialInteriorsV1Pack } from "./packs/editorial-interiors-v1";
 import { selectEditorialInteriorsNarrativeTemplate } from "./packs/editorial-interiors-v1/narrative";
-import type { CapabilitiesContent, CapabilitiesSupportingContent, CoverContent, NarrativeContent, ProjectFeatureContent } from "./packs/editorial-interiors-v1/content";
+import type { CapabilitiesContent, CapabilitiesContinuationContent, CapabilitiesSupportingContent, CoverContent, NarrativeContent, ProjectFeatureContent } from "./packs/editorial-interiors-v1/content";
 import type { PortfolioProjectContent, PortfolioProjectPageContent } from "./packs/editorial-interiors-v1/portfolio-project-pages";
 import type { AuthoredCoverContent, CoverTemplateId } from "./cover-library";
 
@@ -16,6 +16,7 @@ export type VisualPortfolioPlanningInput = {
   narrative: NarrativeContent;
   capabilities: CapabilitiesContent;
   capabilitiesSupporting?: CapabilitiesSupportingContent;
+  capabilityContinuations?: readonly CapabilitiesContinuationContent[];
   details?: readonly NarrativeContent[];
   projects: readonly PortfolioProjectContent[];
 };
@@ -82,6 +83,10 @@ export const createVisualPortfolioDocumentPlan = (
       ...services.slice(4, 6).map((service, index) => ({ contentId: service.id, mode: "consume" as const, slotId: `capabilities.${index}` })),
       { contentId: input.capabilitiesSupporting.detail.contentId, mode: "consume" as const, slotId: "detail.body" },
     ] }] : []),
+    ...(input.capabilityContinuations ?? []).map((continuation, continuationIndex) => {
+      const consumedBefore = 4 + (input.capabilitiesSupporting ? 2 : 0) + (input.capabilityContinuations ?? []).slice(0, continuationIndex).reduce((total, page) => total + page.capabilities.length, 0);
+      return { pageId: `capabilities:continuation:${continuationIndex}`, templateId: `editorial-interiors-v1.capabilities-continuation-${continuation.capabilities.length}`, pageRole: "continuation" as const, candidate: continuation, claims: services.slice(consumedBefore, consumedBefore + continuation.capabilities.length).map((service, index) => ({ contentId: service.id, mode: "consume" as const, slotId: `capabilities.${index}` })) };
+    }),
     ...details.slice(input.capabilitiesSupporting ? 1 : 0).map((detail, index) => ({ pageId: `detail:${index}`, templateId: selectEditorialInteriorsNarrativeTemplate(detail).id, pageRole: "narrative" as const, candidate: detail, claims: [{ contentId: detail.contentId, mode: "consume" as const, slotId: "body" }] })),
   ];
 

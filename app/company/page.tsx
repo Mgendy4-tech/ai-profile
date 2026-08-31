@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearInheritedAssetsForIdentityEdit, isolateNewCompanyState, isSameCompanyIdentity } from '@/lib/profile-state-isolation';
 import { emptyCompanyData, normalizeCompanyData, type CompanyData } from '@/lib/company-data';
+import { resolveProjectsForCompanySave } from '@/lib/persisted-projects';
 
 type Project = {
   id: string;
@@ -39,6 +40,7 @@ export default function CompanyPage() {
   const logoExplicitlySelected = useRef(false);
   const loadedCompanyName = useRef('');
   const explicitlyEditedFields = useRef(new Set<keyof CompanyData>());
+  const projectsExplicitlyEdited = useRef(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -95,6 +97,9 @@ export default function CompanyPage() {
       setEditingProjectId(null);
       setImageUrl('');
       setImagePreview('');
+      // Remove inherited persisted projects at the identity boundary. Projects
+      // saved after this point are explicitly owned by the new company.
+      localStorage.removeItem('projectsData');
       setCompanyData(clearInheritedAssetsForIdentityEdit(loadedCompanyName.current, next) as CompanyData);
     } else {
       setCompanyData(next);
@@ -193,6 +198,7 @@ export default function CompanyPage() {
         ];
 
     setProjects(updatedProjects);
+    projectsExplicitlyEdited.current = true;
     localStorage.setItem('projectsData', JSON.stringify(updatedProjects));
     setEditingProjectId(null);
     setProjectName('');
@@ -209,6 +215,7 @@ export default function CompanyPage() {
     const updatedProjects = projects.filter((project) => project.id !== projectId);
 
     setProjects(updatedProjects);
+    projectsExplicitlyEdited.current = true;
     localStorage.setItem('projectsData', JSON.stringify(updatedProjects));
     setIsAddingProject(updatedProjects.length === 0);
   };
@@ -227,7 +234,14 @@ export default function CompanyPage() {
 
     let previousCompany: CompanyData | null = null;
     try { previousCompany = JSON.parse(localStorage.getItem('companyData') ?? 'null') as CompanyData | null; } catch { previousCompany = null; }
-    const isolated = isolateNewCompanyState(previousCompany, companyData, projects, logoExplicitlySelected.current, explicitlyEditedFields.current);
+    const storedProjectSnapshot = resolveProjectsForCompanySave(localStorage.getItem('projectsData'), projects);
+    if (storedProjectSnapshot.issues.length) {
+      setErrorMessage('Saved project data is incomplete. Reopen the project, confirm its image, and save it again.');
+      setSuccessMessage('');
+      return;
+    }
+    // Project save persists synchronously; prefer that snapshot over a possibly stale React closure.
+    const isolated = isolateNewCompanyState(previousCompany, companyData, storedProjectSnapshot.projects, logoExplicitlySelected.current, explicitlyEditedFields.current, projectsExplicitlyEdited.current);
     isolated.clearKeys.forEach((key) => localStorage.removeItem(key));
     const approvedCompanyData = isolated.companyData as CompanyData;
     const approvedProjects = isolated.projects as Project[];
@@ -235,6 +249,7 @@ export default function CompanyPage() {
     setProjects(approvedProjects);
     loadedCompanyName.current = approvedCompanyData.name;
     logoExplicitlySelected.current = false;
+    projectsExplicitlyEdited.current = false;
     localStorage.setItem('companyData', JSON.stringify(approvedCompanyData));
     localStorage.setItem('projectsData', JSON.stringify(approvedProjects));
 

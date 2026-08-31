@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { validateGeneratedProfileSections, type GeneratedProfileSection, type SelectedProfileSection } from "../generated-profile-boundary";
 import { validateDocumentCoverage } from "./coverage";
@@ -15,6 +15,7 @@ const assert: (condition: unknown, message: string) => asserts condition = (cond
 
 const company = {
   name: "Northbridge Advisory",
+  logoUrl: `data:image/png;base64,${readFileSync(resolve("lib/test-fixtures/logos/brand-wide-transparent.png")).toString("base64")}`,
   about: "Northbridge Advisory is a business consulting firm that helps growing companies improve operations, clarify strategic priorities, and build more effective management processes. The firm works closely with leadership teams to identify operational challenges, structure practical solutions, and support sustainable business growth.",
   activities: "Northbridge Advisory helps growing companies improve operations, clarify strategic priorities, and build more effective management processes.",
   experience: "The firm works closely with leadership teams to identify operational challenges, structure practical solutions, and support sustainable business growth.",
@@ -37,6 +38,7 @@ const liveSections: GeneratedProfileSection[] = [
     { id: "services:service:2", name: "Strategic Priorities", description: "Advisory support that works with leadership teams to clarify strategic priorities as companies grow.", sourceEvidence: "clarify strategic priorities" },
     { id: "services:service:3", name: "Management Processes", description: "Practical consulting support to help companies build more effective management processes alongside their leadership teams.", sourceEvidence: "build more effective management processes" },
     { id: "services:service:4", name: "Growth Advisory", description: "Advisory support structured to support sustainable business growth for growing companies.", sourceEvidence: "support sustainable business growth" },
+    { id: "services:service:5", name: "Leadership Collaboration", description: "Advisory work conducted closely with leadership teams to identify operational challenges.", sourceEvidence: "leadership teams" },
   ] },
   { id: "expertise", title: "Areas of Focus", description: selectedSections[2].description, content: "Northbridge Advisory focuses on three connected areas: improving operations, clarifying strategic priorities, and building more effective management processes. These focus areas guide the firm's work with growing companies and their leadership teams.", items: [] },
   { id: "howItWorks", title: "Our Advisory Approach", description: selectedSections[3].description, content: "Northbridge Advisory works closely with leadership teams to identify operational challenges and structure practical solutions. This collaborative approach connects the firm's advisory work with the operational and management priorities of each growing company.", items: [] },
@@ -80,10 +82,17 @@ const prepared = prepareCorporateServicesDocumentPlan(planning.plan);
 assert(prepared.compatible, `Corporate preflight failed: ${JSON.stringify(prepared.issues)}`);
 
 const input = { company, profile, projects: [] };
-const first = await routeEditorialInteriorsV1Export(input);
-const second = await routeEditorialInteriorsV1Export(input);
+const decodeLogo = async () => ({ width: 480, height: 160 });
+const first = await routeEditorialInteriorsV1Export(input, decodeLogo);
+const second = await routeEditorialInteriorsV1Export(input, decodeLogo);
 assert(first.mode === "authored" && second.mode === "authored", `Production orchestrator fell back: ${JSON.stringify(first.reasons)}`);
 assert(first.familyId === "corporate-services" && first.packId === "corporate-services-v1", "Production orchestrator selected the wrong family or pack.");
+assert(first.pageOrder[3] === "corporate-services-v1.services-continuation-1", "Northbridge must select the fixed one-item services continuation.");
+const rawPages = (first.pdf.internal as unknown as { pages: string[][] }).pages;
+const servicesPage = rawPages[3].join("\n"); const continuationPage = rawPages[4].join("\n");
+assert(servicesPage.includes("Consulting") && servicesPage.includes("Present only"), "First services page must own the full section introduction.");
+assert(continuationPage.includes("SERVICES / CONTINUED") && continuationPage.includes("Additional Services"), "Corporate continuation must use its compact authored treatment.");
+assert(!continuationPage.includes("Consulting & Advisory Services") && !continuationPage.includes("Present only the consulting"), "Corporate continuation must not repeat the services title or description.");
 assert(JSON.stringify(first.pageOrder) === JSON.stringify(planning.plan.pages.map((page) => page.templateId)), "Traced plan and production decision page order must match.");
 const firstBytes = Buffer.from(first.pdf.output("arraybuffer"));
 const secondBytes = Buffer.from(second.pdf.output("arraybuffer"));
@@ -92,8 +101,10 @@ const rawPdf = firstBytes.toString("latin1");
 assert(rawPdf.includes("Northbridge Advisory") && first.pageOrder[0] === "authored-cover-v1.corporate-clean", "PDF must contain Northbridge identity and the selected Corporate authored cover.");
 assert(!/pexels|image credits/i.test(rawPdf), "PDF must not contain legacy Pexels or image-credit markers.");
 const outputPath = resolve("artifacts/manual-review/corporate-services-v1-northbridge-live-production-review.pdf");
+const requestedOutputPath = resolve("artifacts/manual-review/corporate-services-v1-northbridge-continuation-logo-review.pdf");
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, firstBytes);
+writeFileSync(requestedOutputPath, firstBytes);
 
 console.log(JSON.stringify({
   generation: { inputIds: selectedSections.map((section) => section.id), outputIds: boundary.sections.map((section) => section.id), diagnostics: boundary.diagnostics, serviceItemIds: boundary.sections.find((section) => section.id === "services")?.items.map((item) => item.id) ?? [] },

@@ -100,7 +100,7 @@ const run = async () => {
   const wrongCapabilityCount = fixture();
   wrongCapabilityCount.profile.sections[1].items = wrongCapabilityCount.profile.sections[1].items.slice(0, 3);
   const capabilityDecision = await routeEditorialInteriorsV1Export(wrongCapabilityCount, decode);
-  assert(capabilityDecision.mode === "fallback" && capabilityDecision.reasons.some((reason) => reason.code === "capability_count_unsupported"), "Capability count other than four must select fallback.");
+  assert(capabilityDecision.mode === "fallback" && capabilityDecision.reasons.some((reason) => reason.code === "capability_count_unsupported"), "Visual capability counts below the supported 4-12 range must select fallback.");
 
   const overCapacity = fixture();
   overCapacity.profile.sections[0].content = Array.from({ length: 180 }, () => "overlong").join(" ");

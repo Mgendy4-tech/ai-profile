@@ -35,9 +35,12 @@ yarn-error.log*
 
 # local design experiments and generated review evidence
 /experiments/Experiment_Pack_01/
-/artifacts/manual-review/*.pdf
+/artifacts/manual-review/
 /artifacts/beta-hardening/*.json
 /artifacts/go-live/*.json
+/artifacts/go-live/three-family-go-live-readiness.md
+/tmp/
+/temp/
 
 # vercel
 .vercel

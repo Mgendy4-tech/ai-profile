@@ -2,6 +2,11 @@ import type { jsPDF } from "jspdf";
 import type { PreparedImageSlot, TemplateInstance } from "../types";
 
 export type AuthoredLogoFrame = Readonly<{ x: number; y: number; width: number; height: number }>;
+export type AuthoredLogoShape = "wide" | "balanced" | "tall";
+export type AuthoredLogoPlacementVariant = Readonly<Record<AuthoredLogoShape, AuthoredLogoFrame>>;
+
+export const classifyAuthoredLogoShape = (aspectRatio: number): AuthoredLogoShape =>
+  aspectRatio >= 1.8 ? "wide" : aspectRatio <= 0.72 ? "tall" : "balanced";
 
 export const preparedOptionalLogo = <T extends object>(instance: TemplateInstance<T>, slotId = "logo"): PreparedImageSlot | null => {
   const slot = instance.preparedSlots[slotId];
@@ -23,15 +28,17 @@ export const containImageInFrame = (frame: AuthoredLogoFrame, aspectRatio: numbe
 export const drawContainedOptionalLogo = (
   pdf: jsPDF,
   logo: PreparedImageSlot | null,
-  frame: AuthoredLogoFrame,
+  frames: AuthoredLogoPlacementVariant,
   background?: readonly [number, number, number],
 ) => {
   if (!logo) return null;
+  const shape = classifyAuthoredLogoShape(logo.aspectRatio);
+  const frame = frames[shape];
   if (background) {
     pdf.setFillColor(...background);
     pdf.rect(frame.x, frame.y, frame.width, frame.height, "F");
   }
   const placement = containImageInFrame(frame, logo.aspectRatio);
   pdf.addImage(logo.source.source, logo.source.format, placement.x, placement.y, placement.width, placement.height);
-  return placement;
+  return { ...placement, shape, variant: shape };
 };

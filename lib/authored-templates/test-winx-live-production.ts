@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { companySemanticText, companySourceMaterial, type CompanyData } from "../company-data";
 import { validateGeneratedProfileSections, type GeneratedProfileSection, type SelectedProfileSection } from "../generated-profile-boundary";
@@ -21,7 +21,7 @@ const company: CompanyData = {
 };
 const selected: SelectedProfileSection[] = [
   { id: "about", displayTitle: "About WinX", description: "Introduce WinX and its distributed promoter model." },
-  { id: "features", displayTitle: "Platform Features", description: "Present campaign, promoter, performance tracking, lead generation, customer acquisition, and sales growth capabilities." },
+  { id: "features", displayTitle: "Platform Capabilities", description: "Present campaign, promoter, performance tracking, lead generation, customer acquisition, and sales growth capabilities." },
   { id: "useCases", displayTitle: "Who WinX Helps", description: "Show how SMEs, brands, and growing businesses use WinX to expand sales and market reach." },
 ];
 const items = {
@@ -42,7 +42,7 @@ const items = {
 } as const;
 const generated: GeneratedProfileSection[] = [
   { id: "about", title: "About WinX", description: selected[0].description, content: "WinX is a Sales Technology Company operating in the sales technology and affiliate marketing industry. With 3 years of experience, the company provides a digital platform that helps businesses expand sales, market reach, and customer acquisition through a distributed network of independent promoters known as WinXers. Its activities span sales technology, affiliate marketing, distributed sales networks, campaign management, customer acquisition, and business growth.", items: [] },
-  { id: "features", title: "Platform Features", description: selected[1].description, content: "The WinX platform brings together the technology and network capabilities required to manage distributed sales activity, engage independent promoters, track performance, generate leads, support customer acquisition, and drive sales growth.", items: items.features.map(([name, description, sourceEvidence], index) => ({ id: `features:feature:${index + 1}`, name, description, sourceEvidence })) },
+  { id: "features", title: "Platform Capabilities", description: selected[1].description, content: "The WinX platform brings together the technology and network capabilities required to manage distributed sales activity, engage independent promoters, track performance, generate leads, support customer acquisition, and drive sales growth.", items: items.features.map(([name, description, sourceEvidence], index) => ({ id: `features:feature:${index + 1}`, name, description, sourceEvidence })) },
   { id: "useCases", title: "Who WinX Helps", description: selected[2].description, content: "WinX serves B2B customers seeking to expand sales and market reach through sales technology, affiliate marketing, and a distributed network of independent promoters.", items: items.useCases.map(([name, description, sourceEvidence], index) => ({ id: `useCases:use-case:${index + 1}`, name, description, sourceEvidence })) },
 ];
 
@@ -80,8 +80,17 @@ const main = async () => {
   const decision = await routeEditorialInteriorsV1Export({ company, profile: { companyName: company.name, companyType: "Sales Technology Company", sections: boundary.sections }, projects: [] }, async () => ({ width: 640, height: 640 }));
   assert(decision.mode === "authored" && decision.familyId === "product-tech" && decision.packId === "product-tech-v1", `WinX authored routing failed: ${JSON.stringify(decision.reasons)}`);
   assert(decision.pageOrder[0] === "authored-cover-v1.dynamic-bold", "WinX must select the deterministic technical cover.");
+  assert(decision.pageOrder[3] === "product-tech-v1.features-continuation-3", "The real export path must select the fixed three-item feature continuation.");
+  const rawPages = (decision.pdf.internal as unknown as { pages: string[][] }).pages;
+  const page3 = rawPages[3].join("\n"); const page4 = rawPages[4].join("\n");
+  assert(page3.includes("Platform Capabilities") && page3.includes("Present campaign, promoter"), "Page 3 must own the full feature introduction.");
+  assert(page4.includes("FEATURES / CONTINUED") && page4.includes("MORE CAPABILITIES"), "Page 4 must use the authored compact continuation treatment.");
+  assert(!page4.includes("Platform Capabilities") && !page4.includes("Present campaign, promoter"), "Page 4 must not repeat the feature title or description.");
   const pdf = Buffer.from(decision.pdf.output("arraybuffer")).toString("latin1"); assert(!/pexels|image credits/i.test(pdf), "WinX unexpectedly reached legacy image rendering.");
-  console.log(JSON.stringify({ ids: boundary.sections.map((section) => section.id), normalization: normalized.sections.map((entry) => ({ id: entry.section.id, role: entry.role })), ranking: { corporate: corporate?.score, productTech: product?.score, selected: ranking.selectedFamilyId }, decision: { mode: decision.mode, familyId: decision.familyId, packId: decision.packId } }));
+  const reviewPath = resolve("artifacts/manual-review/product-tech-v1-winx-real-ui-continuation-fix.pdf");
+  mkdirSync(resolve("artifacts/manual-review"), { recursive: true });
+  writeFileSync(reviewPath, Buffer.from(decision.pdf.output("arraybuffer")));
+  console.log(JSON.stringify({ ids: boundary.sections.map((section) => section.id), normalization: normalized.sections.map((entry) => ({ id: entry.section.id, role: entry.role })), ranking: { corporate: corporate?.score, productTech: product?.score, selected: ranking.selectedFamilyId }, decision: { mode: decision.mode, familyId: decision.familyId, packId: decision.packId, pageOrder: decision.pageOrder }, reviewPath }));
 };
 
 main().catch((error) => { console.error(error); process.exitCode = 1; });

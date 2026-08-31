@@ -39,7 +39,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     : validateAuthoredImageOperationalLimits(input.company, input.projects);
   if (operationalIssues.length) return fallback(operationalIssues.map((issue) => ({ stage: "operational", code: issue.code, path: issue.path, pageRole: null })));
   const productTechSignal = isProductTechCompanyType(input.profile.companyType);
-  const normalizedRoles = normalizeProductionSectionRoles(input.profile.sections, { productTech: productTechSignal && input.projects.length === 0, corporateServices: isCorporateServicesCompanyType(input.profile.companyType) });
+  const normalizedRoles = normalizeProductionSectionRoles(input.profile.sections, { productTech: productTechSignal && input.projects.length === 0, corporateServices: isCorporateServicesCompanyType(input.profile.companyType), visualPortfolio: input.projects.length > 0 });
   if (normalizedRoles.diagnostics.length > 0) return fallback(normalizedRoles.diagnostics.map(normalizationReason));
   const narrativeEntry = normalizedRoles.sections.find((entry) => entry.role === "narrative");
   const servicesEntry = normalizedRoles.sections.find((entry) => entry.role === "services") ?? normalizedRoles.sections.find((entry) => entry.role === "expertise");
@@ -56,6 +56,8 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
   const enriched = await enrichProductionContentForAuthoredTemplates(input, decodeDimensions);
   const logoDiagnostics = enriched.diagnostics.filter((issue) => issue.path === "company.logoUrl");
   if (logoDiagnostics.length) return fallback(logoDiagnostics.map(enrichmentReason));
+  const projectImageDiagnostics = enriched.diagnostics.filter((issue) => issue.path.startsWith("projects.") && (issue.code.startsWith("image_") || issue.code === "authentic_project_image_metadata_missing"));
+  if (projectImageDiagnostics.length) return fallback(projectImageDiagnostics.map(enrichmentReason));
   const visualByProjectId = new Map(enriched.adapterInput.projectVisuals.map((visual) => [visual.projectId, visual]));
   const units = normalizeAuthoredContentUnits({ company: {}, sections: [
     { id: narrativeEntry.section.id, role: "narrative", content: narrativeEntry.section.content },
@@ -64,6 +66,10 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     ...(featuresEntry ? [{ id: featuresEntry.section.id, role: "features" as const, items: featuresEntry.section.items.map((_, index) => ({ id: `${featuresEntry.section.id}:item:${index}` })) }] : []),
     ...(useCasesEntry ? [{ id: useCasesEntry.section.id, role: "use_cases" as const, items: useCasesEntry.section.items.map((_, index) => ({ id: `${useCasesEntry.section.id}:item:${index}` })) }] : []),
   ], projects: input.projects.map((project) => ({ id: project.id, hasAuthenticImage: visualByProjectId.has(project.id) })) });
+  if (projectsEntry) {
+    const missingProjectVisuals: AuthoredExportFallbackReason[] = input.projects.flatMap((project, index) => visualByProjectId.has(project.id) ? [] : [{ stage: "enrichment", code: "authentic_project_image_metadata_missing", path: `projects.${index}.imageUrl`, pageRole: "project_grid" }]);
+    if (missingProjectVisuals.length > 0) return fallback(missingProjectVisuals);
+  }
   const ranking = explainAuthoredTemplateFamilyRanking(authoredTemplateFamilies, createContentShape(units, null, productTechSignal));
   const selectedFamily = ranking.selectedFamilyId;
   if (!selectedFamily) return fallback([{ stage: "ranking", code: "no_eligible_authored_family", path: "contentShape", pageRole: null }], ranking);
@@ -105,7 +111,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
 
   if (!servicesEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
   if (narrativeEntry.section.items.length > 1) return fallback([{ stage: "planning", code: "source_content_not_covered", path: `profile.sections.${input.profile.sections.indexOf(narrativeEntry.section)}.items`, pageRole: "narrative" }], ranking);
-  if (servicesEntry.section.items.length !== 4 && !(servicesEntry.section.items.length === 6 && corporateDetailEntries.length > 0)) return fallback([{ stage: "planning", code: "capability_count_unsupported", path: `profile.sections.${input.profile.sections.indexOf(servicesEntry.section)}.items`, pageRole: "capabilities" }], ranking);
+  if (servicesEntry.section.items.length < 4 || servicesEntry.section.items.length > 12) return fallback([{ stage: "planning", code: "capability_count_unsupported", path: `profile.sections.${input.profile.sections.indexOf(servicesEntry.section)}.items`, pageRole: "capabilities" }], ranking);
   const imageDiagnostics = enriched.diagnostics.filter((issue) => issue.code.startsWith("image_") || issue.code === "authentic_project_image_metadata_missing");
   if (imageDiagnostics.length > 0) return fallback(imageDiagnostics.map(enrichmentReason), ranking);
   const missingVisuals: AuthoredExportFallbackReason[] = input.projects.flatMap((project, index) => visualByProjectId.has(project.id) ? [] : [{ stage: "enrichment", code: "authentic_project_image_metadata_missing", path: `projects.${index}.imageUrl`, pageRole: "project_grid" }]);
@@ -118,6 +124,12 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     if (!visual) throw new Error(`Verified visual ${projectId} became unavailable.`);
     return { role: visual.role, provenance: visual.provenance, format: visual.format, width: visual.width, height: visual.height, source: visual.imageUrl, projectId } as const;
   };
+  const useSupportingDetail = servicesEntry.section.items.length === 6 && corporateDetailEntries.length > 0;
+  const continuationItems = servicesEntry.section.items.slice(useSupportingDetail ? 6 : 4);
+  const capabilityContinuations = Array.from({ length: Math.ceil(continuationItems.length / 4) }, (_, pageIndex) => {
+    const items = continuationItems.slice(pageIndex * 4, pageIndex * 4 + 4);
+    return { contentId: `${servicesEntry.section.id}:continuation:${pageIndex}`, eyebrow: "CAPABILITIES / CONTINUED", heading: "More ways we shape interiors.", supportingLine: servicesEntry.section.description, capabilities: items.map((item, itemIndex) => ({ index: String((useSupportingDetail ? 7 : 5) + pageIndex * 4 + itemIndex).padStart(2, "0"), title: item.name, description: item.description, items: [] })) };
+  });
   const planning = createVisualPortfolioDocumentPlan({
     units,
     cover, coverTemplateId: coverSelection.templateId,
@@ -125,11 +137,12 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     capabilities: { contentId: servicesEntry.section.id, eyebrow: "02 / CAPABILITIES", heading: servicesEntry.section.title, supportingLine: servicesEntry.section.description, capabilities: servicesEntry.section.items.slice(0, 4).map((item, index) => ({ index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as unknown as readonly [
       { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] },
     ] },
-    ...(servicesEntry.section.items.length === 6 ? { capabilitiesSupporting: {
+    ...(useSupportingDetail ? { capabilitiesSupporting: {
       contentId: `${servicesEntry.section.id}:supporting`, eyebrow: "CAPABILITIES / CONTINUED", heading: "Crafted around every interior.",
       capabilities: servicesEntry.section.items.slice(4).map((item, index) => ({ index: String(index + 5).padStart(2, "0"), title: item.name, description: item.description, items: [] })) as never,
       detail: { contentId: corporateDetailEntries[0].section.id, title: corporateDetailEntries[0].section.title, body: corporateDetailEntries[0].section.content },
     } } : {}),
+    ...(capabilityContinuations.length ? { capabilityContinuations } : {}),
     details: corporateDetailEntries.map((entry) => ({ contentId: entry.section.id, title: entry.section.title, body: entry.section.content })),
     projects: input.projects.map((project) => ({ contentId: project.id, name: project.name, description: project.description, image: toImage(project.id) })),
   });

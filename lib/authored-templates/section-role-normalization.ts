@@ -51,7 +51,7 @@ const normalizeId = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g
 
 export const normalizeProductionSectionRoles = (
   sections: readonly ProductionSectionForNormalization[],
-  options: { productTech?: boolean; corporateServices?: boolean } = {},
+  options: { productTech?: boolean; corporateServices?: boolean; visualPortfolio?: boolean } = {},
 ): SectionRoleNormalizationResult => {
   const normalized: { section: ProductionSectionForNormalization; role: ProductionSectionRole }[] = [];
   const diagnostics: SectionRoleDiagnostic[] = [];
@@ -70,7 +70,7 @@ export const normalizeProductionSectionRoles = (
       diagnostics.push({ code: "ambiguous_semantic_role", path: `sections.${index}.id`, sectionId: section.id, role: null });
       return;
     }
-    if (!options.corporateServices && (matches[0] === "approach" || matches[0] === "supporting_narrative")) {
+    if (!options.corporateServices && !options.visualPortfolio && (matches[0] === "approach" || matches[0] === "supporting_narrative")) {
       diagnostics.push({ code: "unknown_semantic_role", path: `sections.${index}.id`, sectionId: section.id, role: null });
       return;
     }

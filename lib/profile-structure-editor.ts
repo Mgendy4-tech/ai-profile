@@ -115,3 +115,22 @@ export const moveApprovedServiceItem = (structure: EditableProfileStructure, sec
   [items[from], items[to]] = [items[to], items[from]];
   return { ...section, items };
 });
+
+export const moveApprovedSection = (structure: EditableProfileStructure, sectionId: string, direction: -1 | 1): EditableProfileStructure => {
+  const sections = [...structure.recommendedSections];
+  const from = sections.findIndex((section) => section.id === sectionId);
+  const to = from + direction;
+  if (from < 0 || to < 0 || to >= sections.length) return structure;
+  [sections[from], sections[to]] = [sections[to], sections[from]];
+  return { ...structure, recommendedSections: sections };
+};
+
+export const isCustomSection = (section: SelectedProfileSection): boolean => section.id.startsWith("custom-");
+
+export const deleteApprovedCustomSection = (structure: EditableProfileStructure, sectionId: string): StructureEditResult => {
+  const section = structure.recommendedSections.find((candidate) => candidate.id === sectionId);
+  if (!section || !isCustomSection(section)) return { valid: false, structure, error: "Only sections added by you can be deleted." };
+  const next = { ...structure, recommendedSections: structure.recommendedSections.filter((candidate) => candidate.id !== sectionId) };
+  const error = validateApprovedStructure(next);
+  return error ? { valid: false, structure, error } : { valid: true, structure: next, error: null };
+};

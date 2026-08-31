@@ -9,6 +9,8 @@
     "lint": "eslint"
     ,"readiness": "npx tsx --env-file=.env.local lib/check-production-readiness.ts"
     ,"smoke:post-deploy": "node lib/browser-three-family-go-live.cjs"
+    ,"test:aurelia-upload-browser": "node lib/browser-aurelia-upload-persistence.cjs"
+    ,"test:aurelia-seven-capabilities": "npx tsx lib/authored-templates/test-aurelia-seven-capabilities.ts"
   },
   "dependencies": {
     "jspdf": "^4.2.1",

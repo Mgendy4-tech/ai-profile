@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 import { routeEditorialInteriorsV1Export } from "./export-orchestrator";
 import type { ProductionEnrichmentInput } from "./enrichment";
-import { containImageInFrame } from "./packs/logo";
+import { classifyAuthoredLogoShape, containImageInFrame } from "./packs/logo";
 import { corporateServicesCoverTemplate } from "./packs/corporate-services-v1/cover";
 import { editorialInteriorsCoverTemplate } from "./packs/editorial-interiors-v1/cover";
 import { productTechCoverTemplate } from "./packs/product-tech-v1/cover";
@@ -75,6 +75,8 @@ const run = async () => {
     const placement = containImageInFrame({ x: 10, y: 20, width: 40, height: 20 }, candidate.width / candidate.height);
     assert(placement.x >= 10 && placement.y >= 20 && placement.x + placement.width <= 50.0001 && placement.y + placement.height <= 40.0001, "Contain placement must stay inside the fixed frame.");
     assert(Math.abs(placement.width / placement.height - candidate.width / candidate.height) < 0.0001, "Contain placement must preserve aspect ratio.");
+    const expectedShape = candidate.width / candidate.height >= 1.8 ? "wide" : candidate.width / candidate.height <= 0.72 ? "tall" : "balanced";
+    assert(classifyAuthoredLogoShape(candidate.width / candidate.height) === expectedShape, "Logo shape classification must be deterministic.");
   }
   const wrongProvenance = corporateServicesCoverTemplate.prepare({ contentId: "company", documentLabel: "COMPANY PROFILE", companyName: "Northbridge Advisory", companyType: "Business advisory", logo: { ...logoValue(square), provenance: "pexels" } });
   assert(!wrongProvenance.compatible && wrongProvenance.issues.some((issue) => issue.code === "image_provenance_not_allowed"), "Contextual provenance must never enter a company-logo slot.");

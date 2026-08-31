@@ -106,7 +106,9 @@ for (const templates of [corporateServicesPrimaryTemplates, corporateServicesCon
   const count = templateIndex + 1;
   const candidate: CorporateServicesPageContent = { contentId: `geometry:${template.id}`, heading: "Services designed around business clarity", supportingLine: "Fictional test capabilities presented without invented outcomes.", services: Array.from({ length: count }, (_, index) => { const item = service(index, true); return { contentId: `geometry:${template.id}:${index}`, index: String(index + 1).padStart(2, "0"), title: item.name, description: item.description }; }) };
   const prepared = template.prepare(candidate); assert(prepared.compatible, `${template.id} geometry fixture must satisfy its envelope.`); if (!prepared.compatible) continue;
+  if (template.pageRole === "continuation") assert(!prepared.instance.preparedSlots.heading && !prepared.instance.preparedSlots.supportingLine, `${template.id} must not prepare the primary services introduction.`);
   const pdf = new jsPDF({ unit: "mm", format: "a4" }); const audit = template.render(pdf, prepared.instance);
+  if (template.pageRole === "continuation") assert(!audit.renderedTextBySlot.heading && !audit.renderedTextBySlot.supportingLine, `${template.id} must not repeat the services title or description.`);
   const rowHeight = (CORPORATE_SERVICES_TEXT_GEOMETRY.bottom - CORPORATE_SERVICES_TEXT_GEOMETRY.top) / count;
   for (let index = 0; index < count; index += 1) {
     const titleLines = audit.renderedTextBySlot[`service${index}Title`]; const descriptionLines = audit.renderedTextBySlot[`service${index}Description`];

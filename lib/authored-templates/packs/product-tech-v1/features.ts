@@ -19,8 +19,10 @@ export const PRODUCT_FEATURE_CONTINUATION_GEOMETRY: Readonly<Record<1 | 2 | 3 | 
 
 const templateFor = (definition: Definition): AuthoredPageTemplate<ProductFeaturesPageContent> => {
   const envelope: ContentEnvelope = { slots: [
-    { id: "heading", path: "heading", kind: "text", required: true, fontFamily: "helvetica", fontStyle: "bold", fontSize: 25, widthMm: 130, maxLines: 2 },
-    { id: "supportingLine", path: "supportingLine", kind: "text", required: false, fontFamily: "helvetica", fontStyle: "normal", fontSize: 9.25, widthMm: 130, maxLines: 3 },
+    ...(!definition.continuation ? [
+      { id: "heading", path: "heading", kind: "text" as const, required: true, fontFamily: "helvetica", fontStyle: "bold" as const, fontSize: 25, widthMm: 130, maxLines: 2 },
+      { id: "supportingLine", path: "supportingLine", kind: "text" as const, required: false, fontFamily: "helvetica", fontStyle: "normal" as const, fontSize: 9.25, widthMm: 130, maxLines: 3 },
+    ] : []),
     { id: "features", path: "features", kind: "collection", required: true, minItems: definition.count, maxItems: definition.count },
     ...Array.from({ length: definition.count }, (_, index) => [
       { id: `feature${index}Title`, path: `features.${index}.title`, kind: "text" as const, required: true, fontFamily: "helvetica", fontStyle: "bold" as const, fontSize: 14, widthMm: 70, maxLines: 2 },
@@ -35,9 +37,13 @@ const templateFor = (definition: Definition): AuthoredPageTemplate<ProductFeatur
       const geometry = definition.continuation ? PRODUCT_FEATURE_CONTINUATION_GEOMETRY[definition.count] : FOUR_GRID;
       pdf.setFillColor(...v.palette.ink); pdf.rect(0, 0, 210, 34, "F"); pdf.setFillColor(...v.palette.signal); pdf.rect(176, 16, 15, 2.5, "F");
       pdf.setTextColor(...v.palette.white); pdf.setFont("courier", "bold"); pdf.setFontSize(7.5); pdf.text(definition.continuation ? "FEATURES / CONTINUED" : "02 / FEATURES", 19, 21);
-      const heading = productText(instance, "heading"); const support = productText(instance, "supportingLine"); audit.heading = heading.lines; audit.supportingLine = support.lines;
-      pdf.setTextColor(...v.palette.ink); pdf.setFont("helvetica", "bold"); pdf.setFontSize(25); pdf.setLineHeightFactor(1); pdf.text([...heading.lines], 19, 62);
-      pdf.setTextColor(...v.palette.secondary); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.25); pdf.setLineHeightFactor(1.35); pdf.text([...support.lines], 19, 88);
+      if (definition.continuation) {
+        pdf.setTextColor(...v.palette.ink); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13); pdf.text("MORE CAPABILITIES", 19, 67);
+      } else {
+        const heading = productText(instance, "heading"); const support = productText(instance, "supportingLine"); audit.heading = heading.lines; audit.supportingLine = support.lines;
+        pdf.setTextColor(...v.palette.ink); pdf.setFont("helvetica", "bold"); pdf.setFontSize(25); pdf.setLineHeightFactor(1); pdf.text([...heading.lines], 19, 62);
+        pdf.setTextColor(...v.palette.secondary); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.25); pdf.setLineHeightFactor(1.35); pdf.text([...support.lines], 19, 88);
+      }
       pdf.setDrawColor(...v.palette.line); pdf.setLineWidth(0.35); geometry.horizontalRules.forEach((y) => pdf.line(19, y, 191, y)); geometry.verticalRules.forEach((rule) => pdf.line(rule.x, rule.y1, rule.x, rule.y2));
       instance.source.features.forEach((feature, index) => {
         const cell = geometry.cells[index]; const title = productText(instance, `feature${index}Title`); const description = productText(instance, `feature${index}Description`); audit[`feature${index}Title`] = title.lines; audit[`feature${index}Description`] = description.lines;

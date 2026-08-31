@@ -1,5 +1,5 @@
-import { validateGeneratedProfileSections, type GeneratedProfileSection } from "./generated-profile-boundary";
-import { addApprovedServiceItem, addApprovedStructuredItem, deleteApprovedServiceItem, editApprovedSection, editApprovedServiceItem, moveApprovedServiceItem, validateApprovedStructure, type EditableProfileStructure } from "./profile-structure-editor";
+import { createStableCustomSectionId, persistApprovedProfileStructure, readPersistedApprovedProfileStructure, validateGeneratedProfileSections, type GeneratedProfileSection } from "./generated-profile-boundary";
+import { addApprovedServiceItem, addApprovedStructuredItem, deleteApprovedCustomSection, deleteApprovedServiceItem, editApprovedSection, editApprovedServiceItem, moveApprovedSection, moveApprovedServiceItem, validateApprovedStructure, type EditableProfileStructure } from "./profile-structure-editor";
 import { clearInheritedAssetsForIdentityEdit, isolateNewCompanyState, resolveExportCompanyState } from "./profile-state-isolation";
 import { validateAnalyzedProfileStructure } from "./profile-structure-boundary";
 import { normalizeCompanyData } from "./company-data";
@@ -24,6 +24,19 @@ assert(structure.recommendedSections[1].items![0].id === originalIds[1], "Reorde
 structure = deleteApprovedServiceItem(structure, "services", originalIds[2]);
 assert(structure.recommendedSections[1].items!.length === 2 && !structure.recommendedSections[1].items!.some((item) => item.id === originalIds[2]), "Delete must remove only the selected stable item.");
 assert(validateApprovedStructure(structure) === null, "The edited structure must remain valid.");
+
+const customId = createStableCustomSectionId("Solutions Brief", structure.recommendedSections.map((section) => section.id));
+structure = { ...structure, recommendedSections: [...structure.recommendedSections, { id: customId, displayTitle: "Solutions Brief", description: "A source-backed summary of company solutions." }] };
+const editedCustom = editApprovedSection(structure, customId, { displayTitle: "Our Solutions", description: "A concise source-backed summary of company solutions." });
+assert(editedCustom.valid); structure = moveApprovedSection(editedCustom.structure, customId, -1);
+assert(structure.recommendedSections[1].id === customId && structure.recommendedSections[0].id === "about", "Section reorder must preserve every existing section ID.");
+let saved = "";
+persistApprovedProfileStructure({ setItem: (_key, value) => { saved = value; } }, { name: "Northbridge Advisory" }, structure, structure.recommendedSections.map((section) => section.id));
+const reloaded = readPersistedApprovedProfileStructure({ getItem: () => saved });
+assert(reloaded?.structure.recommendedSections[1].id === customId && reloaded.structure.recommendedSections[1].displayTitle === "Our Solutions", "Persist and reload must retain edited custom content and identity.");
+const deletedCustom = deleteApprovedCustomSection(structure, customId);
+assert(deletedCustom.valid && !deletedCustom.structure.recommendedSections.some((section) => section.id === customId), "Customers must be able to delete only their custom section without renumbering other identities.");
+structure = deletedCustom.structure;
 
 let capacity = structure;
 while (capacity.recommendedSections[1].items!.length < 12) {
