@@ -84,7 +84,7 @@ import { companySemanticText, companySourceMaterial, normalizeCompanyData, type 
 import { resolveExportCompanyState } from "@/lib/profile-state-isolation";
 import { createGenerationAttemptGuard, exportProgressMessage, generationProgressMessage, type GenerationOperation } from "@/lib/generation-progress";
 import { optimizeAuthoredLogoImage, optimizeAuthoredProjectImages } from "@/lib/authored-image-optimization";
-import { mustBlockLegacyFallback } from "@/lib/authored-export-policy";
+import { authoredExportPolicyCode, mustBlockLegacyFallback } from "@/lib/authored-export-policy";
 import { reconstructPersistedProjects } from "@/lib/persisted-projects";
 import { authoredDevelopmentFailureMessage, createAuthoredRejectionDiagnostic, type AuthoredExportDevelopmentDiagnostic } from "@/lib/authored-export-diagnostics";
 
@@ -776,6 +776,11 @@ setProfile({
       const persistedProjects = reconstructPersistedProjects(persistedProjectsDataRaw);
       if (persistedProjects.issues.length) throw new Error("persisted_project_state_invalid");
       const authoredProjects = persistedProjects.projects;
+      const generatedProjectCount = profile.projects.length;
+      const authoredPolicyEvidence = {
+        persistedProjectCount: persistedProjects.persistedCount,
+        generatedProjectCount,
+      };
       if (process.env.NODE_ENV !== "production") console.debug("[authored-export-runtime]", {
         persistedProjectsDataRaw,
         companyName: companyData.name,
@@ -784,7 +789,7 @@ setProfile({
         projectImagesPresent: authoredProjects.map((project) => Boolean(project.imageUrl)),
         approvedStructure: (profileStructure?.recommendedSections ?? []).map((section) => ({ id: section.id, role: section.semanticRole ?? null })),
         generatedStructure: profile.sections.map((section) => ({ id: section.id, role: (section as GeneratedSection & { semanticRole?: string }).semanticRole ?? null })),
-        projectFallbackGuard: mustBlockLegacyFallback(persistedProjects.persistedCount),
+        projectFallbackGuard: mustBlockLegacyFallback(authoredPolicyEvidence),
       });
 
       const originalImageIssues = validateAuthoredImageOperationalLimits(companyData, authoredProjects);
@@ -867,6 +872,18 @@ setProfile({
           })),
         });
       }
+      const policyCode = authoredExportPolicyCode(authoredPolicyEvidence);
+      const blockLegacyFallback = mustBlockLegacyFallback(authoredPolicyEvidence);
+      console.info("[authored-export-safe-decision]", JSON.stringify({
+        policyCode,
+        blockLegacyFallback,
+        persistedProjectCount: authoredPolicyEvidence.persistedProjectCount,
+        generatedProjectCount: authoredPolicyEvidence.generatedProjectCount,
+        authoredMode: authoredDecision.mode,
+        selectedFamily: authoredDecision.mode === "authored" ? authoredDecision.familyId : authoredDecision.ranking?.selectedFamilyId ?? null,
+        selectedPack: authoredDecision.packId,
+        reasonCodes: authoredDecision.reasons.map((reason) => reason.code),
+      }));
       if (authoredDecision.mode === "authored") {
         const serializationStartedAt = performance.now();
         const pdfBlob = authoredDecision.pdf.output("blob");
@@ -884,13 +901,13 @@ setProfile({
       fallbackDiagnostics = authoredDecision.reasons.map(({ stage, code, pageRole }) => ({ stage, code, pageRole }));
       const fallbackCategory = authoredDecision.reasons[0] ? classifyAuthoredFallbackReason(authoredDecision.reasons[0]) : "expected_unsupported_content_shape";
       emitProductionTelemetry({ name: "expected_fallback", failureClass: fallbackCategory === "authored_capacity_incompatibility" ? "operational_limit" : "expected_authored_incompatibility", category: fallbackCategory, reasonCodes: authoredDecision.reasons.map((reason) => reason.code) });
-      if (mustBlockLegacyFallback(persistedProjects.persistedCount)) {
+      if (blockLegacyFallback) {
         if (process.env.NODE_ENV !== "production") {
           authoredDevelopmentDiagnostic = createAuthoredRejectionDiagnostic(authoredDecision, authoredProjects);
           console.error("[authored-export-development-diagnostic]", authoredDevelopmentDiagnostic);
           void fetch("/api/dev/authored-export-diagnostic", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(authoredDevelopmentDiagnostic) }).catch((diagnosticError) => console.error("[authored-export-development-diagnostic-relay-failed]", diagnosticError));
         }
-        throw new Error("authored_visual_export_failed");
+        throw new Error(`authored_visual_export_failed:${policyCode}:${authoredDecision.reasons[0]?.code ?? "unknown_authored_rejection"}`);
       }
       const operationalFailure = authoredDecision.reasons.find((reason) => reason.stage === "operational");
       if (operationalFailure) {
@@ -1727,7 +1744,13 @@ setProfile({
       setExportMessageTone("success");
       setExportMessage("Your company profile is ready.");
     } catch (error) {
-      const reasonCode = error instanceof Error && ["page_count_limit", "pdf_byte_limit", "image_byte_limit", "total_image_byte_limit", "embedded_image_byte_limit", "image_format_limit", "image_dimension_limit", "image_optimization_failed", "authored_visual_export_failed", "persisted_project_state_invalid"].includes(error.message) ? error.message : "pdf_export_failed";
+      const rawErrorCode = error instanceof Error ? error.message : "";
+      const authoredFailure = rawErrorCode.startsWith("authored_visual_export_failed:");
+      const reasonCode = authoredFailure
+        ? "authored_visual_export_failed"
+        : ["page_count_limit", "pdf_byte_limit", "image_byte_limit", "total_image_byte_limit", "embedded_image_byte_limit", "image_format_limit", "image_dimension_limit", "image_optimization_failed", "persisted_project_state_invalid"].includes(rawErrorCode)
+          ? rawErrorCode
+          : "pdf_export_failed";
       if (process.env.NODE_ENV !== "production") console.debug("[profile-export-failure]", { reasonCode });
       emitProductionTelemetry({ name: "export_failed", failureClass: "export_failure", reasonCode, latencyMs: Date.now() - exportStartedAt });
       emitExportFailed(exportEventSink, exportEventId, exportStartedAt, Date.now());
@@ -1743,7 +1766,7 @@ setProfile({
               : reasonCode === "authored_visual_export_failed"
                 ? process.env.NODE_ENV !== "production" && authoredDevelopmentDiagnostic
                   ? authoredDevelopmentFailureMessage(authoredDevelopmentDiagnostic)
-                  : "Your project-based profile could not be rendered safely. Check that every saved project still has its uploaded image, then try again. No fallback PDF was created."
+                  : `Your project-based profile could not be rendered safely. No fallback PDF was created. Reference: ${rawErrorCode}`
               : reasonCode === "persisted_project_state_invalid"
                 ? "Your saved project data is incomplete or damaged. Reopen the project, confirm its uploaded image, and save it again. No fallback PDF was created."
               : `We couldn't create your PDF this time. Please try again. Reference: ${exportEventId}`);

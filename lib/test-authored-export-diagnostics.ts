@@ -20,5 +20,7 @@ assert.equal(diagnostic.failingTemplateOrPage, "project_feature");
 assert.deepEqual(diagnostic.images[0], { projectId: project.id, exists: true, sourceType: "data_url", mimeType: "image/jpeg", byteLength: 3, provenance: "user_upload", role: "project_image" });
 assert.match(authoredDevelopmentFailureMessage(diagnostic), /^Authored export failed: image_project_association_mismatch/);
 assert.equal(mustBlockLegacyFallback(1), true, "Diagnostics must not permit project-bearing legacy fallback.");
+assert.equal(mustBlockLegacyFallback({ persistedProjectCount: 0, generatedProjectCount: 1 }), true, "Generated project evidence must block legacy fallback even if runtime persistence reconstruction is empty.");
+assert.equal(mustBlockLegacyFallback({ persistedProjectCount: 0, generatedProjectCount: 0 }), false, "Project-free profiles may retain the explicit unsupported-content route.");
 assert.equal(decision.mode, "fallback", "Diagnostics must not turn a rejection into authored success.");
 console.log("Development authored-export diagnostics and fallback isolation tests passed.");

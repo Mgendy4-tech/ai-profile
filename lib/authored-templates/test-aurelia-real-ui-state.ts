@@ -53,8 +53,9 @@ const main = async () => {
   const missingImage = await routeEditorialInteriorsV1Export(input([{ ...project, imageUrl: "" }]), decode);
   assert(missingImage.mode === "fallback" && missingImage.reasons.some((reason) => reason.code === "authentic_project_image_metadata_missing"), "A Visual project without its required image must fail explicitly.");
   assert(mustBlockLegacyFallback(1) && !mustBlockLegacyFallback(0), "The UI policy must block legacy fallback only for project-bearing exports.");
+  assert(mustBlockLegacyFallback({ persistedProjectCount: 0, generatedProjectCount: 1 }), "Generated Riverside evidence must keep the no-fallback invariant active if persisted reconstruction is empty at export time.");
   const uiSource = readFileSync(resolve("app/generate/page.tsx"), "utf8");
-  const fallbackBlock = uiSource.indexOf("mustBlockLegacyFallback(persistedProjects.persistedCount)");
+  const fallbackBlock = uiSource.indexOf("mustBlockLegacyFallback(authoredPolicyEvidence)");
   const contextualRequest = uiSource.indexOf('"/api/select-visuals"', fallbackBlock);
   assert(fallbackBlock >= 0 && contextualRequest > fallbackBlock, "Project-bearing authored failure must be blocked before contextual API selection and legacy rendering.");
 
