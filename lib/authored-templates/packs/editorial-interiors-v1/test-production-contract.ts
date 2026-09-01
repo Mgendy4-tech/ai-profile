@@ -1,5 +1,6 @@
 import { adaptProductionContentToEditorialInteriorsV1 } from "../../adapter";
 import { enrichProductionContentForAuthoredTemplates, type ProductionEnrichmentInput } from "../../enrichment";
+import { routeEditorialInteriorsV1Export } from "../../export-orchestrator";
 import type { ImageSlotValue, PreparedTextSlot } from "../../types";
 import { editorialInteriorsCoverTemplate } from "./cover";
 import { editorialInteriorsProjectFeatureTemplate } from "./project-feature";
@@ -72,7 +73,13 @@ assert(optionalProject.compatible, "Verified optional metadata must remain suppo
 const excess = production();
 (excess.profile.sections[1].items as Array<{ name: string; description: string }>).push({ name: "Fifth", description: "Excess direct service." });
 const excessResult = await enrichProductionContentForAuthoredTemplates(excess, async () => ({ width: 1200, height: 1600 }));
-assert(excessResult.roleReadiness.find((role) => role.pageRole === "capabilities")?.status !== "candidate_available", "Excess service groups must be rejected without dropping content.");
+assert(excessResult.roleReadiness.find((role) => role.pageRole === "capabilities")?.status === "candidate_available", "Five supported capabilities must remain eligible for deterministic authored planning.");
+const excessDecision = await routeEditorialInteriorsV1Export(excess, async () => ({ width: 1200, height: 1600 }));
+assert(excessDecision.mode === "authored" && excessDecision.pageOrder.includes("editorial-interiors-v1.capabilities-continuation-1"), "Five capabilities must select the fixed one-item continuation variant.");
+if (excessDecision.mode === "authored") {
+  const raw = Buffer.from(excessDecision.pdf.output("arraybuffer")).toString("latin1");
+  assert(raw.split("Fifth").length - 1 === 1, "The fifth capability must be consumed exactly once without clipping or dropping content.");
+}
 
 console.log("Phase C.6 production contract tests passed.");
 };
