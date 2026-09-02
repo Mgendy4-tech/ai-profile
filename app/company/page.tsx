@@ -279,7 +279,7 @@ setTimeout(() => {
           Tell us about your company.
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6 rounded-xl bg-white p-5 shadow sm:p-8">
+        <form noValidate onSubmit={handleSubmit} className="mt-8 space-y-6 rounded-xl bg-white p-5 shadow sm:p-8">
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Company Name
