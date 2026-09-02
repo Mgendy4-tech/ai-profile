@@ -4,7 +4,8 @@ export type PageRole =
   | "capabilities"
   | "project_feature"
   | "project_grid"
-  | "continuation";
+  | "continuation"
+  | "closing";
 
 export type TemplateFontStyle =
   | "normal"
@@ -155,7 +156,10 @@ export type TemplateFamily =
   | "authored_cover_library"
   | "product_overview"
   | "product_features"
-  | "product_use_cases";
+  | "product_use_cases"
+  | "editorial_closing"
+  | "corporate_closing"
+  | "product_closing";
 
 export type TemplateRenderAudit = {
   templateId: string;

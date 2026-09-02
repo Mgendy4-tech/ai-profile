@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { reconstructPersistedProjects } from "../persisted-projects";
 import { enrichProductionContentForAuthoredTemplates } from "./enrichment";
@@ -29,13 +29,17 @@ const main = async () => {
   assert.equal(first.mode, "authored", `Seven-capability Aurelia rejected: ${first.mode === "fallback" ? JSON.stringify(first.reasons) : ""}`);
   assert.equal(first.familyId, "visual-portfolio"); assert.equal(first.packId, "editorial-interiors-v1");
   assert(first.pageOrder.includes("editorial-interiors-v1.capabilities-continuation-3"), "Seven capabilities must select the fixed three-item continuation variant.");
-  assert.equal(first.pdf.getNumberOfPages(), 7);
+  assert.equal(first.pdf.getNumberOfPages(), 8);
+  assert.equal(first.pageOrder.at(-1), "editorial-interiors-v1.closing");
   const firstBytes = Buffer.from(first.pdf.output("arraybuffer")); const secondBytes = Buffer.from(second.mode === "authored" ? second.pdf.output("arraybuffer") : new ArrayBuffer(0));
   assert(firstBytes.equals(secondBytes), "Seven-capability Aurelia PDF must be byte deterministic.");
   const raw = firstBytes.toString("latin1");
   capabilityNames.forEach((name) => assert.equal(raw.split(name).length - 1, 1, `${name} must render exactly once.`));
   assert(raw.includes("Riverside Residence") && raw.includes("/Subtype /Image"), "Riverside text and uploaded raster must render on the project page.");
   assert(!/pexels|image credits/i.test(raw), "No contextual imagery or image credits may enter Visual authored output.");
+  const reviewPath = resolve("artifacts/manual-review/visual-portfolio-v1-aurelia-seven-capabilities-closing-review.pdf");
+  mkdirSync(resolve("artifacts/manual-review"), { recursive: true });
+  writeFileSync(reviewPath, firstBytes);
 
   for (let count = 4; count <= 12; count += 1) {
     const names = Array.from({ length: count }, (_, index) => capabilityNames[index] ?? `Additional Capability ${index + 1}`);
@@ -43,6 +47,6 @@ const main = async () => {
     const decision = await routeEditorialInteriorsV1Export(rangeInput, decode);
     assert.equal(decision.mode, "authored", `Visual V1 capability count ${count} must be authored.`);
   }
-  console.log(JSON.stringify({ previousSupportedCounts: [4, 6], newSupportedCounts: "4-12", sevenCapabilityVariant: "editorial-interiors-v1.capabilities-continuation-3", pageCount: first.pdf.getNumberOfPages(), exactOnce: capabilityNames, project: { id: project.id, name: project.name, role: "project_image", provenance: "user_upload" }, deterministic: true, pexels: false, imageCredits: false }));
+  console.log(JSON.stringify({ previousSupportedCounts: [4, 6], newSupportedCounts: "4-12", sevenCapabilityVariant: "editorial-interiors-v1.capabilities-continuation-3", pageCount: first.pdf.getNumberOfPages(), exactOnce: capabilityNames, project: { id: project.id, name: project.name, role: "project_image", provenance: "user_upload" }, deterministic: true, pexels: false, imageCredits: false, reviewPath }));
 };
 main().catch((error) => { console.error(error); process.exitCode = 1; });

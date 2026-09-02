@@ -43,7 +43,7 @@ const main = async () => {
   const first = await routeEditorialInteriorsV1Export(input(reconstructed), decode);
   const second = await routeEditorialInteriorsV1Export(input(reconstructed), decode);
   assert(first.mode === "authored" && first.familyId === "visual-portfolio" && first.packId === "editorial-interiors-v1", "Real-UI Aurelia state must render through Visual authored mode.");
-  assert(first.pageOrder.at(-1) === "editorial-interiors-v1.project-feature", "Riverside must receive the authored project feature page.");
+  assert(first.pageOrder.at(-2) === "editorial-interiors-v1.project-feature" && first.pageOrder.at(-1) === "editorial-interiors-v1.closing", "Riverside must receive the authored project feature page before closing.");
   assert(Buffer.from(first.pdf.output("arraybuffer")).equals(Buffer.from(second.mode === "authored" ? second.pdf.output("arraybuffer") : new ArrayBuffer(0))), "Real-UI Aurelia export must be byte deterministic.");
   const raw = Buffer.from(first.pdf.output("arraybuffer")).toString("latin1");
   assert(raw.includes("Riverside Residence") && !/pexels|image credits/i.test(raw), "Authored output must contain Riverside and no legacy contextual markers.");
@@ -72,7 +72,7 @@ const main = async () => {
   assert(deleted.mode !== "authored" || deleted.familyId !== "visual-portfolio", "A deleted project must not survive as a ghost Visual project.");
   const secondProject = { ...project, id: "project:aurelia-second", name: "Courtyard Residence" };
   const multiple = await routeEditorialInteriorsV1Export(input([project, secondProject]), decode);
-  assert(multiple.mode === "authored" && multiple.pageOrder.at(-1) === "editorial-interiors-v1.project-grid-2", "Multiple reconstructed projects must preserve source order and fixed grid selection.");
+  assert(multiple.mode === "authored" && multiple.pageOrder.at(-2) === "editorial-interiors-v1.project-grid-2" && multiple.pageOrder.at(-1) === "editorial-interiors-v1.closing", "Multiple reconstructed projects must preserve source order and fixed grid selection before closing.");
   console.log("Aurelia real-UI persistence, provenance, failure-policy, and authored export tests passed.");
 };
 main().catch((error) => { console.error(error); process.exitCode = 1; });

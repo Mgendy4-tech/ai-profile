@@ -70,7 +70,8 @@ for (const count of [1, 2, 3, 4, 5, 6, 7, 8, 9, 12]) {
   const result = createVisualPortfolioDocumentPlan(input);
   assert(result.compatible, `${count} projects must produce a complete Visual plan.`);
   if (!result.compatible) throw new Error(`Expected ${count}-project plan.`);
-  const projectPages = result.plan.pages.slice(3);
+  const projectPages = result.plan.pages.filter((page) => page.pageId.startsWith("projects:"));
+  assert(result.plan.pages.at(-1)?.templateId === "editorial-interiors-v1.closing", `${count}-project plan must end on the authored closing page.`);
   assert(projectPages.map((page) => page.templateId).join("|") === expectedProjectTemplates[count].join("|"), `${count}-project template order must be fixed and deterministic.`);
   assert(projectPages.flatMap((page) => page.claims.filter((claim) => claim.mode === "consume").map((claim) => claim.contentId)).join("|") === input.projects.map((project) => project.contentId).join("|"), `${count} projects must remain in stable source order and be consumed exactly once.`);
   assert(validateDocumentCoverage(input.units, result.plan).complete, `${count}-project plan must pass the generic coverage ledger.`);
@@ -149,7 +150,7 @@ const legacyInput: EditorialInteriorsV1DocumentInput = { cover: one.cover, narra
 const legacyPrepared = prepareEditorialInteriorsV1Document(legacyInput);
 if (!legacyPrepared.compatible) throw new Error("Expected existing one-project preparation.");
 const legacyPdf = renderPreparedEditorialInteriorsV1Document(legacyPrepared.document).pdf;
-assert(Buffer.from(plannedPdf.output("arraybuffer")).equals(Buffer.from(legacyPdf.output("arraybuffer"))), "One-project output must remain byte-identical to the proven pack renderer.");
+assert(legacyPdf.getNumberOfPages() === 4 && plannedPdf.getNumberOfPages() === 5 && onePlan.plan.pages.at(-1)?.templateId === "editorial-interiors-v1.closing", "The production plan must preserve the proven four content pages and append exactly one closing page.");
 
 for (const count of [2, 4, 8, 12]) {
   const result = createVisualPortfolioDocumentPlan(fixture(count));

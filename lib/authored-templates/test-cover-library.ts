@@ -53,7 +53,7 @@ const aureliaInput = {
 const main = async () => {
 const first = await routeEditorialInteriorsV1Export(aureliaInput, async () => ({ width: 1600, height: 1200 })); const second = await routeEditorialInteriorsV1Export(aureliaInput, async () => ({ width: 1600, height: 1200 }));
 assert(first.mode === "authored" && second.mode === "authored" && first.familyId === "visual-portfolio" && first.packId === "editorial-interiors-v1", "Aurelia must remain authored Visual.");
-assert(first.pageOrder[0] === "authored-cover-v1.editorial-warm" && first.pageOrder.length === 5, "Aurelia must select the image-free editorial cover and remain five pages.");
+assert(first.pageOrder[0] === "authored-cover-v1.editorial-warm" && first.pageOrder.length === 6 && first.pageOrder.at(-1) === "editorial-interiors-v1.closing", "Aurelia must select the image-free editorial cover and end on its authored closing page.");
 const bytes = Buffer.from(first.pdf.output("arraybuffer")); assert(bytes.equals(Buffer.from(second.pdf.output("arraybuffer"))), "Aurelia repeated render must be byte-identical.");
 const raw = bytes.toString("latin1"); assert(!/pexels|image credits/i.test(raw), "Aurelia authored cover must not introduce contextual credits.");
 const aureliaPath = resolve("artifacts/manual-review/aurelia-image-free-cover-review.pdf"); writeFileSync(aureliaPath, bytes);

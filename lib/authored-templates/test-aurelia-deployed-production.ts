@@ -103,7 +103,7 @@ const main = async () => {
   assert(planning.plan.pages[0].claims.every((claim) => claim.contentId !== project.id), "Riverside must not be referenced by the cover.");
   const prepared = prepareVisualPortfolioDocumentPlan(planning.plan);
   assert(prepared.compatible, `Preflight failed: ${JSON.stringify(prepared.issues)}`);
-  assert(planning.plan.pages.length === 6 && planning.plan.pages[1].templateId === "editorial-interiors-v1.narrative-sparse-facts-3" && planning.plan.pages[3].templateId === "editorial-interiors-v1.capabilities-supporting-2" && planning.plan.pages[4].pageId === "detail:0", "Real-UI Aurelia must preserve its approach detail before the project feature page.");
+  assert(planning.plan.pages.length === 7 && planning.plan.pages[1].templateId === "editorial-interiors-v1.narrative-sparse-facts-3" && planning.plan.pages[3].templateId === "editorial-interiors-v1.capabilities-supporting-2" && planning.plan.pages[4].pageId === "detail:0" && planning.plan.pages.at(-1)?.templateId === "editorial-interiors-v1.closing", "Real-UI Aurelia must preserve its approach detail and terminal closing page.");
   assert(planning.plan.pages[3].claims.some((claim) => claim.contentId === project.id && claim.mode === "reference"), "Page 4 must reference the next project without consuming it.");
   const capabilityTemplates = planning.plan.pages.slice(2, 4).map((page) => editorialInteriorsV1Pack.templates.find((template) => template.id === page.templateId));
   assert(capabilityTemplates.every((template) => template && template.envelope.slots.every((slot) => slot.kind !== "image")), "No-media capability variants must not expose an empty image placeholder.");

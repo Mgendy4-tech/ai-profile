@@ -1,3 +1,5 @@
+import { experienceDurationLabel } from "./company-data";
+
 type PromptCompany = {
   companyType?: string;
   industry?: string;
@@ -24,7 +26,7 @@ export const semanticCoverageContract = (company: PromptCompany) => {
   ].filter((entry): entry is [string, string] => typeof entry[1] === "string" && Boolean(entry[1].trim()));
   const experience = company.experience?.trim() ?? "";
   const experienceInstruction = /^\d+(?:\.\d+)?$/.test(experience)
-    ? `- Include the exact phrase ${JSON.stringify(`${experience} years of experience`)} naturally in one approved narrative section.`
+    ? `- Include the exact phrase ${JSON.stringify(`${experienceDurationLabel(experience)} of experience`)} naturally in one approved narrative section.`
     : experience ? `- Include the supplied experience information ${JSON.stringify(experience)} naturally in one approved narrative section.` : "";
   return `
 SEMANTIC SOURCE COVERAGE CONTRACT:

@@ -87,6 +87,7 @@ import { optimizeAuthoredLogoImage, optimizeAuthoredProjectImages } from "@/lib/
 import { authoredExportPolicyCode, mustBlockLegacyFallback } from "@/lib/authored-export-policy";
 import { reconstructPersistedProjects } from "@/lib/persisted-projects";
 import { authoredDevelopmentFailureMessage, createAuthoredRejectionDiagnostic, type AuthoredExportDevelopmentDiagnostic } from "@/lib/authored-export-diagnostics";
+import { generatedProjectEvidenceCount, persistGeneratedProfile, readPersistedGeneratedProfile } from "@/lib/generated-profile-storage";
 
 type Project = {
   id?: string;
@@ -436,6 +437,8 @@ const [loading, setLoading] = useState(false);
 
 useEffect(() => {
   const restore = window.setTimeout(() => {
+    const generated = readPersistedGeneratedProfile(localStorage);
+    if (generated) setProfile(generated as GeneratedProfile);
     const persisted = readPersistedApprovedProfileStructure(localStorage);
     if (!persisted || validateApprovedStructure(persisted.structure) !== null) return;
     setProfileStructure(persisted.structure as ProfileStructure);
@@ -645,7 +648,7 @@ if (!validatedSections.valid) {
   throw new Error(generatedSectionsErrorMessage);
 }
 
-setProfile({
+const generatedProfile: GeneratedProfile = {
   companyName: companyData.name.trim(),
   logoUrl: companyData.logoUrl,
 
@@ -689,7 +692,9 @@ setProfile({
       ?.items?.map(
   (item: GeneratedSection["items"][number]) => item.name
 ) || [],
-});
+};
+setProfile(generatedProfile);
+persistGeneratedProfile(localStorage, generatedProfile);
 
       } catch (error) {
         setProfile(null);
@@ -776,7 +781,7 @@ setProfile({
       const persistedProjects = reconstructPersistedProjects(persistedProjectsDataRaw);
       if (persistedProjects.issues.length) throw new Error("persisted_project_state_invalid");
       const authoredProjects = persistedProjects.projects;
-      const generatedProjectCount = profile.projects.length;
+      const generatedProjectCount = generatedProjectEvidenceCount(profile);
       const authoredPolicyEvidence = {
         persistedProjectCount: persistedProjects.persistedCount,
         generatedProjectCount,

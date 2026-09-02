@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearInheritedAssetsForIdentityEdit, isolateNewCompanyState, isSameCompanyIdentity } from '@/lib/profile-state-isolation';
-import { emptyCompanyData, normalizeCompanyData, type CompanyData } from '@/lib/company-data';
+import { emptyCompanyData, experienceValidationMessage, normalizeCompanyData, type CompanyData } from '@/lib/company-data';
 import { resolveProjectsForCompanySave } from '@/lib/persisted-projects';
 
 type Project = {
@@ -240,6 +240,13 @@ export default function CompanyPage() {
       setSuccessMessage('');
       return;
     }
+
+    const experienceError = experienceValidationMessage(companyData.experience);
+    if (experienceError) {
+      setErrorMessage(experienceError);
+      setSuccessMessage('');
+      return;
+    }
     // Project save persists synchronously; prefer that snapshot over a possibly stale React closure.
     const isolated = isolateNewCompanyState(previousCompany, companyData, storedProjectSnapshot.projects, logoExplicitlySelected.current, explicitlyEditedFields.current, projectsExplicitlyEdited.current);
     isolated.clearKeys.forEach((key) => localStorage.removeItem(key));
@@ -373,6 +380,7 @@ setTimeout(() => {
 
             <input
               type="number"
+              min="0"
               placeholder="e.g. 20"
               value={companyData.experience}
               onChange={(event) => updateField('experience', event.target.value)}

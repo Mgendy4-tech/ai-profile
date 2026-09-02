@@ -75,12 +75,12 @@ const run = async () => {
   const valid = await routeEditorialInteriorsV1Export(fixture(), decode);
   assert(valid.mode === "authored", "Fully compatible production input must select authored mode.");
   if (valid.mode !== "authored") throw new Error("Expected authored decision.");
-  assert(valid.pdf.getNumberOfPages() === 4, "Authored export must contain exactly four pages.");
-  const expectedSparsePageOrder: string[] = [...EDITORIAL_INTERIORS_V1_PAGE_ORDER];
+  assert(valid.pdf.getNumberOfPages() === 5, "Authored export must contain four content pages and one closing page.");
+  const expectedSparsePageOrder: string[] = [...EDITORIAL_INTERIORS_V1_PAGE_ORDER, "editorial-interiors-v1.closing"];
   expectedSparsePageOrder[0] = "authored-cover-v1.editorial-warm";
   expectedSparsePageOrder[1] = editorialInteriorsSparseNarrativeTemplate.id;
   assert(valid.pageOrder.join("|") === expectedSparsePageOrder.join("|"), "Authored export must preserve the exact approved sparse narrative page order.");
-  for (let page = 1; page <= 4; page += 1) {
+  for (let page = 1; page <= 5; page += 1) {
     valid.pdf.setPage(page);
     assert(Math.abs(valid.pdf.internal.pageSize.getWidth() - 210) < 0.01 && Math.abs(valid.pdf.internal.pageSize.getHeight() - 297) < 0.01, `Page ${page} must be A4.`);
   }
@@ -131,8 +131,8 @@ const run = async () => {
   const multipleProjectsDecision = await routeEditorialInteriorsV1Export(multipleProjects, decode);
   assert(multipleProjectsDecision.mode === "authored" && multipleProjectsDecision.familyId === "visual-portfolio", "Two real production-shaped projects must route through ranked Visual / Portfolio authored mode.");
   if (multipleProjectsDecision.mode !== "authored") throw new Error("Expected multi-project authored decision.");
-  assert(multipleProjectsDecision.pageOrder.at(-1) === "editorial-interiors-v1.project-grid-2", "Two projects must preserve source order in the fixed grid-2 module.");
-  assert(multipleProjectsDecision.pdf.getNumberOfPages() === 4, "Two-project production output must contain the three shared pages plus one fixed project grid.");
+  assert(multipleProjectsDecision.pageOrder.at(-2) === "editorial-interiors-v1.project-grid-2" && multipleProjectsDecision.pageOrder.at(-1) === "editorial-interiors-v1.closing", "Two projects must preserve source order in the fixed grid-2 module before closing.");
+  assert(multipleProjectsDecision.pdf.getNumberOfPages() === 5, "Two-project production output must contain the shared pages, project grid, and closing page.");
   const pdfBytes = Buffer.from(multipleProjectsDecision.pdf.output("arraybuffer"));
   const raster = extractUnfilteredRgbImage(pdfBytes);
   assert(raster.width === REVIEW_DIMENSIONS.width && raster.height === REVIEW_DIMENSIONS.height, "PDF image dimensions must match the decoded persisted PNG.");

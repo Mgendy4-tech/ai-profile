@@ -60,3 +60,17 @@ export const companySourceMaterial = (company: CompanyData): string[] => [
   company.activities,
   company.experience,
 ].filter((value) => Boolean(value.trim()));
+
+export const experienceDurationLabel = (value: string): string => {
+  const normalized = value.trim();
+  return normalized === "1" ? "1 year" : `${normalized} years`;
+};
+
+export const experienceValidationMessage = (value: string): string | null => {
+  const normalized = value.trim();
+  if (!normalized) return null;
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) && numeric >= 0
+    ? null
+    : "Years of Experience must be 0 or greater.";
+};

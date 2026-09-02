@@ -1,3 +1,5 @@
+import { experienceDurationLabel } from "./company-data";
+
 export type SelectedProfileSection = {
   id: string;
   displayTitle: string;
@@ -219,8 +221,13 @@ export const validateGeneratedProfileSections = (
   });
   const experience = context.experienceYears?.trim() ?? "";
   if (/^\d+(?:\.\d+)?$/.test(experience)) {
+    const expectedExperience = `${experienceDurationLabel(experience)} of experience`;
+    if (experience === "1") validSections.forEach((section) => {
+      section.content = section.content.replace(/\b1 years of experience\b/gi, "1 year of experience");
+      section.items.forEach((item) => { item.description = item.description.replace(/\b1 years of experience\b/gi, "1 year of experience"); });
+    });
     const generatedText = normalizeEvidence(validSections.flatMap((section) => [section.content, ...section.items.flatMap((item) => [item.name, item.description])]).join("\n"));
-    if (!generatedText.includes(`${normalizeEvidence(experience)} years of experience`)) diagnostics.push({ code: "generated_experience_evidence_missing", sectionId: null, path: "sections" });
+    if (!generatedText.includes(normalizeEvidence(expectedExperience))) diagnostics.push({ code: "generated_experience_evidence_missing", sectionId: null, path: "sections" });
   }
   if (diagnostics.length > 0) return { valid: false, sections: null, diagnostics };
   return { valid: true, sections: selectedSections.map((section) => returnedById.get(section.id)!), diagnostics: [] };

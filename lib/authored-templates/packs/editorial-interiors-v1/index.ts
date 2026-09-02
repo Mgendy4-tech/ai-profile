@@ -21,6 +21,7 @@ import { editorialInteriorsProjectFeatureTemplate } from "./project-feature";
 import { editorialInteriorsMultiProjectTemplates } from "./portfolio-project-pages";
 import { editorialInteriorsV1VisualSystem } from "./visual-system";
 import { authoredCoverTemplates } from "../../cover-library";
+import { editorialInteriorsClosingTemplate } from "./closing";
 
 export const EDITORIAL_INTERIORS_V1_PAGE_ORDER = [
   editorialInteriorsCoverTemplate.id,
@@ -46,6 +47,7 @@ export const editorialInteriorsV1Pack = {
     ...editorialInteriorsCapabilitiesContinuationTemplates,
     ...editorialInteriorsMultiProjectTemplates,
     ...authoredCoverTemplates,
+    editorialInteriorsClosingTemplate,
   ],
 } as const satisfies TemplatePack;
 

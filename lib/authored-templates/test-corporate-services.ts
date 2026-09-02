@@ -170,7 +170,7 @@ const northbridgeInput: ProductionEnrichmentInput = { company: { name: "Northbri
 const northbridgeDecision = await routeEditorialInteriorsV1Export(northbridgeInput);
 assert(northbridgeDecision.mode === "authored" && northbridgeDecision.familyId === "corporate-services" && northbridgeDecision.packId === "corporate-services-v1", "Production-shaped Northbridge must render through Corporate authored orchestration, not legacy fallback.");
 if (northbridgeDecision.mode !== "authored") throw new Error(`Northbridge authored orchestration failed: ${JSON.stringify(northbridgeDecision.reasons)}`);
-assert(northbridgeDecision.pageOrder.slice(-3).join("|") === "corporate-services-v1.narrative-sparse|corporate-services-v1.narrative-sparse|corporate-services-v1.narrative-sparse", "Northbridge detail sections must use fixed existing Corporate narrative variants.");
+assert(northbridgeDecision.pageOrder.slice(-4, -1).join("|") === "corporate-services-v1.narrative-sparse|corporate-services-v1.narrative-sparse|corporate-services-v1.narrative-sparse" && northbridgeDecision.pageOrder.at(-1) === "corporate-services-v1.closing", "Northbridge detail sections must use fixed Corporate narrative variants before closing.");
 const northbridgeOutput = resolve("artifacts", "manual-review", "corporate-services-v1-northbridge-production-review.pdf");
 mkdirSync(dirname(northbridgeOutput), { recursive: true }); writeFileSync(northbridgeOutput, Buffer.from(northbridgeDecision.pdf.output("arraybuffer")));
 
@@ -183,7 +183,7 @@ assert(normalFirst.mode === "authored" && normalSecond.mode === "authored" && Bu
 
 for (const [label, input] of [["sparse", fixture(2, "sparse")], ["normal", fixture(6, "normal")], ["dense", fixture(9, "dense")]] as const) {
   const result = await routeEditorialInteriorsV1Export(input); if (result.mode !== "authored") throw new Error(`${label} review fixture was incompatible: ${JSON.stringify(result.reasons)}`);
-  const expectedPages = label === "sparse" ? 4 : label === "normal" ? 5 : 6;
+  const expectedPages = label === "sparse" ? 5 : label === "normal" ? 6 : 7;
   assert(result.pdf.getNumberOfPages() === expectedPages, `${label} must use the expected fixed page sequence.`);
   for (let page = 1; page <= expectedPages; page += 1) { result.pdf.setPage(page); assert(Math.abs(result.pdf.internal.pageSize.getWidth() - 210) < 0.01 && Math.abs(result.pdf.internal.pageSize.getHeight() - 297) < 0.01, `${label} page ${page} must be exact A4.`); }
   const output = resolve("artifacts", "manual-review", `corporate-services-v1-${label}-review.pdf`); mkdirSync(dirname(output), { recursive: true }); writeFileSync(output, Buffer.from(result.pdf.output("arraybuffer")));
