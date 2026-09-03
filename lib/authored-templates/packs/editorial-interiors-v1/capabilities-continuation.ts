@@ -4,10 +4,12 @@ import type { AuthoredPageTemplate, ContentEnvelope, TemplateInstance, TemplateR
 import type { CapabilitiesContinuationContent } from "./content";
 import { createEditorialInteriorsMeasurementContext, editorialInteriorsV1VisualSystem as visual, getPreparedText, paintPaper } from "./visual-system";
 
-const positions = [
-  { x: 19, y: 86 }, { x: 109, y: 86 },
-  { x: 19, y: 184 }, { x: 109, y: 184 },
-] as const;
+const positionsByCount = {
+  1: [{ x: 64, y: 126 }],
+  2: [{ x: 19, y: 126 }, { x: 109, y: 126 }],
+  3: [{ x: 64, y: 91 }, { x: 19, y: 190 }, { x: 109, y: 190 }],
+  4: [{ x: 19, y: 86 }, { x: 109, y: 86 }, { x: 19, y: 184 }, { x: 109, y: 184 }],
+} as const;
 
 const createTemplate = (count: 1 | 2 | 3 | 4): AuthoredPageTemplate<CapabilitiesContinuationContent> => {
   const envelope: ContentEnvelope = { slots: [
@@ -29,7 +31,7 @@ const createTemplate = (count: 1 | 2 | 3 | 4): AuthoredPageTemplate<Capabilities
       pdf.setTextColor(...visual.palette.secondary); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7.5); pdf.setCharSpace(0.7); pdf.text(instance.source.eyebrow, 19, 25); pdf.setCharSpace(0);
       pdf.setTextColor(...visual.palette.charcoal); pdf.setFont("times", "normal"); pdf.setFontSize(30); draw("heading", 19, 49);
       pdf.setTextColor(...visual.palette.secondary); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); draw("supportingLine", 19, 62);
-      instance.source.capabilities.forEach((capability, index) => { const origin = positions[index];
+      instance.source.capabilities.forEach((capability, index) => { const origin = positionsByCount[count][index];
         pdf.setDrawColor(...visual.palette.hairline); pdf.setLineWidth(0.25); pdf.line(origin.x, origin.y, origin.x + 82, origin.y);
         pdf.setTextColor(...visual.palette.ochre); pdf.setFont("times", "normal"); pdf.setFontSize(25); pdf.text(capability.index, origin.x, origin.y + 17);
         pdf.setTextColor(...visual.palette.charcoal); pdf.setFont("times", "bold"); pdf.setFontSize(15); pdf.setLineHeightFactor(1.05); draw(`capability${index}Title`, origin.x, origin.y + 31);

@@ -4,6 +4,7 @@ import { mustBlockLegacyFallback } from "../authored-export-policy";
 import { isolateNewCompanyState } from "../profile-state-isolation";
 import { reconstructPersistedProjects, resolveProjectsForCompanySave } from "../persisted-projects";
 import { routeEditorialInteriorsV1Export } from "./export-orchestrator";
+import { containsGeneratedFillerCopy, containsInternalPresentationCopy } from "./presentation-copy";
 
 const assert: (condition: unknown, message: string) => asserts condition = (condition, message) => { if (!condition) throw new Error(message); };
 const bytes = readFileSync(resolve("lib/test-fixtures/visual/aurelia-browser-upload.jpg"));
@@ -47,6 +48,10 @@ const main = async () => {
   assert(Buffer.from(first.pdf.output("arraybuffer")).equals(Buffer.from(second.mode === "authored" ? second.pdf.output("arraybuffer") : new ArrayBuffer(0))), "Real-UI Aurelia export must be byte deterministic.");
   const raw = Buffer.from(first.pdf.output("arraybuffer")).toString("latin1");
   assert(raw.includes("Riverside Residence") && !/pexels|image credits/i.test(raw), "Authored output must contain Riverside and no legacy contextual markers.");
+  const renderedCopy = ((first.pdf.internal as unknown as { pages: string[][] }).pages).flat().join("\n");
+  assert(!containsInternalPresentationCopy(renderedCopy) && !containsGeneratedFillerCopy(renderedCopy), "Visual PDF must not expose planning instructions or generated filler.");
+  assert(first.pageOrder.length === first.pdf.getNumberOfPages(), "Visual planned and rendered page counts must match.");
+  assert(!/(?:example\.com|info@company|\+1 000)/i.test(renderedCopy), "Visual PDF must not invent contact placeholders.");
   const identityTransitionDecision = await routeEditorialInteriorsV1Export(input(realBrowserReconstruction.projects.map((entry) => ({ ...entry, category: entry.category ?? "" }))), decode);
   assert(identityTransitionDecision.mode === "authored" && identityTransitionDecision.familyId === "visual-portfolio", "The exact identity-transition browser state must not reproduce the five-page legacy fallback.");
 

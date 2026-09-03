@@ -11,6 +11,9 @@
     ,"smoke:post-deploy": "node lib/browser-three-family-go-live.cjs"
     ,"test:aurelia-upload-browser": "node lib/browser-aurelia-upload-persistence.cjs"
     ,"test:aurelia-seven-capabilities": "npx tsx lib/authored-templates/test-aurelia-seven-capabilities.ts"
+    ,"qa:beta": "node lib/run-beta-qa.cjs"
+    ,"qa:beta:full": "node lib/run-beta-qa.cjs --full"
+    ,"qa:review-pack": "node lib/generate-authored-review-pack.cjs"
   },
   "dependencies": {
     "jspdf": "^4.2.1",

@@ -7,8 +7,8 @@ import { corporateServicesV1VisualSystem as v, createCorporateMeasurementContext
 type Definition = { count: 1 | 2 | 3 | 4; continuation: boolean; id: string; rowTops: readonly number[] };
 
 const FIXED_ROW_TOPS = {
-  1: [112],
-  2: [112, 194],
+  1: [151],
+  2: [130, 208],
   3: [112, 166.667, 221.333],
   4: [112, 153, 194, 235],
 } as const;

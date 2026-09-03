@@ -6,4 +6,4 @@ export type ProductFeature = { contentId: string; index: string; title: string; 
 export type ProductFeaturesPageContent = { contentId: string; heading: string; supportingLine: string; features: readonly ProductFeature[] };
 export type ProductUseCase = { contentId: string; index: string; title: string; description: string };
 export type ProductUseCasesPageContent = { contentId: string; heading: string; supportingLine: string; useCases: readonly ProductUseCase[] };
-export type ProductClosingContent = { contentId: string; companyName: string; logo?: ImageSlotValue };
+export type ProductClosingContent = { contentId: string; companyName: string; descriptor?: string; logo?: ImageSlotValue };

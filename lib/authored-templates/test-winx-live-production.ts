@@ -9,6 +9,7 @@ import { routeEditorialInteriorsV1Export } from "./export-orchestrator";
 import { explainAuthoredTemplateFamilyRanking } from "./family-ranking";
 import { authoredTemplateFamilies } from "./registry";
 import { normalizeProductionSectionRoles } from "./section-role-normalization";
+import { containsGeneratedFillerCopy, containsInternalPresentationCopy } from "./presentation-copy";
 
 const assert: (condition: unknown, message: string) => asserts condition = (condition, message) => { if (!condition) throw new Error(message); };
 const logoUrl = `data:image/png;base64,${readFileSync(resolve("lib/test-fixtures/logos/brand-square-transparent.png")).toString("base64")}`;
@@ -83,10 +84,14 @@ const main = async () => {
   assert(decision.pageOrder[3] === "product-tech-v1.features-continuation-3", "The real export path must select the fixed three-item feature continuation.");
   const rawPages = (decision.pdf.internal as unknown as { pages: string[][] }).pages;
   const page3 = rawPages[3].join("\n"); const page4 = rawPages[4].join("\n");
-  assert(page3.includes("Platform Capabilities") && page3.includes("Present campaign, promoter"), "Page 3 must own the full feature introduction.");
+  assert(page3.includes("Platform Capabilities") && page3.includes("structured view"), "Page 3 must own the customer-facing feature introduction.");
   assert(page4.includes("FEATURES / CONTINUED") && page4.includes("MORE CAPABILITIES"), "Page 4 must use the authored compact continuation treatment.");
-  assert(!page4.includes("Platform Capabilities") && !page4.includes("Present campaign, promoter"), "Page 4 must not repeat the feature title or description.");
+  assert(!page4.includes("Platform Capabilities") && !page4.includes("structured view"), "Page 4 must not repeat the feature title or description.");
   const pdf = Buffer.from(decision.pdf.output("arraybuffer")).toString("latin1"); assert(!/pexels|image credits/i.test(pdf), "WinX unexpectedly reached legacy image rendering.");
+  assert(!containsInternalPresentationCopy(rawPages.flat().join("\n")) && !containsGeneratedFillerCopy(rawPages.flat().join("\n")), "Product PDF must not expose planning instructions or generated filler.");
+  assert(decision.pageOrder.length === decision.pdf.getNumberOfPages(), "Product planned and rendered page counts must match.");
+  assert(rawPages.slice(1).every((page) => page.join("").trim()), "Product PDF must not contain a blank page.");
+  assert(!/(?:example\.com|info@company|\+1 000)/i.test(rawPages.flat().join("\n")), "Product PDF must not invent contact placeholders.");
   const reviewPath = resolve("artifacts/manual-review/product-tech-v1-winx-real-ui-continuation-fix.pdf");
   mkdirSync(resolve("artifacts/manual-review"), { recursive: true });
   writeFileSync(reviewPath, Buffer.from(decision.pdf.output("arraybuffer")));

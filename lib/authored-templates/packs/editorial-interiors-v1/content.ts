@@ -72,7 +72,7 @@ export type ProjectFeatureContent = {
   scope?: { title?: string; items: readonly string[] };
 };
 
-export type EditorialClosingContent = { contentId: string; companyName: string; logo?: ImageSlotValue };
+export type EditorialClosingContent = { contentId: string; companyName: string; descriptor?: string; logo?: ImageSlotValue };
 
 export type EditorialInteriorsV1DocumentInput = {
   cover: CoverContent;

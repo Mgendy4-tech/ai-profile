@@ -30,7 +30,7 @@ export const createProductTechDocumentPlan = (input: ProductTechPlanningInput): 
   };
   addChunks(input.features, 4, "product-tech-v1.features-", "product-tech-v1.features-continuation-", "features");
   if (useCases.length) addChunks(useCases, 3, "product-tech-v1.use-cases-", "product-tech-v1.use-cases-continuation-", "useCases");
-  pages.push({ pageId: "closing", templateId: "product-tech-v1.closing", pageRole: "closing", candidate: { contentId: input.cover.contentId, companyName: input.cover.companyName, logo: input.cover.logo }, claims: company ? [{ contentId: company.id, mode: "reference", slotId: "companyName" }] : [] });
+  pages.push({ pageId: "closing", templateId: "product-tech-v1.closing", pageRole: "closing", candidate: { contentId: input.cover.contentId, companyName: input.cover.companyName, descriptor: input.cover.companyType, logo: input.cover.logo }, claims: company ? [{ contentId: company.id, mode: "reference", slotId: "companyName" }] : [] });
   const plan: AuthoredDocumentPlan = { familyId: "product-tech", packId: productTechV1Pack.id, pages };
   const structure = validateAuthoredDocumentPlan(plan, [productTechV1Pack]); if (structure.length) return { compatible: false, plan: null, issues: structure.map((issue) => ({ code: "invalid_document_plan", path: issue.path, message: issue.message })) };
   const coverage = validateDocumentCoverage(input.units, plan); return coverage.complete ? { compatible: true, plan, issues: [] } : { compatible: false, plan: null, issues: coverage.issues };

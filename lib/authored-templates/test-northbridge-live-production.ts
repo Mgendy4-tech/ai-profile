@@ -10,6 +10,7 @@ import { rankAuthoredTemplateFamilies } from "./family-ranking";
 import { authoredTemplateFamilies } from "./registry";
 import { isCorporateServicesCompanyType, normalizeProductionSectionRoles } from "./section-role-normalization";
 import { selectAuthoredCover } from "./cover-library";
+import { containsGeneratedFillerCopy, containsInternalPresentationCopy } from "./presentation-copy";
 
 const assert: (condition: unknown, message: string) => asserts condition = (condition, message) => { if (!condition) throw new Error(message); };
 
@@ -90,9 +91,9 @@ assert(first.familyId === "corporate-services" && first.packId === "corporate-se
 assert(first.pageOrder[3] === "corporate-services-v1.services-continuation-1", "Northbridge must select the fixed one-item services continuation.");
 const rawPages = (first.pdf.internal as unknown as { pages: string[][] }).pages;
 const servicesPage = rawPages[3].join("\n"); const continuationPage = rawPages[4].join("\n");
-assert(servicesPage.includes("Consulting") && servicesPage.includes("Present only"), "First services page must own the full section introduction.");
+assert(servicesPage.includes("Consulting") && servicesPage.includes("structured view"), "First services page must own the customer-facing section introduction.");
 assert(continuationPage.includes("SERVICES / CONTINUED") && continuationPage.includes("Additional Services"), "Corporate continuation must use its compact authored treatment.");
-assert(!continuationPage.includes("Consulting & Advisory Services") && !continuationPage.includes("Present only the consulting"), "Corporate continuation must not repeat the services title or description.");
+assert(!continuationPage.includes("Consulting & Advisory Services") && !continuationPage.includes("structured view"), "Corporate continuation must not repeat the services title or description.");
 assert(JSON.stringify(first.pageOrder) === JSON.stringify(planning.plan.pages.map((page) => page.templateId)), "Traced plan and production decision page order must match.");
 const firstBytes = Buffer.from(first.pdf.output("arraybuffer"));
 const secondBytes = Buffer.from(second.pdf.output("arraybuffer"));
@@ -100,6 +101,10 @@ assert(firstBytes.equals(secondBytes), "Identical Northbridge inputs must produc
 const rawPdf = firstBytes.toString("latin1");
 assert(rawPdf.includes("Northbridge Advisory") && first.pageOrder[0] === "authored-cover-v1.corporate-clean", "PDF must contain Northbridge identity and the selected Corporate authored cover.");
 assert(!/pexels|image credits/i.test(rawPdf), "PDF must not contain legacy Pexels or image-credit markers.");
+assert(!containsInternalPresentationCopy(rawPages.flat().join("\n")) && !containsGeneratedFillerCopy(rawPages.flat().join("\n")), "Corporate PDF must not expose planning instructions or generated filler.");
+assert(first.pageOrder.length === first.pdf.getNumberOfPages() && first.pageOrder.length === planning.plan.pages.length, "Corporate planned and rendered page counts must match.");
+assert(rawPages.slice(1).every((page) => page.join("").trim()), "Corporate PDF must not contain a blank page.");
+assert(!/(?:example\.com|info@company|\+1 000)/i.test(rawPages.flat().join("\n")), "Corporate PDF must not invent contact placeholders.");
 const outputPath = resolve("artifacts/manual-review/corporate-services-v1-northbridge-live-production-review.pdf");
 const requestedOutputPath = resolve("artifacts/manual-review/corporate-services-v1-northbridge-continuation-logo-review.pdf");
 mkdirSync(dirname(outputPath), { recursive: true });

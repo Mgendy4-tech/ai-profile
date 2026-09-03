@@ -127,7 +127,7 @@ export const createVisualPortfolioDocumentPlan = (
     };
   }
 
-  pages.push({ pageId: "closing", templateId: "editorial-interiors-v1.closing", pageRole: "closing", candidate: { contentId: input.cover.contentId, companyName: input.cover.companyName, logo: input.cover.logo }, claims: company ? [{ contentId: company.id, mode: "reference", slotId: "companyName" }] : [] });
+  pages.push({ pageId: "closing", templateId: "editorial-interiors-v1.closing", pageRole: "closing", candidate: { contentId: input.cover.contentId, companyName: input.cover.companyName, descriptor: "companyType" in input.cover ? input.cover.companyType : undefined, logo: input.cover.logo }, claims: company ? [{ contentId: company.id, mode: "reference", slotId: "companyName" }] : [] });
 
   const plan: AuthoredDocumentPlan = { familyId: "visual-portfolio", packId: editorialInteriorsV1Pack.id, pages };
   const structureIssues = validateAuthoredDocumentPlan(plan, [editorialInteriorsV1Pack]);
