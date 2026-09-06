@@ -8,6 +8,12 @@ export type CompanyData = {
   servicesProducts: string;
   activities: string;
   experience: string;
+  website?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  socialUrl?: string;
+  brandColor?: string;
 };
 
 export const emptyCompanyData: CompanyData = {
@@ -20,9 +26,22 @@ export const emptyCompanyData: CompanyData = {
   servicesProducts: "",
   activities: "",
   experience: "",
+  website: "", email: "", phone: "", address: "", socialUrl: "", brandColor: "",
 };
 
-const stringValue = (value: unknown) => typeof value === "string" ? value : "";
+const stringValue = (value: unknown) => typeof value === "string" ? value.trim() : "";
+const hexColor = /^#[0-9a-f]{6}$/i;
+export const normalizeBrandColor = (value: unknown): string => {
+  const color = stringValue(value).toUpperCase();
+  return hexColor.test(color) ? color : "";
+};
+export const validateCompanyContacts = (company: Pick<CompanyData, "website" | "email" | "phone" | "socialUrl">) => {
+  const issues: Partial<Record<keyof typeof company, string>> = {};
+  if (company.website && !/^https?:\/\//i.test(company.website)) issues.website = "Use a full website URL starting with https://.";
+  if (company.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(company.email)) issues.email = "Enter a valid email address.";
+  if (company.socialUrl && !/^https?:\/\//i.test(company.socialUrl)) issues.socialUrl = "Use a full profile URL starting with https://.";
+  return issues;
+};
 
 /** Loads both the current schema and older saved objects without losing their logo. */
 export const normalizeCompanyData = (value: unknown): CompanyData => {
@@ -37,6 +56,8 @@ export const normalizeCompanyData = (value: unknown): CompanyData => {
     servicesProducts: stringValue(source.servicesProducts),
     activities: stringValue(source.activities),
     experience: stringValue(source.experience),
+    website: stringValue(source.website), email: stringValue(source.email), phone: stringValue(source.phone),
+    address: stringValue(source.address), socialUrl: stringValue(source.socialUrl), brandColor: normalizeBrandColor(source.brandColor),
   };
 };
 

@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearInheritedAssetsForIdentityEdit, isolateNewCompanyState, isSameCompanyIdentity } from '@/lib/profile-state-isolation';
-import { emptyCompanyData, experienceValidationMessage, normalizeCompanyData, type CompanyData } from '@/lib/company-data';
+import { emptyCompanyData, experienceValidationMessage, normalizeCompanyData, validateCompanyContacts, normalizeBrandColor, type CompanyData } from '@/lib/company-data';
 import { resolveProjectsForCompanySave } from '@/lib/persisted-projects';
 
 type Project = {
@@ -247,6 +247,17 @@ export default function CompanyPage() {
       setSuccessMessage('');
       return;
     }
+    const contactIssues = validateCompanyContacts(companyData);
+    if (Object.values(contactIssues).length) {
+      setErrorMessage(Object.values(contactIssues)[0] ?? 'Please check the contact information.');
+      setSuccessMessage('');
+      return;
+    }
+    if (companyData.brandColor && !normalizeBrandColor(companyData.brandColor)) {
+      setErrorMessage('Enter a brand color in six-digit hex format, such as #1F2937.');
+      setSuccessMessage('');
+      return;
+    }
     // Project save persists synchronously; prefer that snapshot over a possibly stale React closure.
     const isolated = isolateNewCompanyState(previousCompany, companyData, storedProjectSnapshot.projects, logoExplicitlySelected.current, explicitlyEditedFields.current, projectsExplicitlyEdited.current);
     isolated.clearKeys.forEach((key) => localStorage.removeItem(key));
@@ -343,6 +354,25 @@ setTimeout(() => {
             <label className="block text-sm font-medium text-gray-700">Company Type <span className="font-normal text-gray-500">(optional)</span></label>
             <input type="text" placeholder="e.g. Professional services company" value={companyData.companyType} onChange={(event) => updateField('companyType', event.target.value)} className={textFieldClass} />
           </div>
+
+          <section className="border-t border-gray-200 pt-6">
+            <h2 className="text-xl font-semibold text-gray-900">Brand Kit</h2>
+            <p className="mt-1 text-sm text-gray-600">Optional identity settings used as restrained accents in your profile.</p>
+            <label className="mt-4 block text-sm font-medium text-gray-700">Primary brand color</label>
+            <div className="mt-2 flex gap-3">
+              <input aria-label="Primary brand color" type="color" value={companyData.brandColor || '#1F2937'} onChange={(event) => updateField('brandColor', normalizeBrandColor(event.target.value))} className="h-11 w-14 rounded border border-gray-300 bg-white p-1" />
+              <input type="text" inputMode="text" placeholder="#1F2937" value={companyData.brandColor} onChange={(event) => updateField('brandColor', event.target.value)} className={`${textFieldClass} mt-0`} />
+              <button type="button" onClick={() => updateField('brandColor', '')} className="rounded-lg border border-gray-300 px-3 text-sm">Clear</button>
+            </div>
+          </section>
+
+          <section className="border-t border-gray-200 pt-6">
+            <h2 className="text-xl font-semibold text-gray-900">Contact Information</h2>
+            <p className="mt-1 text-sm text-gray-600">Optional details shown only when provided.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {([['website','Website','https://example.com'],['email','Email','hello@example.com'],['phone','Phone','+20 ...'],['address','Address','Office address'],['socialUrl','LinkedIn / profile URL','https://linkedin.com/company/...']] as const).map(([field,label,placeholder]) => <label key={field} className="block text-sm font-medium text-gray-700">{label}<input type="text" placeholder={placeholder} value={companyData[field]} onChange={(event) => updateField(field, event.target.value)} className={textFieldClass} /></label>)}
+            </div>
+          </section>
 
           <div>
             <label className="block text-sm font-medium text-gray-700">Industry <span className="font-normal text-gray-500">(optional)</span></label>

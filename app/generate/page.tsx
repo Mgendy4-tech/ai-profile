@@ -88,6 +88,7 @@ import { authoredExportPolicyCode, mustBlockLegacyFallback } from "@/lib/authore
 import { reconstructPersistedProjects } from "@/lib/persisted-projects";
 import { authoredDevelopmentFailureMessage, createAuthoredRejectionDiagnostic, type AuthoredExportDevelopmentDiagnostic } from "@/lib/authored-export-diagnostics";
 import { generatedProjectEvidenceCount, persistGeneratedProfile, readPersistedGeneratedProfile } from "@/lib/generated-profile-storage";
+import { familyChoices } from "@/lib/authored-templates/family-selection";
 
 type Project = {
   id?: string;
@@ -434,11 +435,14 @@ const [loading, setLoading] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
   const [exportMessage, setExportMessage] = useState("");
   const [exportMessageTone, setExportMessageTone] = useState<"status" | "success" | "error">("status");
+  const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
+  const [familyMessage, setFamilyMessage] = useState("");
 
 useEffect(() => {
   const restore = window.setTimeout(() => {
     const generated = readPersistedGeneratedProfile(localStorage);
     if (generated) setProfile(generated as GeneratedProfile);
+    setSelectedFamily(localStorage.getItem("authoredFamilyDecision"));
     const persisted = readPersistedApprovedProfileStructure(localStorage);
     if (!persisted || validateApprovedStructure(persisted.structure) !== null) return;
     setProfileStructure(persisted.structure as ProfileStructure);
@@ -446,6 +450,13 @@ useEffect(() => {
   }, 0);
   return () => window.clearTimeout(restore);
 }, []);
+
+useEffect(() => {
+  if (!profile || !selectedFamily) return;
+  const projects = profile.projects ?? [];
+  const choices = familyChoices({ projectCount: projects.length, authenticProjectImageCount: projects.filter((p) => typeof p.imageUrl === "string" && p.imageUrl.startsWith("data:image/")).length, serviceCount: profile.sections.find((s) => s.id === "services")?.items.length ?? 0, productFeatureCount: profile.sections.find((s) => s.id === "features")?.items.length ?? 0, useCaseCount: profile.sections.find((s) => s.id === "useCases")?.items.length ?? 0 });
+  if (!choices.some((choice) => choice.id === selectedFamily && choice.eligible)) { localStorage.removeItem("authoredFamilyDecision"); setSelectedFamily(null); setFamilyMessage("The previous family selection is no longer eligible for this profile. AI recommendation restored."); }
+}, [profile, selectedFamily]);
 
 useEffect(() => {
   if (!loading) return;
@@ -834,6 +845,11 @@ persistGeneratedProfile(localStorage, generatedProfile);
           servicesProducts: typeof optimizedCompanyData.servicesProducts === "string" ? optimizedCompanyData.servicesProducts : "",
           activities: typeof optimizedCompanyData.activities === "string" ? optimizedCompanyData.activities : profile.expertise.join("\n"),
           experience: typeof optimizedCompanyData.experience === "string" ? optimizedCompanyData.experience : profile.experience,
+          website: typeof optimizedCompanyData.website === "string" ? optimizedCompanyData.website : "",
+          email: typeof optimizedCompanyData.email === "string" ? optimizedCompanyData.email : "",
+          phone: typeof optimizedCompanyData.phone === "string" ? optimizedCompanyData.phone : "",
+          address: typeof optimizedCompanyData.address === "string" ? optimizedCompanyData.address : "",
+          socialUrl: typeof optimizedCompanyData.socialUrl === "string" ? optimizedCompanyData.socialUrl : "",
         },
         profile: {
           companyName: profile.companyName,
@@ -841,7 +857,7 @@ persistGeneratedProfile(localStorage, generatedProfile);
           sections: profile.sections,
         },
         projects: optimizedAuthoredProjects,
-      }, undefined, "optimized_embed");
+      }, undefined, "optimized_embed", (localStorage.getItem("authoredFamilyDecision") as "visual-portfolio" | "corporate-services" | "product-tech" | null) ?? undefined);
       const authoredMs = performance.now() - authoredStartedAt;
       if (process.env.NODE_ENV !== "production") {
         const uniqueOptimizedSources = new Set([
@@ -1838,6 +1854,12 @@ persistGeneratedProfile(localStorage, generatedProfile);
   {loading ? "Analyzing..." : "Analyze Saved Company"}
 </button>
 )}
+{profile && (() => {
+  const projects = profile.projects ?? [];
+  const choices = familyChoices({ projectCount: projects.length, authenticProjectImageCount: projects.filter((p) => typeof p.imageUrl === "string" && p.imageUrl.startsWith("data:image/")).length, serviceCount: profile.sections.find((s) => s.id === "services")?.items.length ?? 0, productFeatureCount: profile.sections.find((s) => s.id === "features")?.items.length ?? 0, useCaseCount: profile.sections.find((s) => s.id === "useCases")?.items.length ?? 0 });
+  const choose = (choice: typeof choices[number]) => { if (!choice.eligible) return; localStorage.setItem("authoredFamilyDecision", choice.id); setSelectedFamily(choice.id); setFamilyMessage(`${choice.label} selected for this profile.`); };
+  return <section aria-label="Template family selection" className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><h2 className="text-2xl font-semibold text-gray-900">Choose a template family</h2><p className="mt-2 text-sm text-gray-600">AI recommendation is based on structured content signals. Only safe, eligible families can be selected.</p><div className="mt-5 grid gap-4 md:grid-cols-3">{choices.map((choice) => <button key={choice.id} type="button" disabled={!choice.eligible} onClick={() => choose(choice)} className={`rounded-xl border p-4 text-left transition ${choice.eligible ? "hover:border-gray-900" : "cursor-not-allowed opacity-55"} ${selectedFamily === choice.id ? "border-gray-900 ring-2 ring-gray-200" : "border-gray-200"}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-gray-900">{choice.label}</span>{choice.recommended && <span className="rounded-full bg-green-100 px-2 py-1 text-[10px] font-bold uppercase text-green-800">AI recommended</span>}</div><p className="mt-3 text-sm leading-6 text-gray-600">{choice.description}</p>{choice.eligible ? <p className="mt-3 text-xs font-medium text-green-700">Eligible</p> : <p className="mt-3 text-xs font-medium text-red-700">Unavailable: {choice.reason}</p>}</button>)}</div>{familyMessage && <p role="status" className="mt-4 text-sm text-green-700">{familyMessage}</p>}</section>;
+})()}
 {!profile && profileStructure && (
   <div
     className={`mt-8 rounded-xl border border-gray-200 bg-gray-50 p-5 transition-opacity ${

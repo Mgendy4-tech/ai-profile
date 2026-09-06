@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { betaFixtureImageState, createBetaFixture, loadBetaFixture, type BetaFixture, type BetaFixtureId } from "@/lib/beta-test-fixtures";
 import { clearApplicationLocalData } from "@/lib/local-profile-data";
 import { generatedProjectEvidenceCount, readPersistedGeneratedProfile } from "@/lib/generated-profile-storage";
+import { familyChoices } from "@/lib/authored-templates/family-selection";
 
 const createProjectImage = () => {
   const canvas = document.createElement("canvas"); canvas.width = 1200; canvas.height = 900;
@@ -31,7 +32,7 @@ export default function BetaTestClient() {
     const initialRefresh = window.setTimeout(refresh, 0); window.addEventListener("beta-test-state-changed", refresh);
     return () => { window.clearTimeout(initialRefresh); window.removeEventListener("beta-test-state-changed", refresh); };
   }, []);
-  const load = (id: BetaFixtureId) => { const next = createBetaFixture(id, createProjectImage()); loadBetaFixture(localStorage, next); setFixture(next); window.dispatchEvent(new Event("beta-test-state-changed")); };
+  const load = (id: BetaFixtureId) => { const next = createBetaFixture(id, createProjectImage()); loadBetaFixture(localStorage, next); const recommended = familyChoices({ projectCount: next.projects.length, authenticProjectImageCount: next.projects.filter((p) => Boolean(p.imageUrl)).length, serviceCount: next.generatedProfile.sections.find((s) => s.id === "services")?.items.length ?? 0, productFeatureCount: next.generatedProfile.sections.find((s) => s.id === "features")?.items.length ?? 0, useCaseCount: next.generatedProfile.sections.find((s) => s.id === "useCases")?.items.length ?? 0 }).find((choice) => choice.recommended)?.id; console.info("[beta-family-diagnostic]", { recommendedFamily: recommended, selectedFamily: localStorage.getItem("authoredFamilyDecision"), brandKitPresent: Boolean(next.company.logoUrl || next.company.brandColor), contactFieldsPresent: [next.company.website, next.company.email, next.company.phone, next.company.address, next.company.socialUrl].some(Boolean) }); setFixture(next); window.dispatchEvent(new Event("beta-test-state-changed")); };
   const clear = () => { clearApplicationLocalData(localStorage); setFixture(null); window.dispatchEvent(new Event("beta-test-state-changed")); };
   return <main className="min-h-screen bg-gray-50 p-4 sm:p-8"><div className="mx-auto max-w-4xl space-y-6">
     <div className="rounded-2xl bg-white p-6 shadow-sm"><span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-900">Preview QA only</span><h1 className="mt-4 text-3xl font-bold text-gray-950">Beta QA Harness</h1><p className="mt-2 text-sm text-gray-600">Load deterministic local state, then validate through the unchanged production company, generation, and export paths.</p></div>

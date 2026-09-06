@@ -48,6 +48,12 @@ export type PersistedCompanyInput = {
   industry?: string;
   customerType?: string;
   servicesProducts?: string;
+  website?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  socialUrl?: string;
+  brandColor?: string;
   activities: string;
   experience: string;
 };

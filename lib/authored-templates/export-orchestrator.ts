@@ -33,8 +33,12 @@ const enrichmentReason = (issue: EnrichmentDiagnostic): AuthoredExportFallbackRe
 const planningReason = (issue: VisualPortfolioPlanningIssue | CorporateServicesPlanningIssue | ProductTechPlanningIssue): AuthoredExportFallbackReason => ({ stage: "planning", code: issue.code, path: issue.path, pageRole: null });
 const compatibilityReason = (issue: ContractIssue): AuthoredExportFallbackReason => ({ stage: "compatibility", code: issue.code, path: issue.path, pageRole: null });
 const renderedLimitReasons = (pdf: jsPDF): AuthoredExportFallbackReason[] => validateRenderedDocumentLimits(pdf.getNumberOfPages(), pdf.output("arraybuffer").byteLength).map((issue) => ({ stage: "operational", code: issue.code, path: issue.path, pageRole: null }));
+const contactLines = (company: ProductionEnrichmentInput["company"]): string => [
+  company.website && `Website: ${company.website}`, company.email && `Email: ${company.email}`, company.phone && `Phone: ${company.phone}`,
+  company.address && `Address: ${company.address}`, company.socialUrl && `Profile: ${company.socialUrl}`,
+].filter((line): line is string => Boolean(line)).join("\n");
 
-export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmentInput, decodeDimensions?: ImageMetadataDecoder, imageBoundary: "source" | "optimized_embed" = "source"): Promise<AuthoredExportDecision> => {
+export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmentInput, decodeDimensions?: ImageMetadataDecoder, imageBoundary: "source" | "optimized_embed" = "source", requestedFamilyId?: CurrentFamilyId): Promise<AuthoredExportDecision> => {
   const operationalIssues = imageBoundary === "optimized_embed"
     ? validateAuthoredEmbeddedImageLimits(input.company, input.projects)
     : validateAuthoredImageOperationalLimits(input.company, input.projects);
@@ -72,7 +76,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     if (missingProjectVisuals.length > 0) return fallback(missingProjectVisuals);
   }
   const ranking = explainAuthoredTemplateFamilyRanking(authoredTemplateFamilies, createContentShape(units, null, productTechSignal));
-  const selectedFamily = ranking.selectedFamilyId;
+  const selectedFamily = requestedFamilyId && ranking.eligibleFamilies.some((family) => family.familyId === requestedFamilyId) ? requestedFamilyId : ranking.selectedFamilyId;
   if (!selectedFamily) return fallback([{ stage: "ranking", code: "no_eligible_authored_family", path: "contentShape", pageRole: null }], ranking);
   const coverSelection = selectAuthoredCover({ familyId: selectedFamily as CurrentFamilyId, companyName: input.company.name, companyType: input.profile.companyType, hasLogo: Boolean(enriched.adapterInput.company.logo) });
   if (!coverSelection.compatible) return fallback([{ stage: "compatibility", code: "cover_name_capacity_unsupported", path: "company.name", pageRole: "cover" }], ranking);
@@ -80,7 +84,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
 
   if (selectedFamily === "product-tech") {
     if (!featuresEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
-    const planning = createProductTechDocumentPlan({ units,
+    const planning = createProductTechDocumentPlan({ units, contactLines: contactLines(input.company),
       cover, coverTemplateId: coverSelection.templateId,
       overview: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, supportingLine: customerFacingSectionLine("product-tech", input.company) },
       featuresHeading: featuresEntry.section.title, featuresSupportingLine: customerFacingSectionLine("product-tech", input.company, featuresEntry.section.items),
@@ -93,7 +97,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
 
   if (selectedFamily === "corporate-services") {
     if (!servicesEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
-    const planning = createCorporateServicesDocumentPlan({
+    const planning = createCorporateServicesDocumentPlan({ contactLines: contactLines(input.company),
       units,
       cover, coverTemplateId: coverSelection.templateId,
       narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, supportingLine: customerFacingSectionLine("corporate-services", input.company) },
@@ -131,7 +135,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     const items = continuationItems.slice(pageIndex * 4, pageIndex * 4 + 4);
     return { contentId: `${servicesEntry.section.id}:continuation:${pageIndex}`, eyebrow: "CAPABILITIES / CONTINUED", heading: "More ways we shape interiors.", supportingLine: customerFacingSectionLine("visual-portfolio", input.company, items), capabilities: items.map((item, itemIndex) => ({ index: String((useSupportingDetail ? 7 : 5) + pageIndex * 4 + itemIndex).padStart(2, "0"), title: item.name, description: customerFacingItemDescription("visual-portfolio", input.company, item), items: [] })) };
   });
-  const planning = createVisualPortfolioDocumentPlan({
+  const planning = createVisualPortfolioDocumentPlan({ contactLines: contactLines(input.company),
     units,
     cover, coverTemplateId: coverSelection.templateId,
     narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, facts: extractVisualNarrativeFacts(input.company), ...(narrativeEntry.section.items[0] ? { secondaryBlock: { title: narrativeEntry.section.items[0].name, body: narrativeEntry.section.items[0].description } } : {}) },

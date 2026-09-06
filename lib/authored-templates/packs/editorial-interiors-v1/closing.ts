@@ -7,6 +7,7 @@ const envelope: ContentEnvelope = { slots: [
   { id: "companyName", path: "companyName", kind: "text", required: true, fontFamily: "times", fontStyle: "normal", fontSize: 38, widthMm: 150, maxLines: 3 },
   { id: "descriptor", path: "descriptor", kind: "text", required: false, fontFamily: "helvetica", fontStyle: "normal", fontSize: 9, widthMm: 110, maxLines: 2 },
   { id: "logo", path: "logo", kind: "image", required: false, allowedRoles: ["company_logo"], allowedProvenances: ["user_upload"] },
+  { id: "contactLines", path: "contactLines", kind: "text", required: false, fontFamily: "helvetica", fontStyle: "normal", fontSize: 7.5, widthMm: 150, maxLines: 5 },
 ] };
 
 export const editorialInteriorsClosingTemplate: AuthoredPageTemplate<EditorialClosingContent> = {
@@ -21,7 +22,8 @@ export const editorialInteriorsClosingTemplate: AuthoredPageTemplate<EditorialCl
     const descriptor = instance.preparedSlots.descriptor; if (descriptor?.kind === "text") { pdf.setTextColor(...visual.palette.secondary); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setLineHeightFactor(1.35); pdf.text([...descriptor.lines], 19, 174); }
     const logo = instance.preparedSlots.logo;
     if (logo?.kind === "image") { const ratio = logo.aspectRatio; const width = Math.min(52, 28 * ratio); const height = width / ratio; pdf.addImage(logo.source.source, logo.source.format, 19, 234 - height, width, height); }
+    const contacts = instance.preparedSlots.contactLines; if (contacts?.kind === "text") { pdf.setTextColor(...visual.palette.secondary); pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.text([...contacts.lines], 19, 218); }
     pdf.setTextColor(...visual.palette.ochre); pdf.setFont("times", "italic"); pdf.setFontSize(15); pdf.text("Thank you.", 19, 261);
-    return { templateId: instance.templateId, renderedTextBySlot: { companyName: name.lines, ...(descriptor?.kind === "text" ? { descriptor: descriptor.lines } : {}) } };
+    return { templateId: instance.templateId, renderedTextBySlot: { companyName: name.lines, ...(descriptor?.kind === "text" ? { descriptor: descriptor.lines } : {}), ...(contacts?.kind === "text" ? { contactLines: contacts.lines } : {}) } };
   },
 };

@@ -20,6 +20,7 @@ export type CorporateServicesPlanningInput = {
   projects?: readonly CorporateProject[];
   projectsHeading?: string;
   projectsSupportingLine?: string;
+  contactLines?: string;
 };
 
 export type CorporateServicesPlanningIssue = CoverageIssue | { code: "service_count_unsupported" | "project_count_unsupported" | "normalized_service_mismatch" | "normalized_detail_mismatch" | "normalized_project_mismatch" | "invalid_document_plan"; path: string; message: string };
@@ -65,7 +66,7 @@ export const createCorporateServicesDocumentPlan = (input: CorporateServicesPlan
     pages.push({ pageId: `work:${projectSequence}`, templateId: `corporate-services-v1.work-${count}`, pageRole: "project_grid", candidate, claims: pageProjects.map((project, index) => ({ contentId: project.contentId, mode: "consume", slotId: `projects.${index}` })) });
     projectOffset += count; projectSequence += 1;
   }
-  pages.push({ pageId: "closing", templateId: "corporate-services-v1.closing", pageRole: "closing", candidate: { contentId: input.cover.contentId, companyName: input.cover.companyName, descriptor: input.cover.companyType, logo: input.cover.logo }, claims: company ? [{ contentId: company.id, mode: "reference", slotId: "companyName" }] : [] });
+  pages.push({ pageId: "closing", templateId: "corporate-services-v1.closing", pageRole: "closing", candidate: { contentId: input.cover.contentId, companyName: input.cover.companyName, descriptor: input.cover.companyType, logo: input.cover.logo, ...(input.contactLines ? { contactLines: input.contactLines } : {}) }, claims: company ? [{ contentId: company.id, mode: "reference", slotId: "companyName" }] : [] });
   const plan: AuthoredDocumentPlan = { familyId: "corporate-services", packId: corporateServicesV1Pack.id, pages };
   const structure = validateAuthoredDocumentPlan(plan, [corporateServicesV1Pack]);
   if (structure.length) return { compatible: false, plan: null, issues: structure.map((issue) => ({ code: "invalid_document_plan", path: issue.path, message: issue.message })) };

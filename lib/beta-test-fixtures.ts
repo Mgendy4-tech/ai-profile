@@ -28,7 +28,7 @@ const profile = (company: CompanyData, companyType: string, sections: PersistedG
 const aureliaCompany: CompanyData = {
   name: "Aurelia Interiors", logoUrl: "", companyType: "Interior Design Studio", industry: "Interior Design / Luxury Residential Interiors",
   customerType: "Luxury residential clients", servicesProducts: "Interior Design, Space Planning, Material Selection, Furniture Selection, Lighting Design, Styling, Project Coordination",
-  about: "Aurelia Interiors creates refined residential interiors around warm natural materials and calm neutral palettes.", activities: "Interior design, space planning, material selection, furniture selection, lighting design, styling, and project coordination.", experience: "8",
+  about: "Aurelia Interiors creates refined residential interiors around warm natural materials and calm neutral palettes.", activities: "Interior design, space planning, material selection, furniture selection, lighting design, styling, and project coordination.", experience: "8", website: "https://aurelia.example", email: "studio@aurelia.example", phone: "+20 2 5550 0188", address: "New Cairo, Egypt", brandColor: "#9A6A3A",
 };
 const aureliaCapabilities = ["Interior Design", "Space Planning", "Material Selection", "Furniture Selection", "Lighting Design", "Styling", "Project Coordination"];
 const riversideDescription = "A contemporary residential interior shaped through warm natural materials, layered lighting, custom furniture, and a calm neutral palette.";
@@ -50,7 +50,7 @@ const aureliaSections = (imageUrl: string): PersistedGeneratedProfileSection[] =
 const northbridgeCompany: CompanyData = {
   name: "Northbridge Advisory", logoUrl: "", companyType: "Business Consulting & Professional Services", industry: "Management Consulting", customerType: "B2B",
   servicesProducts: "Operational Improvement, Strategic Priorities, Management Processes, Growth Advisory, Leadership Collaboration",
-  about: "Northbridge Advisory helps growing companies improve operations, clarify strategic priorities, and build effective management processes.", activities: "Consulting with leadership teams to identify operational challenges and structure practical solutions.", experience: "1",
+  about: "Northbridge Advisory helps growing companies improve operations, clarify strategic priorities, and build effective management processes.", activities: "Consulting with leadership teams to identify operational challenges and structure practical solutions.", experience: "1", website: "https://northbridge.example", email: "hello@northbridge.example", phone: "+20 2 5550 0220", address: "Cairo, Egypt",
 };
 const northbridgeServices = ["Operational Improvement", "Strategic Priorities", "Management Processes", "Growth Advisory", "Leadership Collaboration"];
 const northbridgeSelected: BetaSelectedSection[] = [
@@ -67,7 +67,7 @@ const northbridgeSections: PersistedGeneratedProfileSection[] = [
 const winxCompany: CompanyData = {
   name: "WinX", logoUrl: "", companyType: "Sales Technology Company", industry: "Sales Technology / Affiliate Marketing", customerType: "B2B SMEs, brands, and growing businesses",
   servicesProducts: "Digital sales platform, campaign management, promoter management, performance tracking, lead generation, and sales growth solutions.",
-  about: "WinX is a sales technology platform that helps companies expand sales and market reach through independent promoters called WinXers.", activities: "Sales technology, affiliate marketing, customer acquisition, distributed sales networks, and campaign management.", experience: "3",
+  about: "WinX is a sales technology platform that helps companies expand sales and market reach through independent promoters called WinXers.", activities: "Sales technology, affiliate marketing, customer acquisition, distributed sales networks, and campaign management.", experience: "3", website: "https://winx.example", email: "team@winx.example", phone: "+20 2 5550 0330", address: "Alexandria, Egypt",
 };
 const winxFeatures = ["Digital Sales Platform", "Affiliate Network", "Campaign Management", "Promoter Management", "Performance Tracking", "Lead Generation", "Sales Growth"];
 const winxUseCases = ["SMEs", "Brands", "Growing Businesses"];
@@ -97,7 +97,7 @@ export const createBetaFixture = (id: BetaFixtureId, validProjectImage: string):
   const generated = profile(aureliaCompany, aureliaCompany.companyType, aureliaSections(validProjectImage), [riverside(validProjectImage)]);
   return {
     id, label: id === "aurelia" ? "Aurelia — Visual / Portfolio" : id === "aurelia-missing-image" ? "Aurelia — Missing project image" : "Aurelia — Generated-only project evidence",
-    company: aureliaCompany, projects: id === "aurelia-generated-only" ? [] : [riverside(imageUrl)], profileStructure: structure(aureliaCompany, aureliaCompany.companyType, aureliaSelected), generatedProfile: generated,
+    company: { ...aureliaCompany, logoUrl: validProjectImage }, projects: id === "aurelia-generated-only" ? [] : [riverside(imageUrl)], profileStructure: structure({ ...aureliaCompany, logoUrl: validProjectImage }, aureliaCompany.companyType, aureliaSelected), generatedProfile: { ...generated, logoUrl: validProjectImage },
     expectedFamily: "visual-portfolio", expectedSafetyOutcome: id === "aurelia-missing-image" ? "Explicit image failure; legacy/contextual fallback forbidden." : id === "aurelia-generated-only" ? "project_state_generated_only; unsafe fallback blocked." : "Authored Visual / Portfolio export expected.",
   };
 };

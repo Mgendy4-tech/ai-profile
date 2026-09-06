@@ -6,6 +6,7 @@ const envelope: ContentEnvelope = { slots: [
   { id: "companyName", path: "companyName", kind: "text", required: true, fontFamily: "times", fontStyle: "bold", fontSize: 34, widthMm: 146, maxLines: 3 },
   { id: "descriptor", path: "descriptor", kind: "text", required: false, fontFamily: "helvetica", fontStyle: "normal", fontSize: 9, widthMm: 120, maxLines: 2 },
   { id: "logo", path: "logo", kind: "image", required: false, allowedRoles: ["company_logo"], allowedProvenances: ["user_upload"] },
+  { id: "contactLines", path: "contactLines", kind: "text", required: false, fontFamily: "helvetica", fontStyle: "normal", fontSize: 7.5, widthMm: 150, maxLines: 5 },
 ] };
 export const corporateServicesClosingTemplate: AuthoredPageTemplate<CorporateClosingContent> = {
   id: "corporate-services-v1.closing", pageRole: "closing", family: "corporate_closing", priority: 100, envelope,
@@ -17,7 +18,8 @@ export const corporateServicesClosingTemplate: AuthoredPageTemplate<CorporateClo
     const descriptor = instance.preparedSlots.descriptor; if (descriptor?.kind === "text") { pdf.setTextColor(...visual.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setLineHeightFactor(1.35); pdf.text([...descriptor.lines], 31, 158); }
     pdf.setDrawColor(...visual.palette.cobalt); pdf.setLineWidth(1); pdf.line(31, 173, 92, 173);
     const logo = instance.preparedSlots.logo; if (logo?.kind === "image") { const width = Math.min(48, 25 * logo.aspectRatio); pdf.addImage(logo.source.source, logo.source.format, 31, 230 - width / logo.aspectRatio, width, width / logo.aspectRatio); }
+    const contacts = instance.preparedSlots.contactLines; if (contacts?.kind === "text") { pdf.setTextColor(...visual.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.text([...contacts.lines], 31, 215); }
     pdf.setTextColor(...visual.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.text("COMPANY PROFILE", 31, 263);
-    return { templateId: instance.templateId, renderedTextBySlot: { companyName: name.lines, ...(descriptor?.kind === "text" ? { descriptor: descriptor.lines } : {}) } };
+    return { templateId: instance.templateId, renderedTextBySlot: { companyName: name.lines, ...(descriptor?.kind === "text" ? { descriptor: descriptor.lines } : {}), ...(contacts?.kind === "text" ? { contactLines: contacts.lines } : {}) } };
   },
 };
