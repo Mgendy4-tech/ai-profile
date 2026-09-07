@@ -280,6 +280,7 @@ setSuccessMessage(
             <label htmlFor="project-image" className="text-sm font-medium text-gray-900">
               Upload Project Image <span className="font-normal text-gray-500">(required)</span>
             </label>
+            <p className="mt-1 text-sm text-gray-600">Use an authentic image of this project. It is required for Visual / Portfolio eligibility.</p>
 
             <input
               key={projects.length}
@@ -291,11 +292,7 @@ setSuccessMessage(
             />
 
             {imagePreview && (
-              <img
-                src={imagePreview}
-                alt="Featured project preview"
-                className="mt-4 h-48 w-full rounded-lg object-cover"
-              />
+              <div className="mt-4"><p className="mb-2 text-xs font-medium text-green-700">Image selected and ready to save</p><img src={imagePreview} alt="Featured project preview" className="h-48 w-full rounded-lg object-cover" /><button type="button" onClick={() => { setImageUrl(""); setImagePreview(""); }} className="mt-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Remove image</button></div>
             )}
           </div>
 
@@ -351,7 +348,7 @@ setSuccessMessage(
                   
 
                   <label className="cursor-pointer rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:bg-gray-50">
-                    Replace Image
+                    Replace image
                     <input
                       type="file"
                       accept="image/png,image/jpeg"
@@ -360,6 +357,7 @@ setSuccessMessage(
                       className="hidden"
                     />
                   </label>
+                  <button type="button" onClick={() => { const updated = projects.map((entry) => entry.id === project.id ? { ...entry, imageUrl: "" } : entry); setProjects(updated); localStorage.setItem("projectsData", JSON.stringify(updated)); setSuccessMessage("Project image removed. Visual / Portfolio now requires a new authentic image."); }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:bg-gray-50">Remove image</button>
                 </div>
               </article>
             ))}

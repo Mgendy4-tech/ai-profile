@@ -332,6 +332,7 @@ setTimeout(() => {
                 >
                   Replace Logo
                 </button>
+                <button type="button" onClick={() => updateField('logoUrl', '')} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900">Remove Logo</button>
               </div>
             )}
           </div>
