@@ -4,7 +4,7 @@ import { mustBlockLegacyFallback } from "../authored-export-policy";
 import { isolateNewCompanyState } from "../profile-state-isolation";
 import { reconstructPersistedProjects, resolveProjectsForCompanySave } from "../persisted-projects";
 import { routeEditorialInteriorsV1Export } from "./export-orchestrator";
-import { containsGeneratedFillerCopy, containsInternalPresentationCopy } from "./presentation-copy";
+import { containsGeneratedFillerCopy, containsInternalPresentationCopy, customerFacingSectionDescription } from "./presentation-copy";
 
 const assert: (condition: unknown, message: string) => asserts condition = (condition, message) => { if (!condition) throw new Error(message); };
 const bytes = readFileSync(resolve("lib/test-fixtures/visual/aurelia-browser-upload.jpg"));
@@ -20,6 +20,13 @@ const sections = (projects = [project]) => [
 ];
 const input = (projects = [project]) => ({ company, profile: { companyName: company.name, companyType: company.companyType, sections: sections(projects) }, projects });
 const decode = async () => ({ width: 1600, height: 1200 });
+const plannerCopy = [
+  customerFacingSectionDescription(company, "Residential Expertise", "Describe Aurelia's supplied residential expertise."),
+  customerFacingSectionDescription(company, "Design Approach", "Describe the supplied material-led design approach."),
+  customerFacingSectionDescription(company, "Design Approach", "A calm, material-led approach grounded in the supplied company and project information."),
+].join("\n");
+assert(!/(?:Describe |supplied residential expertise|supplied material-led|grounded in the supplied|supplied company and project information)/i.test(plannerCopy), "Aurelia planner copy must not expose internal instruction or grounding filler.");
+assert(plannerCopy.toLocaleLowerCase().includes("interior design") && plannerCopy.includes("Aurelia Interiors"), "Aurelia planner copy must remain source-grounded and personalized.");
 
 const main = async () => {
   // Mirrors Save Project -> Save Company -> JSON persistence -> Generate reconstruction.

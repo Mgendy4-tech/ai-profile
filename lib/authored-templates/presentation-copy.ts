@@ -5,16 +5,20 @@ export type CustomerFacingSection = { id?: string; title: string; description: s
 
 const normalized = (value: string) => value.trim().replace(/\s+/g, " ");
 const sourceCorpus = (company: CompanyIdentity) => [company.about, company.companyType, company.industry, company.customerType, company.servicesProducts, company.activities, company.experience].filter(Boolean).join("\n").toLocaleLowerCase();
-const generatedFiller = /\b(?:source-backed|supplied information|supplied (?:advisory|product|company|project) information|grounded in supplied|based on supplied)\b/i;
+const generatedFiller = /\b(?:source-backed|supplied information|supplied (?:advisory|product|company|project|residential|material-led) information|(?:the )?supplied (?:company|project|residential|material-led)|grounded in (?:the )?supplied|based on (?:the )?supplied)\b/i;
+const plannerInstruction = /^\s*(?:describe|present|introduce|explain|showcase)\b[^.]{0,180}\b(?:supplied|provided|grounded|based on)\b/i;
 const unique = (values: readonly string[]) => values.map(normalized).filter((value, index, all) => value && all.indexOf(value) === index);
 const companyDescriptor = (company: CompanyIdentity, fallback: string) => unique([company.companyType ?? "", company.industry ?? ""]).join(" · ") || fallback;
 const possessive = (name: string) => `${name}${/s$/i.test(name) ? "'" : "'s"}`;
 const audience = (company: CompanyIdentity) => company.customerType ? ` for ${normalized(company.customerType)}` : "";
+const sourceFactLine = (company: CompanyIdentity) => unique([company.activities ?? "", company.servicesProducts ?? "", company.industry ?? "", company.customerType ?? ""]).find(Boolean) ?? companyDescriptor(company, "the available design practice");
+const sectionLabel = (title: string) => normalized(title).replace(/^(?:our|the)\s+/i, "").toLocaleLowerCase() || "practice";
+const customerFacingPlannerLine = (company: CompanyIdentity, title: string) => `${possessive(company.name)} ${sectionLabel(title)} draws on ${sourceFactLine(company)}.`;
 
 const isLiteralSourceText = (value: string, company: CompanyIdentity) => sourceCorpus(company).includes(value.toLocaleLowerCase());
 const needsCustomerFacingRewrite = (value: string, company: CompanyIdentity) => {
   const text = normalized(value);
-  return Boolean(text) && !isLiteralSourceText(text, company) && (generatedFiller.test(text) || containsInternalPresentationCopy(text));
+  return Boolean(text) && !isLiteralSourceText(text, company) && (generatedFiller.test(text) || plannerInstruction.test(text) || containsInternalPresentationCopy(text));
 };
 
 const familySupportingLine = (family: CustomerFacingFamily, company: CompanyIdentity, _items: readonly PresentationItem[]) => {
@@ -35,16 +39,20 @@ export const customerFacingItemDescription = (family: CustomerFacingFamily, comp
 
 export const containsInternalPresentationCopy = (value: string) => /\b(?:present|introduce|explain|showcase)\b[^.]{0,100}\b(?:supplied|renderer|section|profile|capabilit|service|feature|use case)/i.test(value);
 export const containsGeneratedFillerCopy = (value: string) => generatedFiller.test(value);
+export const customerFacingSectionDescription = (company: CompanyIdentity, title: string, description: string) => {
+  const text = normalized(description);
+  return needsCustomerFacingRewrite(text, company) ? customerFacingPlannerLine(company, title) : text;
+};
 
 export const customerFacingSectionCopy = (family: CustomerFacingFamily, company: CompanyIdentity, section: CustomerFacingSection) => {
   const items = section.items.map((item) => ({ ...item, description: customerFacingItemDescription(family, company, item) }));
   const fallback = customerFacingSectionLine(family, company, items);
   return {
     ...section,
-    description: needsCustomerFacingRewrite(section.description, company) ? fallback : normalized(section.description),
-    content: needsCustomerFacingRewrite(section.content, company) ? fallback : normalized(section.content),
+    description: customerFacingSectionDescription(company, section.title, section.description),
+    content: customerFacingSectionDescription(company, section.title, section.content),
     items,
   };
 };
 
-export const customerFacingSectionBody = (family: CustomerFacingFamily, company: CompanyIdentity, section: Pick<CustomerFacingSection, "description" | "content" | "items">) => customerFacingSectionCopy(family, company, { title: "", ...section }).content;
+export const customerFacingSectionBody = (family: CustomerFacingFamily, company: CompanyIdentity, section: Pick<CustomerFacingSection, "title" | "description" | "content" | "items">) => customerFacingSectionCopy(family, company, section).content;

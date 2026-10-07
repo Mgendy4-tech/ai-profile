@@ -89,7 +89,7 @@ import { reconstructPersistedProjects } from "@/lib/persisted-projects";
 import { authoredDevelopmentFailureMessage, createAuthoredRejectionDiagnostic, type AuthoredExportDevelopmentDiagnostic } from "@/lib/authored-export-diagnostics";
 import { generatedProjectEvidenceCount, persistGeneratedProfile, readPersistedGeneratedProfile } from "@/lib/generated-profile-storage";
 import { familyChoices } from "@/lib/authored-templates/family-selection";
-import { customerFacingSectionCopy, type CustomerFacingFamily, type CompanyIdentity } from "@/lib/authored-templates/presentation-copy";
+import { customerFacingSectionCopy, customerFacingSectionDescription, type CustomerFacingFamily, type CompanyIdentity } from "@/lib/authored-templates/presentation-copy";
 
 type Project = {
   id?: string;
@@ -1891,6 +1891,11 @@ persistGeneratedProfile(localStorage, generatedProfile);
     <div className="mt-5 space-y-3">
       {profileStructure.recommendedSections.map((section) => {
   const isSelected = selectedSectionIds.includes(section.id);
+  const customerFacingDescription = customerFacingSectionDescription(
+    presentationCompany ?? { name: profileStructure.companyType, companyType: profileStructure.companyType },
+    section.displayTitle,
+    section.description,
+  );
 
   return (
     <div
@@ -2012,7 +2017,7 @@ persistGeneratedProfile(localStorage, generatedProfile);
             </p>
 
             <p className="mt-1 text-sm leading-6 text-gray-600">
-              {section.description}
+              {customerFacingDescription}
             </p>
           </div>
 
