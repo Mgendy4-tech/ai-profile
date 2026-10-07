@@ -4,6 +4,7 @@ import { isBetaTestModeEnabled } from "./beta-test-mode";
 import { APPLICATION_STORAGE_KEYS, clearApplicationLocalData } from "./local-profile-data";
 import { generatedProjectEvidenceCount, readPersistedGeneratedProfile } from "./generated-profile-storage";
 import { familyChoices } from "./authored-templates/family-selection";
+import { readPersistedCompanyData } from "./company-data";
 
 assert.equal(isBetaTestModeEnabled(undefined), false); assert.equal(isBetaTestModeEnabled("false"), false); assert.equal(isBetaTestModeEnabled("true"), true);
 const values = new Map<string, string>([["unrelated-origin-state", "keep"]]); const writes: string[] = [];
@@ -12,6 +13,7 @@ const image = "data:image/png;base64,QUJD";
 const load = (id: BetaFixtureId) => { writes.length = 0; const fixture = createBetaFixture(id, image); loadBetaFixture(storage as Storage, fixture); assert(writes.every((key) => (APPLICATION_STORAGE_KEYS as readonly string[]).includes(key)), `${id} wrote a non-application storage key.`); return fixture; };
 
 const aurelia = load("aurelia"); const aureliaProjects = JSON.parse(values.get("projectsData")!); const aureliaGenerated = readPersistedGeneratedProfile(storage);
+assert.equal(readPersistedCompanyData(storage)?.name, "Aurelia Interiors");
 assert.equal(aurelia.company.experience, "8"); assert.equal(aurelia.generatedProfile.sections.find((section) => section.id === "services")?.items.length, 7); assert.equal(aureliaProjects[0].name, "Riverside Residence"); assert.equal(betaFixtureImageState(aureliaProjects), "valid_data_url"); assert(aureliaGenerated && generatedProjectEvidenceCount(aureliaGenerated) === 1);
 const familyRecommendation = (fixture: ReturnType<typeof createBetaFixture>) => familyChoices({ projectCount: fixture.projects.length, authenticProjectImageCount: fixture.projects.filter((project) => Boolean(project.imageUrl)).length, serviceCount: fixture.generatedProfile.sections.find((section) => section.id === "services")?.items.length ?? 0, productFeatureCount: fixture.generatedProfile.sections.find((section) => section.id === "features")?.items.length ?? 0, useCaseCount: fixture.generatedProfile.sections.find((section) => section.id === "useCases")?.items.length ?? 0 }).find((choice) => choice.recommended)?.id;
 assert.equal(aurelia.expectedFamily, "visual-portfolio"); assert.equal(familyRecommendation(aurelia), "visual-portfolio");

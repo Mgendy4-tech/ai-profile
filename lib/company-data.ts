@@ -31,6 +31,7 @@ export const emptyCompanyData: CompanyData = {
 
 const stringValue = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const hexColor = /^#[0-9a-f]{6}$/i;
+type CompanyDataStorageReader = Pick<Storage, "getItem">;
 export const normalizeBrandColor = (value: unknown): string => {
   const color = stringValue(value).toUpperCase();
   return hexColor.test(color) ? color : "";
@@ -59,6 +60,18 @@ export const normalizeCompanyData = (value: unknown): CompanyData => {
     website: stringValue(source.website), email: stringValue(source.email), phone: stringValue(source.phone),
     address: stringValue(source.address), socialUrl: stringValue(source.socialUrl), brandColor: normalizeBrandColor(source.brandColor),
   };
+};
+
+export const readPersistedCompanyData = (storage: CompanyDataStorageReader): CompanyData | null => {
+  try {
+    const raw = storage.getItem("companyData");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return normalizeCompanyData(parsed);
+  } catch {
+    return null;
+  }
 };
 
 export const companySemanticText = (company: CompanyData) => ({

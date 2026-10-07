@@ -80,7 +80,7 @@ import {
   type StructureEditResult,
 } from "@/lib/profile-structure-editor";
 import { analyzedStructureErrorMessage, validateAnalyzedProfileStructure } from "@/lib/profile-structure-boundary";
-import { companySemanticText, companySourceMaterial, normalizeCompanyData, type CompanyData } from "@/lib/company-data";
+import { companySemanticText, companySourceMaterial, normalizeCompanyData, readPersistedCompanyData, type CompanyData } from "@/lib/company-data";
 import { resolveExportCompanyState } from "@/lib/profile-state-isolation";
 import { createGenerationAttemptGuard, exportProgressMessage, generationProgressMessage, type GenerationOperation } from "@/lib/generation-progress";
 import { optimizeAuthoredLogoImage, optimizeAuthoredProjectImages } from "@/lib/authored-image-optimization";
@@ -422,6 +422,7 @@ const postJsonWithTimeout = async <T,>(
 
 export default function GeneratePage() {
   const [profile, setProfile] = useState<GeneratedProfile | null>(null);
+  const [savedCompanyData, setSavedCompanyData] = useState<CompanyData | null>(null);
   const [presentationCompany, setPresentationCompany] = useState<CompanyIdentity | null>(null);
 const [profileStructure, setProfileStructure] =
   useState<ProfileStructure | null>(null);
@@ -455,10 +456,9 @@ useEffect(() => {
   const restore = window.setTimeout(() => {
     const generated = readPersistedGeneratedProfile(localStorage);
     if (generated) setProfile(generated as GeneratedProfile);
-    const rawCompany = localStorage.getItem("companyData");
-    if (rawCompany) {
-      try { setPresentationCompany(normalizeCompanyData(JSON.parse(rawCompany))); } catch { setPresentationCompany(null); }
-    }
+    const persistedCompany = readPersistedCompanyData(localStorage);
+    setSavedCompanyData(persistedCompany);
+    setPresentationCompany(persistedCompany);
     setSelectedFamily(localStorage.getItem("authoredFamilyDecision"));
     const persisted = readPersistedApprovedProfileStructure(localStorage);
     if (!persisted || validateApprovedStructure(persisted.structure) !== null) return;
@@ -489,9 +489,9 @@ useEffect(() => {
 }, [isExporting]);
 
 const persistStructureSnapshot = (structure: ProfileStructure, sectionIds: readonly string[] = selectedSectionIds) => {
-  const rawCompany = localStorage.getItem("companyData");
-  if (!rawCompany) return;
-  persistApprovedProfileStructure(localStorage, JSON.parse(rawCompany), structure, sectionIds);
+  const companyData = readPersistedCompanyData(localStorage);
+  if (!companyData) return;
+  persistApprovedProfileStructure(localStorage, companyData, structure, sectionIds);
 };
 const commitStructure = (update: (current: ProfileStructure) => ProfileStructure) => {
   setProfileStructure((current) => {
@@ -516,13 +516,13 @@ const handleAnalyze = async () => {
   setErrorMessage("");
 
   try {
-    const savedCompanyData = localStorage.getItem("companyData");
+    const companyData = readPersistedCompanyData(localStorage);
     const savedProjectsData = localStorage.getItem("projectsData");
-    if (!savedCompanyData) {
+    setSavedCompanyData(companyData);
+    if (!companyData) {
       throw new Error("Please save your company information first.");
     }
 
-    const companyData = normalizeCompanyData(JSON.parse(savedCompanyData));
     setPresentationCompany(companyData);
 
     if (!companyData.name?.trim() || !companyData.about?.trim()) {
@@ -591,16 +591,16 @@ setStructureConfirmed(false);
 
     window.setTimeout(async() => {
       try {
-        const savedCompanyData = localStorage.getItem("companyData");
+        const companyData = readPersistedCompanyData(localStorage);
         const savedProjectsData = localStorage.getItem("projectsData");
 
-        if (!savedCompanyData) {
+        setSavedCompanyData(companyData);
+        if (!companyData) {
           setProfile(null);
           setErrorMessage("Please save your company information before generating a profile.");
           return;
         }
 
-        const companyData = normalizeCompanyData(JSON.parse(savedCompanyData));
         setPresentationCompany(companyData);
         if (!companyData.name?.trim() || !companyData.about?.trim()) {
           setProfile(null);
@@ -790,17 +790,10 @@ persistGeneratedProfile(localStorage, generatedProfile);
         logoUrl: profile.logoUrl,
       };
       let companyData: Partial<CompanyData> = generatedCompanyData;
-      const savedCompanyData = localStorage.getItem("companyData");
+      const persistedCompanyData = readPersistedCompanyData(localStorage);
 
-      if (savedCompanyData) {
-        try {
-          const parsedCompanyData = JSON.parse(savedCompanyData);
-          if (parsedCompanyData && typeof parsedCompanyData === "object") {
-            companyData = resolveExportCompanyState(generatedCompanyData, normalizeCompanyData(parsedCompanyData));
-          }
-        } catch {
-          companyData = generatedCompanyData;
-        }
+      if (persistedCompanyData) {
+        companyData = resolveExportCompanyState(generatedCompanyData, persistedCompanyData);
       }
 
       const persistedProjectsDataRaw = localStorage.getItem("projectsData");
@@ -1849,7 +1842,7 @@ persistGeneratedProfile(localStorage, generatedProfile);
             Your company information and projects will be used to create a
             professional profile.
           </p>
-          {!profile && !profileStructure && (
+          {!profile && !profileStructure && savedCompanyData && (
             <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4">
               <p className="font-semibold text-green-900">
                 ✓ Company information saved successfully
