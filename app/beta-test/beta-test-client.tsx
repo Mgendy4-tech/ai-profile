@@ -8,10 +8,10 @@ import { generatedProjectEvidenceCount, readPersistedGeneratedProfile } from "@/
 import { familyChoices } from "@/lib/authored-templates/family-selection";
 
 const createProjectImage = () => {
-  const canvas = document.createElement("canvas"); canvas.width = 1200; canvas.height = 900;
+  const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 480;
   const context = canvas.getContext("2d"); if (!context) throw new Error("Fixture image canvas is unavailable.");
-  const gradient = context.createLinearGradient(0, 0, 1200, 900); gradient.addColorStop(0, "#6f5848"); gradient.addColorStop(0.55, "#d8c9ad"); gradient.addColorStop(1, "#3e5059");
-  context.fillStyle = gradient; context.fillRect(0, 0, 1200, 900); context.fillStyle = "rgba(242,236,224,0.72)"; context.fillRect(110, 130, 520, 540); context.fillStyle = "rgba(39,34,30,0.72)"; context.fillRect(710, 90, 310, 650);
+  const gradient = context.createLinearGradient(0, 0, 640, 480); gradient.addColorStop(0, "#6f5848"); gradient.addColorStop(0.55, "#d8c9ad"); gradient.addColorStop(1, "#3e5059");
+  context.fillStyle = gradient; context.fillRect(0, 0, 640, 480); context.fillStyle = "rgba(242,236,224,0.72)"; context.fillRect(60, 70, 280, 290); context.fillStyle = "rgba(39,34,30,0.72)"; context.fillRect(380, 48, 165, 345);
   return canvas.toDataURL("image/png");
 };
 
