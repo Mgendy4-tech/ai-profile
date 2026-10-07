@@ -3,6 +3,7 @@ import { betaFixtureImageState, createBetaFixture, loadBetaFixture, type BetaFix
 import { isBetaTestModeEnabled } from "./beta-test-mode";
 import { APPLICATION_STORAGE_KEYS, clearApplicationLocalData } from "./local-profile-data";
 import { generatedProjectEvidenceCount, readPersistedGeneratedProfile } from "./generated-profile-storage";
+import { familyChoices } from "./authored-templates/family-selection";
 
 assert.equal(isBetaTestModeEnabled(undefined), false); assert.equal(isBetaTestModeEnabled("false"), false); assert.equal(isBetaTestModeEnabled("true"), true);
 const values = new Map<string, string>([["unrelated-origin-state", "keep"]]); const writes: string[] = [];
@@ -12,8 +13,12 @@ const load = (id: BetaFixtureId) => { writes.length = 0; const fixture = createB
 
 const aurelia = load("aurelia"); const aureliaProjects = JSON.parse(values.get("projectsData")!); const aureliaGenerated = readPersistedGeneratedProfile(storage);
 assert.equal(aurelia.company.experience, "8"); assert.equal(aurelia.generatedProfile.sections.find((section) => section.id === "services")?.items.length, 7); assert.equal(aureliaProjects[0].name, "Riverside Residence"); assert.equal(betaFixtureImageState(aureliaProjects), "valid_data_url"); assert(aureliaGenerated && generatedProjectEvidenceCount(aureliaGenerated) === 1);
+const familyRecommendation = (fixture: ReturnType<typeof createBetaFixture>) => familyChoices({ projectCount: fixture.projects.length, authenticProjectImageCount: fixture.projects.filter((project) => Boolean(project.imageUrl)).length, serviceCount: fixture.generatedProfile.sections.find((section) => section.id === "services")?.items.length ?? 0, productFeatureCount: fixture.generatedProfile.sections.find((section) => section.id === "features")?.items.length ?? 0, useCaseCount: fixture.generatedProfile.sections.find((section) => section.id === "useCases")?.items.length ?? 0 }).find((choice) => choice.recommended)?.id;
+assert.equal(aurelia.expectedFamily, "visual-portfolio"); assert.equal(familyRecommendation(aurelia), "visual-portfolio");
 const northbridge = load("northbridge"); assert.equal(northbridge.company.experience, "1"); assert.equal(northbridge.projects.length, 0); assert.equal(northbridge.generatedProfile.sections.find((section) => section.id === "services")?.items.length, 5); assert(northbridge.generatedProfile.sections.some((section) => section.id === "howItWorks"));
+assert.equal(familyRecommendation(northbridge), "corporate-services");
 const winx = load("winx"); assert.equal(winx.projects.length, 0); assert(winx.generatedProfile.sections.some((section) => section.id === "features") && winx.generatedProfile.sections.some((section) => section.id === "useCases"));
+assert.equal(familyRecommendation(winx), "product-tech");
 const missing = load("aurelia-missing-image"); assert.equal(missing.projects.length, 1); assert.equal(betaFixtureImageState(missing.projects), "missing_or_corrupt"); assert.equal(generatedProjectEvidenceCount(missing.generatedProfile), 1);
 const generatedOnly = load("aurelia-generated-only"); assert.equal(JSON.parse(values.get("projectsData")!).length, 0); assert.equal(generatedProjectEvidenceCount(generatedOnly.generatedProfile), 1); assert.match(generatedOnly.expectedSafetyOutcome, /project_state_generated_only/);
 const legacy = load("legacy-control"); assert.equal(legacy.projects.length, 0); assert.equal(generatedProjectEvidenceCount(legacy.generatedProfile), 0); assert.equal(legacy.expectedFamily, "legacy");
