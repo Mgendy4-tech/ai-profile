@@ -12,7 +12,7 @@ import { validateAuthoredEmbeddedImageLimits, validateAuthoredImageOperationalLi
 import type { FamilyRankingExplanation } from "./library-types";
 import { selectAuthoredCover, type AuthoredCoverContent, type CurrentFamilyId } from "./cover-library";
 import { extractVisualNarrativeFacts } from "./visual-narrative-facts";
-import { customerFacingItemDescription, customerFacingSectionLine } from "./presentation-copy";
+import { customerFacingItemDescription, customerFacingSectionBody, customerFacingSectionLine } from "./presentation-copy";
 
 export type AuthoredExportFallbackReason = { stage: "operational" | "normalization" | "enrichment" | "ranking" | "planning" | "compatibility"; code: string; path: string; pageRole: PageRole | null };
 export type AuthoredFallbackCategory = "expected_unsupported_content_shape" | "missing_authentic_asset" | "authored_capacity_incompatibility" | "ambiguous_semantic_normalization" | "runtime_system_error";
@@ -86,7 +86,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     if (!featuresEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
     const planning = createProductTechDocumentPlan({ units, contactLines: contactLines(input.company),
       cover, coverTemplateId: coverSelection.templateId,
-      overview: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, supportingLine: customerFacingSectionLine("product-tech", input.company) },
+      overview: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: customerFacingSectionBody("product-tech", input.company, narrativeEntry.section), supportingLine: customerFacingSectionLine("product-tech", input.company) },
       featuresHeading: featuresEntry.section.title, featuresSupportingLine: customerFacingSectionLine("product-tech", input.company, featuresEntry.section.items),
       features: featuresEntry.section.items.map((item, index) => ({ contentId: `${featuresEntry.section.id}:item:${index}`, index: String(index + 1).padStart(2, "0"), title: item.name, description: customerFacingItemDescription("product-tech", input.company, item) })),
       ...(useCasesEntry?.section.items.length ? { useCases: { heading: useCasesEntry.section.title, supportingLine: "Applications across the platform's intended customer contexts.", items: useCasesEntry.section.items.map((item, index) => ({ contentId: `${useCasesEntry.section.id}:item:${index}`, index: String(index + 1).padStart(2, "0"), title: item.name, description: customerFacingItemDescription("product-tech", input.company, item) })) } } : {}),
@@ -100,12 +100,12 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     const planning = createCorporateServicesDocumentPlan({ contactLines: contactLines(input.company),
       units,
       cover, coverTemplateId: coverSelection.templateId,
-      narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, supportingLine: customerFacingSectionLine("corporate-services", input.company) },
+      narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: customerFacingSectionBody("corporate-services", input.company, narrativeEntry.section), supportingLine: customerFacingSectionLine("corporate-services", input.company) },
       ...(corporateDetailEntries.some((entry) => entry.role === "approach") ? {} : input.company.activities && input.company.experience ? { approach: { contentId: "company", heading: "Business approach", activities: input.company.activities, experience: input.company.experience } } : {}),
       servicesHeading: servicesEntry.section.title,
       servicesSupportingLine: customerFacingSectionLine("corporate-services", input.company, servicesEntry.section.items),
       services: servicesEntry.section.items.map((item, index) => ({ contentId: `${servicesEntry.section.id}:item:${index}`, index: String(index + 1).padStart(2, "0"), title: item.name, description: customerFacingItemDescription("corporate-services", input.company, item) })),
-      details: corporateDetailEntries.map((entry) => ({ contentId: entry.section.id, title: entry.section.title, body: entry.section.content, supportingLine: customerFacingSectionLine("corporate-services", input.company) })),
+      details: corporateDetailEntries.map((entry) => ({ contentId: entry.section.id, title: entry.section.title, body: customerFacingSectionBody("corporate-services", input.company, entry.section), supportingLine: customerFacingSectionLine("corporate-services", input.company) })),
     });
     if (!planning.compatible) return fallback(planning.issues.map(planningReason), ranking);
     const prepared = prepareCorporateServicesDocumentPlan(planning.plan);
@@ -138,18 +138,18 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
   const planning = createVisualPortfolioDocumentPlan({ contactLines: contactLines(input.company),
     units,
     cover, coverTemplateId: coverSelection.templateId,
-    narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: narrativeEntry.section.content, facts: extractVisualNarrativeFacts(input.company), ...(narrativeEntry.section.items[0] ? { secondaryBlock: { title: narrativeEntry.section.items[0].name, body: narrativeEntry.section.items[0].description } } : {}) },
+    narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: customerFacingSectionBody("visual-portfolio", input.company, narrativeEntry.section), facts: extractVisualNarrativeFacts(input.company), ...(narrativeEntry.section.items[0] ? { secondaryBlock: { title: narrativeEntry.section.items[0].name, body: customerFacingItemDescription("visual-portfolio", input.company, narrativeEntry.section.items[0]) } } : {}) },
     capabilities: { contentId: servicesEntry.section.id, eyebrow: "02 / CAPABILITIES", heading: servicesEntry.section.title, supportingLine: customerFacingSectionLine("visual-portfolio", input.company, servicesEntry.section.items), capabilities: servicesEntry.section.items.slice(0, 4).map((item, index) => ({ index: String(index + 1).padStart(2, "0"), title: item.name, description: customerFacingItemDescription("visual-portfolio", input.company, item), items: [] })) as unknown as readonly [
       { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] }, { index: string; title: string; description: string; items: readonly string[] },
     ] },
     ...(useSupportingDetail ? { capabilitiesSupporting: {
       contentId: `${servicesEntry.section.id}:supporting`, eyebrow: "CAPABILITIES / CONTINUED", heading: "Crafted around every interior.",
       capabilities: servicesEntry.section.items.slice(4).map((item, index) => ({ index: String(index + 5).padStart(2, "0"), title: item.name, description: customerFacingItemDescription("visual-portfolio", input.company, item), items: [] })) as never,
-      detail: { contentId: corporateDetailEntries[0].section.id, title: corporateDetailEntries[0].section.title, body: corporateDetailEntries[0].section.content },
+      detail: { contentId: corporateDetailEntries[0].section.id, title: corporateDetailEntries[0].section.title, body: customerFacingSectionBody("visual-portfolio", input.company, corporateDetailEntries[0].section) },
     } } : {}),
     ...(capabilityContinuations.length ? { capabilityContinuations } : {}),
-    details: corporateDetailEntries.map((entry) => ({ contentId: entry.section.id, title: entry.section.title, body: entry.section.content })),
-    projects: input.projects.map((project) => ({ contentId: project.id, name: project.name, description: project.description, image: toImage(project.id) })),
+    details: corporateDetailEntries.map((entry) => ({ contentId: entry.section.id, title: entry.section.title, body: customerFacingSectionBody("visual-portfolio", input.company, entry.section) })),
+    projects: input.projects.map((project) => ({ contentId: project.id, name: project.name, description: customerFacingItemDescription("visual-portfolio", input.company, project), image: toImage(project.id) })),
   });
   if (!planning.compatible) return fallback(planning.issues.map(planningReason), ranking);
   const prepared = prepareVisualPortfolioDocumentPlan(planning.plan);

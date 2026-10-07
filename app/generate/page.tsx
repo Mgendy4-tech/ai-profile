@@ -89,6 +89,7 @@ import { reconstructPersistedProjects } from "@/lib/persisted-projects";
 import { authoredDevelopmentFailureMessage, createAuthoredRejectionDiagnostic, type AuthoredExportDevelopmentDiagnostic } from "@/lib/authored-export-diagnostics";
 import { generatedProjectEvidenceCount, persistGeneratedProfile, readPersistedGeneratedProfile } from "@/lib/generated-profile-storage";
 import { familyChoices } from "@/lib/authored-templates/family-selection";
+import { customerFacingSectionCopy, type CustomerFacingFamily, type CompanyIdentity } from "@/lib/authored-templates/presentation-copy";
 
 type Project = {
   id?: string;
@@ -131,6 +132,17 @@ type ProfileSection = {
   description: string;
   semanticRole?: string;
   items?: readonly { id: string; title: string; description: string }[];
+};
+
+const familyChoicesForProfile = (currentProfile: GeneratedProfile) => {
+  const projects = currentProfile.projects ?? [];
+  return familyChoices({
+    projectCount: projects.length,
+    authenticProjectImageCount: projects.filter((project) => typeof project.imageUrl === "string" && project.imageUrl.startsWith("data:image/")).length,
+    serviceCount: currentProfile.sections.find((section) => section.id === "services")?.items.length ?? 0,
+    productFeatureCount: currentProfile.sections.find((section) => section.id === "features")?.items.length ?? 0,
+    useCaseCount: currentProfile.sections.find((section) => section.id === "useCases")?.items.length ?? 0,
+  });
 };
 
 type ProfileStructure = {
@@ -410,6 +422,7 @@ const postJsonWithTimeout = async <T,>(
 
 export default function GeneratePage() {
   const [profile, setProfile] = useState<GeneratedProfile | null>(null);
+  const [presentationCompany, setPresentationCompany] = useState<CompanyIdentity | null>(null);
 const [profileStructure, setProfileStructure] =
   useState<ProfileStructure | null>(null);
 const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
@@ -442,6 +455,10 @@ useEffect(() => {
   const restore = window.setTimeout(() => {
     const generated = readPersistedGeneratedProfile(localStorage);
     if (generated) setProfile(generated as GeneratedProfile);
+    const rawCompany = localStorage.getItem("companyData");
+    if (rawCompany) {
+      try { setPresentationCompany(normalizeCompanyData(JSON.parse(rawCompany))); } catch { setPresentationCompany(null); }
+    }
     setSelectedFamily(localStorage.getItem("authoredFamilyDecision"));
     const persisted = readPersistedApprovedProfileStructure(localStorage);
     if (!persisted || validateApprovedStructure(persisted.structure) !== null) return;
@@ -453,8 +470,7 @@ useEffect(() => {
 
 useEffect(() => {
   if (!profile || !selectedFamily) return;
-  const projects = profile.projects ?? [];
-  const choices = familyChoices({ projectCount: projects.length, authenticProjectImageCount: projects.filter((p) => typeof p.imageUrl === "string" && p.imageUrl.startsWith("data:image/")).length, serviceCount: profile.sections.find((s) => s.id === "services")?.items.length ?? 0, productFeatureCount: profile.sections.find((s) => s.id === "features")?.items.length ?? 0, useCaseCount: profile.sections.find((s) => s.id === "useCases")?.items.length ?? 0 });
+  const choices = familyChoicesForProfile(profile);
   if (!choices.some((choice) => choice.id === selectedFamily && choice.eligible)) { localStorage.removeItem("authoredFamilyDecision"); setSelectedFamily(null); setFamilyMessage("The previous family selection is no longer eligible for this profile. AI recommendation restored."); }
 }, [profile, selectedFamily]);
 
@@ -507,6 +523,7 @@ const handleAnalyze = async () => {
     }
 
     const companyData = normalizeCompanyData(JSON.parse(savedCompanyData));
+    setPresentationCompany(companyData);
 
     if (!companyData.name?.trim() || !companyData.about?.trim()) {
       throw new Error("Please complete your company information first.");
@@ -584,6 +601,7 @@ setStructureConfirmed(false);
         }
 
         const companyData = normalizeCompanyData(JSON.parse(savedCompanyData));
+        setPresentationCompany(companyData);
         if (!companyData.name?.trim() || !companyData.about?.trim()) {
           setProfile(null);
           setErrorMessage("Please complete your company information before generating a profile.");
@@ -717,26 +735,23 @@ persistGeneratedProfile(localStorage, generatedProfile);
     }, 400);
   };
 
+  const getCustomerFacingProfile = (currentProfile: GeneratedProfile) => {
+    const choices = familyChoicesForProfile(currentProfile);
+    const storedFamily = selectedFamily === "visual-portfolio" || selectedFamily === "corporate-services" || selectedFamily === "product-tech" ? selectedFamily : null;
+    const family = (storedFamily ?? choices.find((choice) => choice.recommended)?.id ?? "corporate-services") as CustomerFacingFamily;
+    const company = presentationCompany ?? { name: currentProfile.companyName, companyType: currentProfile.companyType };
+    return { family, sections: currentProfile.sections.map((section) => customerFacingSectionCopy(family, company, section)) };
+  };
+
   const getProfileText = () => {
     if (!profile) {
       return "";
     }
 
+    const presented = getCustomerFacingProfile(profile).sections;
+
     return [
-      "ABOUT US",
-      profile.about,
-      "OUR EXPERTISE",
-      profile.expertise.map((item) => `- ${item}`).join("\n"),
-      "OUR EXPERIENCE",
-      profile.experience,
-      "FEATURED PROJECTS",
-      profile.projects.length
-        ? profile.projects
-            .map((project) => `${project.name}\n${project.description}`)
-            .join("\n\n")
-        : "No projects have been added yet.",
-      "WHY CHOOSE US",
-      profile.reasons.map((reason) => `- ${reason}`).join("\n"),
+      ...presented.map((section) => [section.title, section.description, section.content, section.items.map((item) => `${item.name}\n${item.description}`).join("\n\n")].filter(Boolean).join("\n\n")),
     ].join("\n\n");
   };
 
@@ -1855,10 +1870,9 @@ persistGeneratedProfile(localStorage, generatedProfile);
 </button>
 )}
 {profile && (() => {
-  const projects = profile.projects ?? [];
-  const choices = familyChoices({ projectCount: projects.length, authenticProjectImageCount: projects.filter((p) => typeof p.imageUrl === "string" && p.imageUrl.startsWith("data:image/")).length, serviceCount: profile.sections.find((s) => s.id === "services")?.items.length ?? 0, productFeatureCount: profile.sections.find((s) => s.id === "features")?.items.length ?? 0, useCaseCount: profile.sections.find((s) => s.id === "useCases")?.items.length ?? 0 });
+  const choices = familyChoicesForProfile(profile);
   const choose = (choice: typeof choices[number]) => { if (!choice.eligible) return; localStorage.setItem("authoredFamilyDecision", choice.id); setSelectedFamily(choice.id); setFamilyMessage(`${choice.label} selected for this profile.`); };
-  return <section aria-label="Template family selection" className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><h2 className="text-2xl font-semibold text-gray-900">Choose a template family</h2><p className="mt-2 text-sm text-gray-600">AI recommendation is based on structured content signals. Only safe, eligible families can be selected.</p><div className="mt-5 grid gap-4 md:grid-cols-3">{choices.map((choice) => <button key={choice.id} type="button" disabled={!choice.eligible} onClick={() => choose(choice)} className={`rounded-xl border p-4 text-left transition ${choice.eligible ? "hover:border-gray-900" : "cursor-not-allowed opacity-55"} ${selectedFamily === choice.id ? "border-gray-900 ring-2 ring-gray-200" : "border-gray-200"}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-gray-900">{choice.label}</span>{choice.recommended && <span className="rounded-full bg-green-100 px-2 py-1 text-[10px] font-bold uppercase text-green-800">AI recommended</span>}</div><p className="mt-3 text-sm leading-6 text-gray-600">{choice.description}</p>{choice.eligible ? <p className="mt-3 text-xs font-medium text-green-700">Eligible</p> : <p className="mt-3 text-xs font-medium text-red-700">Unavailable: {choice.reason}</p>}</button>)}</div>{familyMessage && <p role="status" className="mt-4 text-sm text-green-700">{familyMessage}</p>}</section>;
+  return <section aria-label="Template family selection" className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><h2 className="text-2xl font-semibold text-gray-900">Choose a template family</h2><p className="mt-2 text-sm text-gray-600">AI recommendation is based on structured content signals. Only safe, eligible families can be selected.</p><div className="mt-5 grid gap-4 md:grid-cols-3">{choices.map((choice) => <button key={choice.id} type="button" disabled={!choice.eligible} onClick={() => choose(choice)} className={`rounded-xl border p-4 text-left transition ${choice.eligible ? "hover:border-gray-900" : "cursor-not-allowed opacity-55"} ${selectedFamily === choice.id ? "border-gray-900 ring-2 ring-gray-200" : "border-gray-200"}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-gray-900">{choice.label}</span><span className="flex flex-wrap justify-end gap-1">{choice.recommended && <span className="rounded-full bg-green-100 px-2 py-1 text-[10px] font-bold uppercase text-green-800">AI recommended</span>}{selectedFamily === choice.id && <span className="rounded-full bg-gray-900 px-2 py-1 text-[10px] font-bold uppercase text-white">Selected</span>}</span></div><p className="mt-3 text-sm leading-6 text-gray-600">{choice.description}</p>{choice.recommended && choice.recommendationReason && <p className="mt-3 text-xs leading-5 text-gray-700">{choice.recommendationReason}</p>}{choice.eligible ? <p className="mt-3 text-xs font-medium text-green-700">Eligible</p> : <p className="mt-3 text-xs font-medium text-red-700">Unavailable: {choice.reason}</p>}</button>)}</div>{familyMessage && <p role="status" className="mt-4 text-sm text-green-700">{familyMessage}</p>}</section>;
 })()}
 {!profile && profileStructure && (
   <div
@@ -2120,13 +2134,19 @@ persistGeneratedProfile(localStorage, generatedProfile);
               </div>
 
               <section className="space-y-10 px-5 py-7 text-gray-700 sm:px-7 sm:py-9">
-  {profile.sections?.map((section) => (
+  {getCustomerFacingProfile(profile).sections.map((section) => (
     <div key={section.id} className="max-w-4xl">
       <h4 className="text-xl font-semibold tracking-tight text-gray-900">
         {section.title}
       </h4>
 
       <div className="mt-3 h-px w-12 bg-gray-900" />
+
+      {section.description && (
+        <p className="mt-3 text-sm leading-6 text-gray-600">
+          {section.description}
+        </p>
+      )}
 
       {section.content && (
         <p className="mt-4 text-base leading-8">

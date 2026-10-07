@@ -84,9 +84,9 @@ const main = async () => {
   assert(decision.pageOrder[3] === "product-tech-v1.features-continuation-3", "The real export path must select the fixed three-item feature continuation.");
   const rawPages = (decision.pdf.internal as unknown as { pages: string[][] }).pages;
   const page3 = rawPages[3].join("\n"); const page4 = rawPages[4].join("\n");
-  assert(page3.includes("Platform Capabilities") && page3.includes("structured view"), "Page 3 must own the customer-facing feature introduction.");
+  assert(page3.includes("Platform Capabilities") && page3.includes("product capabilities"), "Page 3 must own the customer-facing feature introduction.");
   assert(page4.includes("FEATURES / CONTINUED") && page4.includes("MORE CAPABILITIES"), "Page 4 must use the authored compact continuation treatment.");
-  assert(!page4.includes("Platform Capabilities") && !page4.includes("structured view"), "Page 4 must not repeat the feature title or description.");
+  assert(!page4.includes("Platform Capabilities") && !page4.includes("product capabilities"), "Page 4 must not repeat the feature title or description.");
   const pdf = Buffer.from(decision.pdf.output("arraybuffer")).toString("latin1"); assert(!/pexels|image credits/i.test(pdf), "WinX unexpectedly reached legacy image rendering.");
   assert(!containsInternalPresentationCopy(rawPages.flat().join("\n")) && !containsGeneratedFillerCopy(rawPages.flat().join("\n")), "Product PDF must not expose planning instructions or generated filler.");
   assert(decision.pageOrder.length === decision.pdf.getNumberOfPages(), "Product planned and rendered page counts must match.");

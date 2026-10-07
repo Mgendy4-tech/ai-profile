@@ -1,14 +1,33 @@
 import assert from "node:assert/strict";
-import { containsGeneratedFillerCopy, containsInternalPresentationCopy, customerFacingItemDescription, customerFacingSectionLine } from "./presentation-copy";
+import { containsGeneratedFillerCopy, containsInternalPresentationCopy, customerFacingItemDescription, customerFacingSectionCopy, customerFacingSectionLine } from "./presentation-copy";
+import { familyChoices } from "./family-selection";
 
 const company = { name: "Aurelia Interiors", companyType: "Interior Design Studio", industry: "Interior Design", about: "Customer wording may explicitly say based on supplied information." };
 const filler = { name: "Interior Design", description: "Interior Design grounded in supplied information." };
 const explicit = { name: "Research", description: "based on supplied information" };
 
-assert.equal(customerFacingItemDescription("visual-portfolio", company, filler), "Part of Aurelia Interiors' design capabilities.");
+assert.equal(customerFacingItemDescription("visual-portfolio", company, filler), "Design capability within Aurelia Interiors' practice.");
 assert.equal(customerFacingItemDescription("corporate-services", company, explicit), explicit.description, "Explicit customer-entered wording must not be filtered.");
-assert.equal(customerFacingSectionLine("visual-portfolio", company, [filler]), "A coordinated view of the studio's design practice.");
+assert.equal(customerFacingSectionLine("visual-portfolio", company, [filler]), "Aurelia Interiors' Interior Design Studio · Interior Design practice.");
 assert.equal(containsInternalPresentationCopy("Present the seven supplied capabilities."), true);
 assert.equal(containsInternalPresentationCopy("We present thoughtful interiors."), false);
 assert.equal(containsGeneratedFillerCopy(filler.description), true);
+const presented = customerFacingSectionCopy("visual-portfolio", company, { title: "Capabilities", description: "Present the supplied capabilities.", content: "A source-backed design practice.", items: [filler] });
+assert(!containsGeneratedFillerCopy(presented.description) && !containsGeneratedFillerCopy(presented.content), "Customer-facing section copy must remove generated filler.");
+assert(presented.content.includes("Aurelia Interiors") && presented.items[0].description.includes("Design capability"), "Personalized presentation must retain source facts.");
+const northbridgePresented = customerFacingSectionCopy("corporate-services", { name: "Northbridge Advisory", companyType: "Business Consulting & Professional Services" }, { title: "Advisory Services", description: "Present the supplied services.", content: "Northbridge provides source-backed advisory services.", items: [{ name: "Operational Improvement", description: "Operational Improvement grounded in supplied company information." }] });
+assert(northbridgePresented.content.includes("Northbridge Advisory") && northbridgePresented.items[0].description.includes("Advisory capability") && !containsGeneratedFillerCopy(northbridgePresented.content), "Northbridge copy must remain advisory and source-grounded without internal filler.");
+const winxPresented = customerFacingSectionCopy("product-tech", { name: "WinX", companyType: "Sales Technology Company" }, { title: "Platform Features", description: "Present the supplied product features.", content: "WinX provides source-backed platform capabilities.", items: [{ name: "Campaign Management", description: "Campaign Management based on supplied product information." }] });
+assert(winxPresented.content.includes("WinX") && winxPresented.items[0].description.includes("Platform capability") && !containsGeneratedFillerCopy(winxPresented.content), "WinX copy must remain product-focused without internal filler.");
+const entered = { name: "Research", description: "The client explicitly wrote source-backed in this description." };
+const enteredCopy = customerFacingSectionCopy("visual-portfolio", { ...company, about: entered.description }, { title: "Research", description: entered.description, content: entered.description, items: [entered] });
+assert.equal(entered.description, "The client explicitly wrote source-backed in this description.", "User-entered source text must remain unchanged.");
+assert.equal(enteredCopy.items[0].description, entered.description, "Literal user-entered wording must remain customer-visible.");
+const aureliaChoices = familyChoices({ projectCount: 1, authenticProjectImageCount: 1, serviceCount: 7, productFeatureCount: 0, useCaseCount: 0 });
+const northbridgeChoices = familyChoices({ projectCount: 0, authenticProjectImageCount: 0, serviceCount: 5, productFeatureCount: 0, useCaseCount: 0 });
+const winxChoices = familyChoices({ projectCount: 0, authenticProjectImageCount: 0, serviceCount: 0, productFeatureCount: 7, useCaseCount: 3 });
+assert.equal(aureliaChoices.find((choice) => choice.recommended)?.id, "visual-portfolio");
+assert.equal(northbridgeChoices.find((choice) => choice.recommended)?.id, "corporate-services");
+assert.equal(winxChoices.find((choice) => choice.recommended)?.id, "product-tech");
+assert(aureliaChoices.find((choice) => choice.recommended)?.recommendationReason?.includes("authentic imagery"));
 console.log("Customer-facing authored presentation-copy boundary tests passed.");

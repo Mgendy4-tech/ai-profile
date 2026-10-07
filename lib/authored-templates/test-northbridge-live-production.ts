@@ -91,9 +91,9 @@ assert(first.familyId === "corporate-services" && first.packId === "corporate-se
 assert(first.pageOrder[3] === "corporate-services-v1.services-continuation-1", "Northbridge must select the fixed one-item services continuation.");
 const rawPages = (first.pdf.internal as unknown as { pages: string[][] }).pages;
 const servicesPage = rawPages[3].join("\n"); const continuationPage = rawPages[4].join("\n");
-assert(servicesPage.includes("Consulting") && servicesPage.includes("structured view"), "First services page must own the customer-facing section introduction.");
+assert(servicesPage.includes("Consulting") && servicesPage.includes("practical advisory work"), "First services page must own the customer-facing section introduction.");
 assert(continuationPage.includes("SERVICES / CONTINUED") && continuationPage.includes("Additional Services"), "Corporate continuation must use its compact authored treatment.");
-assert(!continuationPage.includes("Consulting & Advisory Services") && !continuationPage.includes("structured view"), "Corporate continuation must not repeat the services title or description.");
+assert(!continuationPage.includes("Consulting & Advisory Services") && !continuationPage.includes("practical advisory work"), "Corporate continuation must not repeat the services title or description.");
 assert(JSON.stringify(first.pageOrder) === JSON.stringify(planning.plan.pages.map((page) => page.templateId)), "Traced plan and production decision page order must match.");
 const firstBytes = Buffer.from(first.pdf.output("arraybuffer"));
 const secondBytes = Buffer.from(second.pdf.output("arraybuffer"));
