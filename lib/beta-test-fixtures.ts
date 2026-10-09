@@ -93,11 +93,12 @@ export const createBetaFixture = (id: BetaFixtureId, validProjectImage: string):
   if (id === "northbridge") return { id, label: "Northbridge — Corporate / Services", company: northbridgeCompany, projects: [], profileStructure: structure(northbridgeCompany, northbridgeCompany.companyType, northbridgeSelected), generatedProfile: profile(northbridgeCompany, northbridgeCompany.companyType, northbridgeSections), expectedFamily: "corporate-services", expectedSafetyOutcome: "Authored Corporate / Services export expected." };
   if (id === "winx") return { id, label: "WinX — Product / Tech", company: winxCompany, projects: [], profileStructure: structure(winxCompany, winxCompany.companyType, winxSelected), generatedProfile: profile(winxCompany, winxCompany.companyType, winxSections), expectedFamily: "product-tech", expectedSafetyOutcome: "Authored Product / Tech export expected." };
   if (id === "legacy-control") return { id, label: "Project-free approved legacy control", company: legacyCompany, projects: [], generatedProfile: profile(legacyCompany, legacyCompany.companyType, legacySections), expectedFamily: "legacy", expectedSafetyOutcome: "Approved project-free legacy fallback remains available." };
-  const imageUrl = id === "aurelia-missing-image" ? "" : validProjectImage;
-  const generated = profile(aureliaCompany, aureliaCompany.companyType, aureliaSections(validProjectImage), [riverside(validProjectImage)]);
+  const imageUrl = id === "aurelia-missing-image" ? "corrupt://aurelia-missing-project-image" : validProjectImage;
+  const generated = profile(aureliaCompany, aureliaCompany.companyType, aureliaSections(imageUrl), [riverside(imageUrl)]);
+  const fixtureCompany = { ...aureliaCompany, logoUrl: "" };
   return {
     id, label: id === "aurelia" ? "Aurelia — Visual / Portfolio" : id === "aurelia-missing-image" ? "Aurelia — Missing project image" : "Aurelia — Generated-only project evidence",
-    company: { ...aureliaCompany, logoUrl: validProjectImage }, projects: id === "aurelia-generated-only" ? [] : [riverside(imageUrl)], profileStructure: structure({ ...aureliaCompany, logoUrl: validProjectImage }, aureliaCompany.companyType, aureliaSelected), generatedProfile: { ...generated, logoUrl: validProjectImage },
+    company: fixtureCompany, projects: id === "aurelia-generated-only" ? [] : [riverside(imageUrl)], profileStructure: structure(fixtureCompany, aureliaCompany.companyType, aureliaSelected), generatedProfile: { ...generated, logoUrl: "" },
     expectedFamily: "visual-portfolio", expectedSafetyOutcome: id === "aurelia-missing-image" ? "Explicit image failure; legacy/contextual fallback forbidden." : id === "aurelia-generated-only" ? "project_state_generated_only; unsafe fallback blocked." : "Authored Visual / Portfolio export expected.",
   };
 };

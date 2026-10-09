@@ -5,6 +5,8 @@ import { APPLICATION_STORAGE_KEYS, clearApplicationLocalData } from "./local-pro
 import { generatedProjectEvidenceCount, readPersistedGeneratedProfile } from "./generated-profile-storage";
 import { familyChoices } from "./authored-templates/family-selection";
 import { readPersistedCompanyData } from "./company-data";
+import { readPersistedProjects } from "./persisted-projects";
+import { validateProjectOperationalLimits } from "./production-limits";
 
 assert.equal(isBetaTestModeEnabled(undefined), false); assert.equal(isBetaTestModeEnabled("false"), false); assert.equal(isBetaTestModeEnabled("true"), true);
 const values = new Map<string, string>([["unrelated-origin-state", "keep"]]); const writes: string[] = [];
@@ -15,13 +17,19 @@ const load = (id: BetaFixtureId) => { writes.length = 0; const fixture = createB
 const aurelia = load("aurelia"); const aureliaProjects = JSON.parse(values.get("projectsData")!); const aureliaGenerated = readPersistedGeneratedProfile(storage);
 assert.equal(readPersistedCompanyData(storage)?.name, "Aurelia Interiors");
 assert.equal(aurelia.company.experience, "8"); assert.equal(aurelia.generatedProfile.sections.find((section) => section.id === "services")?.items.length, 7); assert.equal(aureliaProjects[0].name, "Riverside Residence"); assert.equal(betaFixtureImageState(aureliaProjects), "valid_data_url"); assert(aureliaGenerated && generatedProjectEvidenceCount(aureliaGenerated) === 1);
+assert.equal(aurelia.company.logoUrl, "", "Normal Aurelia must not use its project image as a company logo.");
 const familyRecommendation = (fixture: ReturnType<typeof createBetaFixture>) => familyChoices({ projectCount: fixture.projects.length, authenticProjectImageCount: fixture.projects.filter((project) => Boolean(project.imageUrl)).length, serviceCount: fixture.generatedProfile.sections.find((section) => section.id === "services")?.items.length ?? 0, productFeatureCount: fixture.generatedProfile.sections.find((section) => section.id === "features")?.items.length ?? 0, useCaseCount: fixture.generatedProfile.sections.find((section) => section.id === "useCases")?.items.length ?? 0 }).find((choice) => choice.recommended)?.id;
 assert.equal(aurelia.expectedFamily, "visual-portfolio"); assert.equal(familyRecommendation(aurelia), "visual-portfolio");
 const northbridge = load("northbridge"); assert.equal(northbridge.company.experience, "1"); assert.equal(northbridge.projects.length, 0); assert.equal(northbridge.generatedProfile.sections.find((section) => section.id === "services")?.items.length, 5); assert(northbridge.generatedProfile.sections.some((section) => section.id === "howItWorks"));
 assert.equal(familyRecommendation(northbridge), "corporate-services");
 const winx = load("winx"); assert.equal(winx.projects.length, 0); assert(winx.generatedProfile.sections.some((section) => section.id === "features") && winx.generatedProfile.sections.some((section) => section.id === "useCases"));
 assert.equal(familyRecommendation(winx), "product-tech");
-const missing = load("aurelia-missing-image"); assert.equal(missing.projects.length, 1); assert.equal(betaFixtureImageState(missing.projects), "missing_or_corrupt"); assert.equal(generatedProjectEvidenceCount(missing.generatedProfile), 1);
+const missing = load("aurelia-missing-image"); const missingProjects = JSON.parse(values.get("projectsData")!); const missingGenerated = readPersistedGeneratedProfile(storage);
+assert.equal(missing.projects.length, 1); assert.equal(betaFixtureImageState(missing.projects), "missing_or_corrupt"); assert.equal(missingProjects[0].imageUrl, "corrupt://aurelia-missing-project-image"); assert(missingGenerated && generatedProjectEvidenceCount(missingGenerated) === 1);
+assert.equal(missingGenerated?.projects[0]?.imageUrl, missingProjects[0].imageUrl, "Missing-image preset must not restore a valid generated-profile image.");
+assert.equal(familyChoices({ projectCount: missingProjects.length, authenticProjectImageCount: missingProjects.filter((project: { imageUrl: string }) => project.imageUrl.startsWith("data:image/")).length, serviceCount: missing.generatedProfile.sections.find((section) => section.id === "services")?.items.length ?? 0, productFeatureCount: 0, useCaseCount: 0 }).find((choice) => choice.id === "visual-portfolio")?.eligible, false, "Missing-image preset must make Visual / Portfolio ineligible.");
+assert.equal(readPersistedProjects(storage).projects.length, 1, "Missing-image preset must preserve the project record after reload.");
+assert(validateProjectOperationalLimits(missingProjects).some((issue) => issue.code === "image_format_limit"), "Missing-image export safety must reject the corrupt project image with an actionable validation code.");
 const generatedOnly = load("aurelia-generated-only"); assert.equal(JSON.parse(values.get("projectsData")!).length, 0); assert.equal(generatedProjectEvidenceCount(generatedOnly.generatedProfile), 1); assert.match(generatedOnly.expectedSafetyOutcome, /project_state_generated_only/);
 const legacy = load("legacy-control"); assert.equal(legacy.projects.length, 0); assert.equal(generatedProjectEvidenceCount(legacy.generatedProfile), 0); assert.equal(legacy.expectedFamily, "legacy");
 const cleared = clearApplicationLocalData(storage as Storage); assert(cleared.complete && APPLICATION_STORAGE_KEYS.every((key) => !values.has(key))); assert.equal(values.get("unrelated-origin-state"), "keep");
