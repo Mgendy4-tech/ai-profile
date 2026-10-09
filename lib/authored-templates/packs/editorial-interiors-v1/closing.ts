@@ -1,6 +1,7 @@
 import { evaluateContentEnvelope } from "../../content-envelope";
 import type { AuthoredPageTemplate, ContentEnvelope } from "../../types";
 import type { EditorialClosingContent } from "./content";
+import { drawContainedOptionalLogo, preparedOptionalLogo } from "../logo";
 import { createEditorialInteriorsMeasurementContext, editorialInteriorsV1VisualSystem as visual, getPreparedText, paintPaper } from "./visual-system";
 
 const envelope: ContentEnvelope = { slots: [
@@ -20,8 +21,7 @@ export const editorialInteriorsClosingTemplate: AuthoredPageTemplate<EditorialCl
     pdf.setFillColor(...visual.palette.ochre); pdf.rect(visual.layout.closing.accentX, 0, visual.layout.closing.accentWidth, visual.layout.closing.accentHeight, "F");
     const name = getPreparedText(instance, "companyName"); pdf.setTextColor(...visual.palette.charcoal); pdf.setFont("times", "normal"); pdf.setFontSize(38); pdf.setLineHeightFactor(1.05); pdf.text([...name.lines], 19, 139);
     const descriptor = instance.preparedSlots.descriptor; if (descriptor?.kind === "text") { pdf.setTextColor(...visual.palette.secondary); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setLineHeightFactor(1.35); pdf.text([...descriptor.lines], 19, 174); }
-    const logo = instance.preparedSlots.logo;
-    if (logo?.kind === "image") { const ratio = logo.aspectRatio; const width = Math.min(52, 28 * ratio); const height = width / ratio; pdf.addImage(logo.source.source, logo.source.format, 19, 234 - height, width, height); }
+    drawContainedOptionalLogo(pdf, preparedOptionalLogo(instance), visual.layout.closing.logoFrames);
     const contacts = instance.preparedSlots.contactLines;
     if (contacts?.kind === "text") {
       pdf.setDrawColor(...visual.palette.hairline); pdf.setLineWidth(0.25); pdf.line(19, visual.layout.closing.contactRuleY, visual.layout.right, visual.layout.closing.contactRuleY);

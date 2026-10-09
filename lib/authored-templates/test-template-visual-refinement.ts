@@ -11,6 +11,7 @@ import { PRODUCT_FEATURE_CONTINUATION_GEOMETRY, productFeatureContinuationTempla
 import type { ProductFeaturesPageContent } from "./packs/product-tech-v1/content";
 import { productTechClosingTemplate } from "./packs/product-tech-v1/closing";
 import { productTechV1VisualSystem } from "./packs/product-tech-v1/visual-system";
+import type { ImageSlotValue } from "./types";
 
 const assert = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
 
@@ -31,6 +32,11 @@ assert(corporateServicesV1VisualSystem.layout.margin === 19 && corporateServices
 assert(productTechV1VisualSystem.layout.margin === 19 && productTechV1VisualSystem.layout.right === 191, "Product / Tech must keep the bounded product frame.");
 assertFrame("Visual closing accent", { x: editorialInteriorsV1VisualSystem.layout.closing.accentX, y: 0, width: editorialInteriorsV1VisualSystem.layout.closing.accentWidth, height: editorialInteriorsV1VisualSystem.layout.closing.accentHeight });
 assert(editorialInteriorsV1VisualSystem.layout.closing.contactRuleY < editorialInteriorsV1VisualSystem.layout.closing.contactTextY, "Visual contact rule must precede contact copy.");
+Object.entries(editorialInteriorsV1VisualSystem.layout.closing.logoFrames).forEach(([shape, frame]) => {
+  assertFrame(`Visual closing ${shape} logo frame`, frame);
+  assert(frame.x >= editorialInteriorsV1VisualSystem.layout.closing.accentX && frame.x + frame.width <= page.width, `Visual closing ${shape} logo must remain in the accent region.`);
+  assert(frame.y + frame.height < editorialInteriorsV1VisualSystem.layout.closing.contactRuleY, `Visual closing ${shape} logo must clear the contact block.`);
+});
 assert(corporateServicesV1VisualSystem.layout.closing.contactRuleY < corporateServicesV1VisualSystem.layout.closing.contactTextY, "Corporate contact rule must precede contact copy.");
 assert(productTechV1VisualSystem.layout.closing.contactRuleY < productTechV1VisualSystem.layout.closing.contactTextY, "Product contact rule must precede contact copy.");
 
@@ -86,5 +92,27 @@ closingCases.forEach(({ name, template, withContact }) => {
   assert(Boolean(audit.renderedTextBySlot.companyName), `${name} closing must keep the company identity.`);
   assert(Boolean(audit.renderedTextBySlot.contactLines) === withContact, `${name} closing contact rendering must remain conditional.`);
 });
+
+const imageSource = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+const projectImage: ImageSlotValue = { role: "project_image", provenance: "user_upload", format: "PNG", width: 1200, height: 900, source: imageSource };
+const companyLogo: ImageSlotValue = { role: "company_logo", provenance: "user_upload", format: "PNG", width: 1200, height: 300, source: imageSource };
+const contactLines = "aureliainteriors.com\nhello@aureliainteriors.com\n+20 100 000 0000\nCairo, Egypt";
+const closingWithProjectImageInLogoSlot = editorialInteriorsClosingTemplate.prepare({ contentId: "closing-project-image-regression", companyName: "Aurelia Interiors", descriptor: "Interior Design Studio", logo: projectImage, contactLines });
+assert(!closingWithProjectImageInLogoSlot.compatible && closingWithProjectImageInLogoSlot.issues.some((issue) => issue.code === "image_role_not_allowed"), "Visual closing must reject project images in the logo slot.");
+const closingWithLogo = editorialInteriorsClosingTemplate.prepare({ contentId: "closing-logo-regression", companyName: "Aurelia Interiors", descriptor: "Interior Design Studio", logo: companyLogo, contactLines });
+assert(closingWithLogo.compatible, "Visual closing with a valid company logo and contact data must preflight.");
+if (closingWithLogo.compatible) {
+  const logoPdf = new jsPDF({ unit: "mm", format: "a4" });
+  editorialInteriorsClosingTemplate.render(logoPdf, closingWithLogo.instance);
+  assert(logoPdf.getNumberOfPages() === 1, "Visual closing with a logo must remain one A4 page.");
+}
+const closingWithoutLogo = editorialInteriorsClosingTemplate.prepare({ contentId: "closing-no-logo-regression", companyName: "Aurelia Interiors", descriptor: "Interior Design Studio", contactLines });
+assert(closingWithoutLogo.compatible, "Visual closing without a logo must remain compatible.");
+if (closingWithoutLogo.compatible) {
+  const noLogoPdf = new jsPDF({ unit: "mm", format: "a4" });
+  editorialInteriorsClosingTemplate.render(noLogoPdf, closingWithoutLogo.instance);
+  const imageCount = Object.keys(((noLogoPdf.internal as unknown as { collections?: { addImage_images?: Record<string, unknown> } }).collections?.addImage_images) ?? {}).length;
+  assert(imageCount === 0, "Visual closing without a logo must not substitute a project or placeholder image.");
+}
 
 console.log("Three-family visual refinement geometry and closing checks passed.");

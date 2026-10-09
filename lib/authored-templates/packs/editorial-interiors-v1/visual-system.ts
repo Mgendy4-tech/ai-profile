@@ -45,6 +45,11 @@ export const editorialInteriorsV1VisualSystem = {
       accentX: 151,
       accentWidth: 59,
       accentHeight: 112,
+      logoFrames: {
+        wide: { x: 157, y: 36, width: 47, height: 14 },
+        balanced: { x: 165, y: 29, width: 30, height: 30 },
+        tall: { x: 168, y: 22, width: 24, height: 42 },
+      },
       contactRuleY: 198,
       contactLabelY: 207,
       contactTextY: 218,
@@ -83,7 +88,19 @@ export const editorialInteriorsV1VisualSystem = {
     headerLabelY: number;
     headerRuleY: number;
     bottomRuleY: number;
-    closing: { accentX: number; accentWidth: number; accentHeight: number; contactRuleY: number; contactLabelY: number; contactTextY: number };
+    closing: {
+      accentX: number;
+      accentWidth: number;
+      accentHeight: number;
+      logoFrames: {
+        wide: { x: number; y: number; width: number; height: number };
+        balanced: { x: number; y: number; width: number; height: number };
+        tall: { x: number; y: number; width: number; height: number };
+      };
+      contactRuleY: number;
+      contactLabelY: number;
+      contactTextY: number;
+    };
   };
 };
 
