@@ -89,7 +89,7 @@ import { reconstructPersistedProjects } from "@/lib/persisted-projects";
 import { authoredDevelopmentFailureMessage, createAuthoredRejectionDiagnostic, type AuthoredExportDevelopmentDiagnostic } from "@/lib/authored-export-diagnostics";
 import { generatedProjectEvidenceCount, persistGeneratedProfile, readPersistedGeneratedProfile } from "@/lib/generated-profile-storage";
 import { familyChoices } from "@/lib/authored-templates/family-selection";
-import { customerFacingSectionCopy, customerFacingSectionDescription, type CustomerFacingFamily, type CompanyIdentity } from "@/lib/authored-templates/presentation-copy";
+import { customerFacingSectionCopy, customerFacingSectionDescription, dedupeCustomerFacingSectionCopy, type CustomerFacingFamily, type CompanyIdentity } from "@/lib/authored-templates/presentation-copy";
 
 type Project = {
   id?: string;
@@ -740,7 +740,7 @@ persistGeneratedProfile(localStorage, generatedProfile);
     const storedFamily = selectedFamily === "visual-portfolio" || selectedFamily === "corporate-services" || selectedFamily === "product-tech" ? selectedFamily : null;
     const family = (storedFamily ?? choices.find((choice) => choice.recommended)?.id ?? "corporate-services") as CustomerFacingFamily;
     const company = presentationCompany ?? { name: currentProfile.companyName, companyType: currentProfile.companyType };
-    return { family, sections: currentProfile.sections.map((section) => customerFacingSectionCopy(family, company, section)) };
+    return { family, sections: currentProfile.sections.map((section) => dedupeCustomerFacingSectionCopy(customerFacingSectionCopy(family, company, section))) };
   };
 
   const getProfileText = () => {

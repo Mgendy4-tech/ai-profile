@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { containsGeneratedFillerCopy, containsInternalPresentationCopy, customerFacingItemDescription, customerFacingSectionCopy, customerFacingSectionDescription, customerFacingSectionLine } from "./presentation-copy";
+import { containsGeneratedFillerCopy, containsInternalPresentationCopy, customerFacingItemDescription, customerFacingSectionCopy, customerFacingSectionDescription, customerFacingSectionLine, dedupeCustomerFacingSectionCopy } from "./presentation-copy";
 import { familyChoices } from "./family-selection";
 
 const company = { name: "Aurelia Interiors", companyType: "Interior Design Studio", industry: "Interior Design", about: "Customer wording may explicitly say based on supplied information." };
@@ -33,6 +33,17 @@ const longCapabilityList = "interior design, space planning, material selection,
 assert(aureliaPreviewSections.filter((section) => section.description.toLocaleLowerCase().includes(longCapabilityList) || section.content.toLocaleLowerCase().includes(longCapabilityList)).length <= 1, "Long capability lists must not repeat across customer-facing sections.");
 assert(aureliaPreviewSections.find((section) => section.title === "Selected Projects")?.content.includes("Riverside Residence is a completed project featuring contemporary residential interior"), "Project section must use natural project-specific framing.");
 assert(!customerFacingSectionDescription(company, "Residential Expertise", "Describe Aurelia's supplied residential expertise.").includes("supplied"), "Planner descriptions must normalize internal instructions without changing source data.");
+const duplicateAureliaSections = [
+  { id: "services", title: "Interior Design Capabilities", description: "Aurelia Interiors brings together interior design and space planning.", content: "Aurelia Interiors brings together interior design and space planning.", items: [] },
+  { id: "approach", title: "Design Approach", description: "Aurelia Interiors' design approach balances warm natural materials and calm neutral palettes.", content: "Aurelia Interiors' design approach balances warm natural materials and calm neutral palettes.", items: [] },
+  { id: "projects", title: "Selected Projects", description: "Riverside Residence is a completed project featuring a contemporary residential interior.", content: "Riverside Residence is a completed project featuring a contemporary residential interior.", items: [{ name: "Riverside Residence", description: "A contemporary residential interior." }] },
+].map((section) => dedupeCustomerFacingSectionCopy(section));
+assert(duplicateAureliaSections.every((section) => section.content === ""), "Equivalent Aurelia section copy must render only once.");
+const distinctCopy = dedupeCustomerFacingSectionCopy({ title: "Design Approach", description: "Aurelia Interiors' design approach balances warm natural materials.", content: "Layered lighting and calm neutral palettes guide the visual character.", items: [] });
+assert(distinctCopy.content.length > 0, "Distinct complementary section copy must remain visible.");
+const sourceSection = { title: "Design Approach", description: "Same source description.", content: "Same source description.", items: [] };
+dedupeCustomerFacingSectionCopy(sourceSection);
+assert.equal(sourceSection.content, "Same source description.", "Presentation dedupe must not mutate source data.");
 const northbridgePresented = customerFacingSectionCopy("corporate-services", { name: "Northbridge Advisory", companyType: "Business Consulting & Professional Services" }, { title: "Advisory Services", description: "Present the supplied services.", content: "Northbridge provides source-backed advisory services.", items: [{ name: "Operational Improvement", description: "Operational Improvement grounded in supplied company information." }] });
 assert(northbridgePresented.content.includes("Northbridge Advisory") && northbridgePresented.items[0].description.includes("Advisory capability") && !containsGeneratedFillerCopy(northbridgePresented.content), "Northbridge copy must remain advisory and source-grounded without internal filler.");
 const winxPresented = customerFacingSectionCopy("product-tech", { name: "WinX", companyType: "Sales Technology Company" }, { title: "Platform Features", description: "Present the supplied product features.", content: "WinX provides source-backed platform capabilities.", items: [{ name: "Campaign Management", description: "Campaign Management based on supplied product information." }] });

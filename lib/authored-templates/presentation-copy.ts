@@ -68,6 +68,23 @@ export const customerFacingSectionDescription = (company: CompanyIdentity, title
   return needsCustomerFacingRewrite(text, company) ? customerFacingPlannerLine(company, title, items) : text;
 };
 
+const copyTokens = (value: string) => new Set(normalized(value).toLocaleLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((token) => token.length > 2));
+const effectivelyEquivalentCopy = (first: string, second: string) => {
+  if (!first || !second) return false;
+  const firstTokens = copyTokens(first);
+  const secondTokens = copyTokens(second);
+  const smaller = Math.min(firstTokens.size, secondTokens.size);
+  const larger = Math.max(firstTokens.size, secondTokens.size);
+  const overlap = [...firstTokens].filter((token) => secondTokens.has(token)).length;
+  return firstTokens.size === secondTokens.size && firstTokens.size > 0 && overlap / smaller >= 0.85 && smaller / larger >= 0.85;
+};
+
+export const dedupeCustomerFacingSectionCopy = (section: CustomerFacingSection): CustomerFacingSection => {
+  if (!effectivelyEquivalentCopy(section.description, section.content)) return section;
+  const preferred = section.content.length >= section.description.length ? section.content : section.description;
+  return { ...section, description: preferred, content: "" };
+};
+
 export const customerFacingSectionCopy = (family: CustomerFacingFamily, company: CompanyIdentity, section: CustomerFacingSection) => {
   const items = section.items.map((item) => ({ ...item, description: customerFacingItemDescription(family, company, item) }));
   const fallback = customerFacingSectionLine(family, company, items);

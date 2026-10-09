@@ -4,7 +4,7 @@ import { mustBlockLegacyFallback } from "../authored-export-policy";
 import { isolateNewCompanyState } from "../profile-state-isolation";
 import { reconstructPersistedProjects, resolveProjectsForCompanySave } from "../persisted-projects";
 import { routeEditorialInteriorsV1Export } from "./export-orchestrator";
-import { containsGeneratedFillerCopy, containsInternalPresentationCopy, customerFacingSectionCopy, customerFacingSectionDescription } from "./presentation-copy";
+import { containsGeneratedFillerCopy, containsInternalPresentationCopy, customerFacingSectionCopy, customerFacingSectionDescription, dedupeCustomerFacingSectionCopy } from "./presentation-copy";
 
 const assert: (condition: unknown, message: string) => asserts condition = (condition, message) => { if (!condition) throw new Error(message); };
 const bytes = readFileSync(resolve("lib/test-fixtures/visual/aurelia-browser-upload.jpg"));
@@ -31,6 +31,12 @@ const presentedAurelia = sections().map((section) => customerFacingSectionCopy("
 const presentedAureliaText = presentedAurelia.map((section) => [section.title, section.description, section.content, ...section.items.map((item) => `${item.name} ${item.description}`)].join("\n")).join("\n");
 assert(!/\bsupplied\b/i.test(presentedAureliaText) && !containsInternalPresentationCopy(presentedAureliaText), "Aurelia UI presentation must not expose internal source/planner wording.");
 assert(presentedAureliaText.includes(project.name) && presentedAureliaText.includes(project.description), "Aurelia UI presentation must preserve project identity and description.");
+for (const section of [
+  { title: "Interior Design Capabilities", description: "Aurelia Interiors brings together interior design and space planning.", content: "Aurelia Interiors brings together interior design and space planning.", items: [] },
+  { title: "Our Design Approach", description: "Aurelia Interiors' design approach balances warm natural materials and calm neutral palettes.", content: "Aurelia Interiors' design approach balances warm natural materials and calm neutral palettes.", items: [] },
+  { title: "Selected Projects", description: `${project.name} is a completed project featuring a contemporary residential interior.`, content: `${project.name} is a completed project featuring a contemporary residential interior.`, items: [{ name: project.name, description: project.description }] },
+]) assert(dedupeCustomerFacingSectionCopy(section).content === "", `Duplicate ${section.title} copy must render once.`);
+assert(dedupeCustomerFacingSectionCopy({ title: "Design Approach", description: "Warm natural materials shape the studio's approach.", content: "Layered lighting and calm neutral palettes guide the visual character.", items: [] }).content.length > 0, "Distinct Aurelia UI copy must remain visible.");
 
 const main = async () => {
   // Mirrors Save Project -> Save Company -> JSON persistence -> Generate reconstruction.
