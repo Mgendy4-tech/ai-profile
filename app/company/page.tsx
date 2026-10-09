@@ -3,8 +3,9 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearInheritedAssetsForIdentityEdit, isolateNewCompanyState, isSameCompanyIdentity } from '@/lib/profile-state-isolation';
-import { emptyCompanyData, experienceValidationMessage, normalizeCompanyData, validateCompanyContacts, normalizeBrandColor, type CompanyData } from '@/lib/company-data';
-import { resolveProjectsForCompanySave } from '@/lib/persisted-projects';
+import { emptyCompanyData, experienceValidationMessage, inspectPersistedCompanyData, validateCompanyContacts, normalizeBrandColor, type CompanyData } from '@/lib/company-data';
+import { persistProjects, readPersistedProjects } from '@/lib/persisted-projects';
+import { clearDerivedProfileState, removeApplicationStorage, storageUserMessage, writeApplicationStorage } from '@/lib/local-profile-data';
 
 type Project = {
   id: string;
@@ -43,20 +44,13 @@ export default function CompanyPage() {
   const projectsExplicitlyEdited = useRef(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const loadCompanyData = () => {
-      const savedCompanyData = localStorage.getItem('companyData');
-
-      if (savedCompanyData) {
-        try {
-          const normalized = normalizeCompanyData(JSON.parse(savedCompanyData));
-          loadedCompanyName.current = normalized.name;
-          setCompanyData(normalized);
-        } catch {
-          localStorage.removeItem('companyData');
-        }
-      }
+      const persisted = inspectPersistedCompanyData(localStorage);
+      if (persisted.data) { loadedCompanyName.current = persisted.data.name; setCompanyData(persisted.data); }
+      else if (persisted.issue) { removeApplicationStorage(localStorage, 'companyData'); setErrorMessage('Saved company information could not be read. Please enter it again and save it.'); }
 
     };
 
@@ -67,20 +61,10 @@ export default function CompanyPage() {
 
   useEffect(() => {
     const loadProjects = () => {
-      const savedProjects = localStorage.getItem('projectsData');
-
-      if (savedProjects) {
-        try {
-          const parsedProjects = JSON.parse(savedProjects);
-
-          if (Array.isArray(parsedProjects)) {
-            setProjects(parsedProjects);
-            setIsAddingProject(parsedProjects.length === 0);
-          }
-        } catch {
-          localStorage.removeItem('projectsData');
-        }
-      }
+      const snapshot = readPersistedProjects(localStorage);
+      if (snapshot.issues.length) { removeApplicationStorage(localStorage, 'projectsData'); setErrorMessage('Saved project data could not be read. Add the project again and save it.'); return; }
+      setProjects(snapshot.projects as Project[]);
+      setIsAddingProject(snapshot.projects.length === 0);
     };
 
     const loadTimeout = window.setTimeout(loadProjects, 0);
@@ -99,7 +83,7 @@ export default function CompanyPage() {
       setImagePreview('');
       // Remove inherited persisted projects at the identity boundary. Projects
       // saved after this point are explicitly owned by the new company.
-      localStorage.removeItem('projectsData');
+      removeApplicationStorage(localStorage, 'projectsData');
       setCompanyData(clearInheritedAssetsForIdentityEdit(loadedCompanyName.current, next) as CompanyData);
     } else {
       setCompanyData(next);
@@ -197,9 +181,11 @@ export default function CompanyPage() {
           },
         ];
 
+    const saved = persistProjects(localStorage, updatedProjects);
+    if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(''); return; }
     setProjects(updatedProjects);
     projectsExplicitlyEdited.current = true;
-    localStorage.setItem('projectsData', JSON.stringify(updatedProjects));
+    clearDerivedProfileState(localStorage);
     setEditingProjectId(null);
     setProjectName('');
     setCategory('');
@@ -213,15 +199,18 @@ export default function CompanyPage() {
 
   const handleDeleteProject = (projectId: string) => {
     const updatedProjects = projects.filter((project) => project.id !== projectId);
-
+    const saved = persistProjects(localStorage, updatedProjects);
+    if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(''); return; }
     setProjects(updatedProjects);
     projectsExplicitlyEdited.current = true;
-    localStorage.setItem('projectsData', JSON.stringify(updatedProjects));
+    clearDerivedProfileState(localStorage);
     setIsAddingProject(updatedProjects.length === 0);
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSaving) return;
+    setIsSaving(true);
 
     if (
       !companyData.name.trim() ||
@@ -229,38 +218,43 @@ export default function CompanyPage() {
     ) {
       setErrorMessage('Please provide the company name and about information before saving.');
       setSuccessMessage('');
+      setIsSaving(false);
       return;
     }
 
-    let previousCompany: CompanyData | null = null;
-    try { previousCompany = JSON.parse(localStorage.getItem('companyData') ?? 'null') as CompanyData | null; } catch { previousCompany = null; }
-    const storedProjectSnapshot = resolveProjectsForCompanySave(localStorage.getItem('projectsData'), projects);
+    const previousCompany = inspectPersistedCompanyData(localStorage).data;
+    const storedProjectSnapshot = readPersistedProjects(localStorage);
     if (storedProjectSnapshot.issues.length) {
       setErrorMessage('Saved project data is incomplete. Reopen the project, confirm its image, and save it again.');
       setSuccessMessage('');
+      setIsSaving(false);
       return;
     }
+    const projectsToSave = storedProjectSnapshot.persistedCount > 0 ? storedProjectSnapshot.projects : projects;
 
     const experienceError = experienceValidationMessage(companyData.experience);
     if (experienceError) {
       setErrorMessage(experienceError);
       setSuccessMessage('');
+      setIsSaving(false);
       return;
     }
     const contactIssues = validateCompanyContacts(companyData);
     if (Object.values(contactIssues).length) {
       setErrorMessage(Object.values(contactIssues)[0] ?? 'Please check the contact information.');
       setSuccessMessage('');
+      setIsSaving(false);
       return;
     }
     if (companyData.brandColor && !normalizeBrandColor(companyData.brandColor)) {
       setErrorMessage('Enter a brand color in six-digit hex format, such as #1F2937.');
       setSuccessMessage('');
+      setIsSaving(false);
       return;
     }
     // Project save persists synchronously; prefer that snapshot over a possibly stale React closure.
-    const isolated = isolateNewCompanyState(previousCompany, companyData, storedProjectSnapshot.projects, logoExplicitlySelected.current, explicitlyEditedFields.current, projectsExplicitlyEdited.current);
-    isolated.clearKeys.forEach((key) => localStorage.removeItem(key));
+    const isolated = isolateNewCompanyState(previousCompany, companyData, projectsToSave, logoExplicitlySelected.current, explicitlyEditedFields.current, projectsExplicitlyEdited.current);
+    isolated.clearKeys.forEach((key) => removeApplicationStorage(localStorage, key));
     const approvedCompanyData = isolated.companyData as CompanyData;
     const approvedProjects = isolated.projects as Project[];
     setCompanyData(approvedCompanyData);
@@ -268,15 +262,25 @@ export default function CompanyPage() {
     loadedCompanyName.current = approvedCompanyData.name;
     logoExplicitlySelected.current = false;
     projectsExplicitlyEdited.current = false;
-    localStorage.setItem('companyData', JSON.stringify(approvedCompanyData));
-    localStorage.setItem('projectsData', JSON.stringify(approvedProjects));
-
-setTimeout(() => {
-  router.push('/generate');
-}, 500);
+    const previousCompanyRaw = localStorage.getItem('companyData');
+    const previousProjectsRaw = localStorage.getItem('projectsData');
+    const companySaved = writeApplicationStorage(localStorage, 'companyData', JSON.stringify(approvedCompanyData));
+    const projectsSaved = companySaved.ok ? writeApplicationStorage(localStorage, 'projectsData', JSON.stringify(approvedProjects)) : companySaved;
+    if (!companySaved.ok || !projectsSaved.ok) {
+      if (previousCompanyRaw === null) removeApplicationStorage(localStorage, 'companyData'); else writeApplicationStorage(localStorage, 'companyData', previousCompanyRaw);
+      if (previousProjectsRaw === null) removeApplicationStorage(localStorage, 'projectsData'); else writeApplicationStorage(localStorage, 'projectsData', previousProjectsRaw);
+      const failureCode = !companySaved.ok ? companySaved.code : !projectsSaved.ok ? projectsSaved.code : 'storage_unavailable';
+      setErrorMessage(storageUserMessage(failureCode));
+      setSuccessMessage('');
+      setIsSaving(false);
+      return;
+    }
+    clearDerivedProfileState(localStorage);
+    router.push('/generate');
 
     setErrorMessage('');
     setSuccessMessage('Company information saved successfully.');
+    setIsSaving(false);
   };
 
   return (
@@ -571,8 +575,8 @@ setTimeout(() => {
             )}
           </section>
 
-          <button type="submit" className="rounded-lg bg-black px-6 py-3 font-medium text-white">
-            Save Company
+          <button type="submit" disabled={isSaving} className="rounded-lg bg-black px-6 py-3 font-medium text-white disabled:cursor-wait disabled:opacity-60">
+            {isSaving ? 'Saving...' : 'Save Company'}
           </button>
 
           {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}

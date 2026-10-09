@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { dataUrlDecodedBytes, PRODUCTION_V1_LIMITS } from "@/lib/production-limits";
+import { clearDerivedProfileState, removeApplicationStorage, storageUserMessage } from "@/lib/local-profile-data";
+import { persistProjects, readPersistedProjects } from "@/lib/persisted-projects";
 
 type Project = {
   id: string;
@@ -48,22 +50,13 @@ export default function ProjectsPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const loadProjects = () => {
-      const savedProjects = localStorage.getItem("projectsData");
-
-      if (savedProjects) {
-        try {
-          const parsedProjects = JSON.parse(savedProjects);
-
-          if (Array.isArray(parsedProjects)) {
-            setProjects(parsedProjects);
-          }
-        } catch {
-          localStorage.removeItem("projectsData");
-        }
-      }
+      const snapshot = readPersistedProjects(localStorage);
+      if (snapshot.issues.length) { removeApplicationStorage(localStorage, "projectsData"); setErrorMessage("Saved project data could not be read. Add the project again and save it."); return; }
+      setProjects(snapshot.projects);
     };
 
     const loadTimeout = window.setTimeout(loadProjects, 0);
@@ -85,6 +78,8 @@ const handleEdit = (project: Project) => {
 };
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSaving) return;
+    setIsSaving(true);
 
     const trimmedProjectName = projectName.trim();
 const trimmedDescription = description.trim();
@@ -95,11 +90,13 @@ if (!trimmedProjectName || !trimmedDescription || !trimmedImageUrl) {
     "Please fill in the project name, description, and project image.",
   );
   setSuccessMessage("");
+  setIsSaving(false);
   return;
 }
 if (!editingProjectId && projects.length >= PRODUCTION_V1_LIMITS.projects) {
   setErrorMessage(`V1 supports at most ${PRODUCTION_V1_LIMITS.projects} projects.`);
   setSuccessMessage("");
+  setIsSaving(false);
   return;
 }
 
@@ -126,8 +123,10 @@ if (!editingProjectId && projects.length >= PRODUCTION_V1_LIMITS.projects) {
       },
     ];
 
+const saved = persistProjects(localStorage, updatedProjects);
+if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); setIsSaving(false); return; }
 setProjects(updatedProjects);
-localStorage.setItem("projectsData", JSON.stringify(updatedProjects));
+clearDerivedProfileState(localStorage);
 
 setEditingProjectId(null);
 setProjectName("");
@@ -141,6 +140,7 @@ setSuccessMessage(
     ? "Project updated successfully."
     : "Project saved successfully.",
 );
+setIsSaving(false);
   };
 
   const handleImageSelect = async (file: File | undefined) => {
@@ -177,8 +177,10 @@ setSuccessMessage(
         project.id === projectId ? { ...project, imageUrl: imageData } : project,
       );
 
+      const saved = persistProjects(localStorage, updatedProjects);
+      if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); return; }
       setProjects(updatedProjects);
-      localStorage.setItem("projectsData", JSON.stringify(updatedProjects));
+      clearDerivedProfileState(localStorage);
       setErrorMessage("");
       setSuccessMessage("Project image updated successfully.");
     } catch (error) {
@@ -190,8 +192,10 @@ setSuccessMessage(
   const handleDelete = (projectId: string) => {
     const updatedProjects = projects.filter((project) => project.id !== projectId);
 
+    const saved = persistProjects(localStorage, updatedProjects);
+    if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); return; }
     setProjects(updatedProjects);
-    localStorage.setItem("projectsData", JSON.stringify(updatedProjects));
+    clearDerivedProfileState(localStorage);
   };
 
   const focusNewProjectForm = () => {
@@ -298,9 +302,10 @@ setSuccessMessage(
 
           <button
             type="submit"
-            className="mt-8 rounded-lg bg-black px-6 py-3 font-medium text-white"
+            disabled={isSaving}
+                    className="mt-8 rounded-lg bg-black px-6 py-3 font-medium text-white disabled:cursor-wait disabled:opacity-60"
           >
-            Save Project
+            {isSaving ? "Saving..." : "Save Project"}
           </button>
 
           {errorMessage && <p role="alert" className="mt-4 text-sm text-red-600">{errorMessage}</p>}
@@ -357,7 +362,7 @@ setSuccessMessage(
                       className="hidden"
                     />
                   </label>
-                  <button type="button" onClick={() => { const updated = projects.map((entry) => entry.id === project.id ? { ...entry, imageUrl: "" } : entry); setProjects(updated); localStorage.setItem("projectsData", JSON.stringify(updated)); setSuccessMessage("Project image removed. Visual / Portfolio now requires a new authentic image."); }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:bg-gray-50">Remove image</button>
+                  <button type="button" onClick={() => { const updated = projects.map((entry) => entry.id === project.id ? { ...entry, imageUrl: "" } : entry); const saved = persistProjects(localStorage, updated); if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); return; } setProjects(updated); clearDerivedProfileState(localStorage); setSuccessMessage("Project image removed. Visual / Portfolio now requires a new authentic image."); }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:bg-gray-50">Remove image</button>
                 </div>
               </article>
             ))}

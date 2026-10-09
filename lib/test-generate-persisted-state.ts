@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { createBetaFixture, loadBetaFixture } from "./beta-test-fixtures";
 import { companySemanticText, readPersistedCompanyData } from "./company-data";
 import { familyChoices } from "./authored-templates/family-selection";
-import { generatedProjectEvidenceCount, readPersistedGeneratedProfile } from "./generated-profile-storage";
+import { createGeneratedProfileSourceFingerprint, generatedProjectEvidenceCount, isPersistedGeneratedProfileCurrent, readPersistedGeneratedProfile } from "./generated-profile-storage";
 import { APPLICATION_STORAGE_KEYS, clearApplicationLocalData } from "./local-profile-data";
+import { readPersistedProjects } from "./persisted-projects";
 
 const values = new Map<string, string>();
 const storage = {
@@ -31,6 +32,10 @@ const choices = familyChoices({
 assert.equal(choices.find((choice) => choice.recommended)?.id, "visual-portfolio", "Aurelia must retain the Visual / Portfolio recommendation.");
 assert.equal(generated.projects[0]?.name, "Riverside Residence", "Aurelia project content must remain intact.");
 assert(generated.sections.find((section) => section.id === "services")?.items.some((item) => item.name === "Interior Design"), "Aurelia capability names must remain intact.");
+assert(isPersistedGeneratedProfileCurrent({ ...generated, sourceFingerprint: createGeneratedProfileSourceFingerprint(savedCompany, fixture.projects) }, savedCompany, fixture.projects), "Aurelia generated state must match its persisted source snapshot.");
+assert(!isPersistedGeneratedProfileCurrent({ ...generated, sourceFingerprint: createGeneratedProfileSourceFingerprint({ ...savedCompany, about: "Changed source" }, fixture.projects) }, savedCompany, fixture.projects), "Changed company source must invalidate generated state.");
+values.set("projectsData", "{malformed");
+assert(readPersistedGeneratedProfile(storage) && readPersistedProjects(storage).issues.length === 1, "Malformed project storage must be isolated from generated-profile persistence.");
 
 clearApplicationLocalData(storage as Storage);
 assert.equal(readPersistedCompanyData(storage), null, "Empty storage must remain an absent-company state.");

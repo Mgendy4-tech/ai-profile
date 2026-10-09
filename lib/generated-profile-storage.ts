@@ -1,9 +1,13 @@
+import type { CompanyData } from "./company-data";
+import type { PersistedProject } from "./persisted-projects";
+
 export type PersistedGeneratedProfileItem = { id?: string; name: string; description: string; sourceEvidence?: string; imageUrl?: string };
 export type PersistedGeneratedProfileSection = { id: string; semanticRole?: string; title: string; description: string; content: string; items: PersistedGeneratedProfileItem[] };
 export type PersistedGeneratedProfile = {
   companyName: string; logoUrl?: string; companyType: string; sections: PersistedGeneratedProfileSection[];
   about: string; expertise: string[]; experience: string;
   projects: { id?: string; name: string; description: string; imageUrl?: string }[]; reasons: string[];
+  sourceFingerprint?: string;
 };
 type StorageReader = { getItem(key: string): string | null };
 type StorageWriter = { setItem(key: string, value: string): void };
@@ -26,13 +30,25 @@ const isProject = (value: unknown): value is PersistedGeneratedProfile["projects
 export const parsePersistedGeneratedProfile = (value: unknown): PersistedGeneratedProfile | null => {
   if (!value || typeof value !== "object") return null;
   const profile = value as Record<string, unknown>;
-  if (typeof profile.companyName !== "string" || typeof profile.companyType !== "string" || typeof profile.about !== "string" || typeof profile.experience !== "string" || (profile.logoUrl !== undefined && typeof profile.logoUrl !== "string") || !Array.isArray(profile.sections) || !profile.sections.every(isSection) || !Array.isArray(profile.projects) || !profile.projects.every(isProject) || !isStringArray(profile.expertise) || !isStringArray(profile.reasons)) return null;
+  if (typeof profile.companyName !== "string" || typeof profile.companyType !== "string" || typeof profile.about !== "string" || typeof profile.experience !== "string" || (profile.logoUrl !== undefined && typeof profile.logoUrl !== "string") || (profile.sourceFingerprint !== undefined && typeof profile.sourceFingerprint !== "string") || !Array.isArray(profile.sections) || !profile.sections.every(isSection) || !Array.isArray(profile.projects) || !profile.projects.every(isProject) || !isStringArray(profile.expertise) || !isStringArray(profile.reasons)) return null;
   return profile as PersistedGeneratedProfile;
 };
 export const readPersistedGeneratedProfile = (storage: StorageReader): PersistedGeneratedProfile | null => {
   try { const raw = storage.getItem("generatedProfile"); return raw ? parsePersistedGeneratedProfile(JSON.parse(raw)) : null; } catch { return null; }
 };
 export const persistGeneratedProfile = (storage: StorageWriter, profile: PersistedGeneratedProfile) => storage.setItem("generatedProfile", JSON.stringify(profile));
+
+export const createGeneratedProfileSourceFingerprint = (company: Pick<CompanyData, "name" | "about" | "companyType" | "industry" | "customerType" | "servicesProducts" | "activities" | "experience">, projects: readonly Pick<PersistedProject, "id" | "name" | "description" | "imageUrl">[]): string => JSON.stringify({
+  company: [company.name, company.about, company.companyType, company.industry, company.customerType, company.servicesProducts, company.activities, company.experience].map((value) => value.trim()),
+  projects: projects.map((project) => [project.id, project.name.trim(), project.description.trim(), Boolean(project.imageUrl)]),
+});
+
+export const isPersistedGeneratedProfileCurrent = (profile: PersistedGeneratedProfile, company: CompanyData, projects: readonly PersistedProject[]): boolean => {
+  if (profile.sourceFingerprint) return profile.sourceFingerprint === createGeneratedProfileSourceFingerprint(company, projects);
+  if (profile.companyName.trim().toLowerCase() !== company.name.trim().toLowerCase()) return false;
+  if (projects.length === 0) return true;
+  return profile.projects.length === projects.length && profile.projects.every((project, index) => project.name === projects[index]?.name && project.description === projects[index]?.description);
+};
 /** Counts only explicit generated project structures; narrative keyword scanning is forbidden. */
 export const generatedProjectEvidenceCount = (profile: PersistedGeneratedProfile): number => {
   const section = profile.sections.find((candidate) => candidate.id === "projects" || candidate.semanticRole === "projects");

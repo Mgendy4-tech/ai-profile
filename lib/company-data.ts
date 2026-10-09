@@ -32,6 +32,8 @@ export const emptyCompanyData: CompanyData = {
 const stringValue = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const hexColor = /^#[0-9a-f]{6}$/i;
 type CompanyDataStorageReader = Pick<Storage, "getItem">;
+export type PersistedCompanyDataIssue = "company_data_json_invalid" | "company_data_shape_invalid";
+export type PersistedCompanyDataRead = { data: CompanyData | null; issue: PersistedCompanyDataIssue | null };
 export const normalizeBrandColor = (value: unknown): string => {
   const color = stringValue(value).toUpperCase();
   return hexColor.test(color) ? color : "";
@@ -62,17 +64,17 @@ export const normalizeCompanyData = (value: unknown): CompanyData => {
   };
 };
 
-export const readPersistedCompanyData = (storage: CompanyDataStorageReader): CompanyData | null => {
+export const inspectPersistedCompanyData = (storage: CompanyDataStorageReader): PersistedCompanyDataRead => {
   try {
     const raw = storage.getItem("companyData");
-    if (!raw) return null;
+    if (!raw) return { data: null, issue: null };
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    return normalizeCompanyData(parsed);
-  } catch {
-    return null;
-  }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.keys(parsed).length === 0) return { data: null, issue: "company_data_shape_invalid" };
+    return { data: normalizeCompanyData(parsed), issue: null };
+  } catch { return { data: null, issue: "company_data_json_invalid" }; }
 };
+
+export const readPersistedCompanyData = (storage: CompanyDataStorageReader): CompanyData | null => inspectPersistedCompanyData(storage).data;
 
 export const companySemanticText = (company: CompanyData) => ({
   name: company.name,

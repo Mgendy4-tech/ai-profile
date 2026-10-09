@@ -85,9 +85,10 @@ import { resolveExportCompanyState } from "@/lib/profile-state-isolation";
 import { createGenerationAttemptGuard, exportProgressMessage, generationProgressMessage, type GenerationOperation } from "@/lib/generation-progress";
 import { optimizeAuthoredLogoImage, optimizeAuthoredProjectImages } from "@/lib/authored-image-optimization";
 import { authoredExportPolicyCode, mustBlockLegacyFallback } from "@/lib/authored-export-policy";
-import { reconstructPersistedProjects } from "@/lib/persisted-projects";
+import { readPersistedProjects } from "@/lib/persisted-projects";
+import { clearDerivedProfileState, removeApplicationStorage, storageUserMessage, writeApplicationStorage } from "@/lib/local-profile-data";
 import { authoredDevelopmentFailureMessage, createAuthoredRejectionDiagnostic, type AuthoredExportDevelopmentDiagnostic } from "@/lib/authored-export-diagnostics";
-import { generatedProjectEvidenceCount, persistGeneratedProfile, readPersistedGeneratedProfile } from "@/lib/generated-profile-storage";
+import { createGeneratedProfileSourceFingerprint, generatedProjectEvidenceCount, isPersistedGeneratedProfileCurrent, persistGeneratedProfile, readPersistedGeneratedProfile } from "@/lib/generated-profile-storage";
 import { familyChoices } from "@/lib/authored-templates/family-selection";
 import { customerFacingSectionCopy, customerFacingSectionDescription, dedupeCustomerFacingSectionCopy, type CustomerFacingFamily, type CompanyIdentity } from "@/lib/authored-templates/presentation-copy";
 
@@ -101,6 +102,7 @@ type Project = {
 type GeneratedProfile = {
   companyName: string;
   logoUrl?: string;
+  sourceFingerprint?: string;
   companyType: string;
   sections: GeneratedSection[];
 
@@ -134,8 +136,8 @@ type ProfileSection = {
   items?: readonly { id: string; title: string; description: string }[];
 };
 
-const familyChoicesForProfile = (currentProfile: GeneratedProfile) => {
-  const projects = currentProfile.projects ?? [];
+const familyChoicesForProfile = (currentProfile: GeneratedProfile, sourceProjects: readonly Project[] = currentProfile.projects ?? []) => {
+  const projects = sourceProjects;
   return familyChoices({
     projectCount: projects.length,
     authenticProjectImageCount: projects.filter((project) => typeof project.imageUrl === "string" && project.imageUrl.startsWith("data:image/")).length,
@@ -143,6 +145,13 @@ const familyChoicesForProfile = (currentProfile: GeneratedProfile) => {
     productFeatureCount: currentProfile.sections.find((section) => section.id === "features")?.items.length ?? 0,
     useCaseCount: currentProfile.sections.find((section) => section.id === "useCases")?.items.length ?? 0,
   });
+};
+
+const userFacingGenerationError = (error: unknown, fallback: string): string => {
+  const code = error instanceof Error ? error.message : "";
+  if (code === "storage_quota" || code === "storage_unavailable") return storageUserMessage(code);
+  if (code === "saved_project_state_invalid") return "Your saved project data is incomplete. Reopen Projects and save the project again.";
+  return error instanceof Error && error.message ? error.message : fallback;
 };
 
 type ProfileStructure = {
@@ -455,8 +464,14 @@ const [loading, setLoading] = useState(false);
 useEffect(() => {
   const restore = window.setTimeout(() => {
     const generated = readPersistedGeneratedProfile(localStorage);
-    if (generated) setProfile(generated as GeneratedProfile);
     const persistedCompany = readPersistedCompanyData(localStorage);
+    const persistedProjects = readPersistedProjects(localStorage);
+    if (generated && persistedCompany && !persistedProjects.issues.length && isPersistedGeneratedProfileCurrent(generated, persistedCompany, persistedProjects.projects)) {
+      setProfile(generated as GeneratedProfile);
+    } else if (generated && (!persistedCompany || persistedProjects.issues.length || !isPersistedGeneratedProfileCurrent(generated, persistedCompany ?? { name: "", logoUrl: "", about: "", companyType: "", industry: "", customerType: "", servicesProducts: "", activities: "", experience: "" }, persistedProjects.projects))) {
+      clearDerivedProfileState(localStorage);
+      setErrorMessage("Your saved profile is out of date. Analyze and generate it again after confirming your saved company and project data.");
+    }
     setSavedCompanyData(persistedCompany);
     setPresentationCompany(persistedCompany);
     setSelectedFamily(localStorage.getItem("authoredFamilyDecision"));
@@ -471,7 +486,7 @@ useEffect(() => {
 useEffect(() => {
   if (!profile || !selectedFamily) return;
   const choices = familyChoicesForProfile(profile);
-  if (!choices.some((choice) => choice.id === selectedFamily && choice.eligible)) { localStorage.removeItem("authoredFamilyDecision"); setSelectedFamily(null); setFamilyMessage("The previous family selection is no longer eligible for this profile. AI recommendation restored."); }
+  if (!choices.some((choice) => choice.id === selectedFamily && choice.eligible)) { removeApplicationStorage(localStorage, "authoredFamilyDecision"); setSelectedFamily(null); setFamilyMessage("The previous family selection is no longer eligible for this profile. AI recommendation restored."); }
 }, [profile, selectedFamily]);
 
 useEffect(() => {
@@ -517,7 +532,8 @@ const handleAnalyze = async () => {
 
   try {
     const companyData = readPersistedCompanyData(localStorage);
-    const savedProjectsData = localStorage.getItem("projectsData");
+    const savedProjects = readPersistedProjects(localStorage);
+    if (savedProjects.issues.length) throw new Error("Your saved project data is incomplete. Reopen Projects and save the project again.");
     setSavedCompanyData(companyData);
     if (!companyData) {
       throw new Error("Please save your company information first.");
@@ -529,12 +545,7 @@ const handleAnalyze = async () => {
       throw new Error("Please complete your company information first.");
     }
 
-    const projects = savedProjectsData
-      ? (JSON.parse(savedProjectsData) as Project[]).filter(
-          (project) =>
-            project.name?.trim() && project.description?.trim(),
-        )
-      : [];
+    const projects = savedProjects.projects.filter((project) => project.name.trim() && project.description.trim());
 
     const response = await fetch("/api/analyze-structure", {
       method: "POST",
@@ -547,10 +558,11 @@ const handleAnalyze = async () => {
       }),
     });
 
-    const data = await response.json();
+    let data: { error?: unknown };
+    try { data = await response.json() as { error?: unknown }; } catch { throw new Error("Failed to analyze company structure."); }
 
     if (!response.ok) {
-      throw new Error(data.error || "Failed to analyze company structure.");
+      throw new Error(typeof data.error === "string" ? data.error : "Failed to analyze company structure.");
     }
 
 const validatedStructure = validateAnalyzedProfileStructure(data);
@@ -561,20 +573,10 @@ setSelectedSectionIds(
   approvedAnalysis.recommendedSections.map((section: ProfileSection) => section.id)
 );
 setStructureConfirmed(false);
-    localStorage.setItem(
-      "profileStructure",
-      JSON.stringify({
-        companyData,
-        analysis: approvedAnalysis,
-        selectedSections: approvedAnalysis.recommendedSections,
-      }),
-    );
+    const structureSaved = writeApplicationStorage(localStorage, "profileStructure", JSON.stringify({ companyData, analysis: approvedAnalysis, selectedSections: approvedAnalysis.recommendedSections }));
+    if (!structureSaved.ok) throw new Error(structureSaved.code);
   } catch (error) {
-    setErrorMessage(
-      error instanceof Error
-        ? error.message
-        : "Failed to analyze company structure.",
-    );
+    setErrorMessage(userFacingGenerationError(error, "Failed to analyze company structure."));
   } finally {
     generationAttemptGuard.current.finish();
     setLoading(false);
@@ -592,7 +594,8 @@ setStructureConfirmed(false);
     window.setTimeout(async() => {
       try {
         const companyData = readPersistedCompanyData(localStorage);
-        const savedProjectsData = localStorage.getItem("projectsData");
+        const savedProjects = readPersistedProjects(localStorage);
+        if (savedProjects.issues.length) throw new Error("saved_project_state_invalid");
 
         setSavedCompanyData(companyData);
         if (!companyData) {
@@ -613,24 +616,19 @@ if (!profileStructure) {
   return;
 }
 
-persistApprovedProfileStructure(
-  localStorage,
-  companyData,
-  profileStructure,
-  selectedSectionIds,
-);
-const persistedStructure = JSON.parse(localStorage.getItem("profileStructure") ?? "null") as { selectedSections?: ProfileSection[] } | null;
-const selectedSections = persistedStructure?.selectedSections ?? [];
+let selectedSections: ProfileSection[];
+try {
+  selectedSections = persistApprovedProfileStructure(localStorage, companyData, profileStructure, selectedSectionIds) as ProfileSection[];
+} catch (error) {
+  throw new Error(error instanceof Error && /quota|storage/i.test(error.name + error.message) ? "storage_quota" : "storage_unavailable");
+}
 const structureError = validateApprovedStructure(profileStructure);
 if (structureError) throw new Error(structureError);
-          const projects = savedProjectsData
-          ? (JSON.parse(savedProjectsData) as Project[]).filter(
-              (project) => project.name?.trim() && project.description?.trim(),
-            ).map((project) => ({
+          const projects = savedProjects.projects
+          .filter((project) => project.name.trim() && project.description.trim()).map((project) => ({
               ...project,
               description: getProjectDescription(project),
             }))
-          : [];
         const expertise = [
           "Marble & Granite Supply",
           "Marble & Granite Installation",
@@ -657,11 +655,14 @@ const response = await fetch("/api/generate-profile", {
 }),
 });
 
-const data = await response.json();
+let data: { error?: unknown; companyType?: unknown; sections?: unknown };
+try { data = await response.json() as { error?: unknown; companyType?: unknown; sections?: unknown }; } catch { throw new Error("Failed to generate company profile."); }
 
 if (!response.ok) {
-  throw new Error(data.error || "Failed to generate profile.");
+  throw new Error(typeof data.error === "string" ? data.error : "Failed to generate profile.");
 }
+
+const generatedCompanyType = typeof data.companyType === "string" ? data.companyType : companyData.companyType;
 
 const validatedSections = validateGeneratedProfileSections(
   selectedSections,
@@ -669,7 +670,7 @@ const validatedSections = validateGeneratedProfileSections(
   {
     serviceSourceMaterial: companySourceMaterial(companyData),
     productSourceMaterial: companySourceMaterial(companyData),
-    productTech: /saas|software|platform|technology|tech|digital product|ai company/i.test(data.companyType),
+    productTech: /saas|software|platform|technology|tech|digital product|ai company/i.test(generatedCompanyType),
     experienceYears: companyData.experience,
   },
 );
@@ -681,7 +682,7 @@ const generatedProfile: GeneratedProfile = {
   companyName: companyData.name.trim(),
   logoUrl: companyData.logoUrl,
 
-  companyType: data.companyType,
+  companyType: generatedCompanyType,
   sections: validatedSections.sections.map((section: GeneratedSection) => ({
     ...section,
     items: (section.items || []).map((item: GeneratedSection["items"][number]) => ({
@@ -720,14 +721,16 @@ const generatedProfile: GeneratedProfile = {
       .find((section: GeneratedSection) => section.id === "whyChoose")
       ?.items?.map(
   (item: GeneratedSection["items"][number]) => item.name
-) || [],
+      ) || [],
+  sourceFingerprint: createGeneratedProfileSourceFingerprint(companyData, savedProjects.projects),
 };
+try { persistGeneratedProfile(localStorage, generatedProfile); }
+catch (error) { throw new Error(error instanceof Error && /quota|storage/i.test(error.name + error.message) ? "storage_quota" : "storage_unavailable"); }
 setProfile(generatedProfile);
-persistGeneratedProfile(localStorage, generatedProfile);
 
       } catch (error) {
         setProfile(null);
-        setErrorMessage(error instanceof Error ? error.message : "We could not generate a complete company profile.");
+        setErrorMessage(userFacingGenerationError(error, "We could not generate a complete company profile."));
       } finally {
         generationAttemptGuard.current.finish();
         setLoading(false);
@@ -796,17 +799,22 @@ persistGeneratedProfile(localStorage, generatedProfile);
         companyData = resolveExportCompanyState(generatedCompanyData, persistedCompanyData);
       }
 
-      const persistedProjectsDataRaw = localStorage.getItem("projectsData");
-      const persistedProjects = reconstructPersistedProjects(persistedProjectsDataRaw);
+      const persistedProjects = readPersistedProjects(localStorage);
       if (persistedProjects.issues.length) throw new Error("persisted_project_state_invalid");
       const authoredProjects = persistedProjects.projects;
+      if (!persistedCompanyData || !isPersistedGeneratedProfileCurrent(profile, persistedCompanyData, authoredProjects)) throw new Error("stale_generated_profile");
+      const requestedFamilyId = localStorage.getItem("authoredFamilyDecision") as "visual-portfolio" | "corporate-services" | "product-tech" | null;
+      if (requestedFamilyId && !familyChoicesForProfile(profile, authoredProjects).some((choice) => choice.id === requestedFamilyId && choice.eligible)) {
+        removeApplicationStorage(localStorage, "authoredFamilyDecision");
+        setSelectedFamily(null);
+        throw new Error("selected_family_no_longer_eligible");
+      }
       const generatedProjectCount = generatedProjectEvidenceCount(profile);
       const authoredPolicyEvidence = {
         persistedProjectCount: persistedProjects.persistedCount,
         generatedProjectCount,
       };
       if (process.env.NODE_ENV !== "production") console.debug("[authored-export-runtime]", {
-        persistedProjectsDataRaw,
         companyName: companyData.name,
         persistedProjectIds: authoredProjects.map((project) => project.id),
         persistedProjectCount: persistedProjects.persistedCount,
@@ -865,7 +873,7 @@ persistGeneratedProfile(localStorage, generatedProfile);
           sections: profile.sections,
         },
         projects: optimizedAuthoredProjects,
-      }, undefined, "optimized_embed", (localStorage.getItem("authoredFamilyDecision") as "visual-portfolio" | "corporate-services" | "product-tech" | null) ?? undefined);
+      }, undefined, "optimized_embed", requestedFamilyId ?? undefined);
       const authoredMs = performance.now() - authoredStartedAt;
       if (process.env.NODE_ENV !== "production") {
         const uniqueOptimizedSources = new Set([
@@ -1777,7 +1785,7 @@ persistGeneratedProfile(localStorage, generatedProfile);
       const authoredFailure = rawErrorCode.startsWith("authored_visual_export_failed:");
       const reasonCode = authoredFailure
         ? "authored_visual_export_failed"
-        : ["page_count_limit", "pdf_byte_limit", "image_byte_limit", "total_image_byte_limit", "embedded_image_byte_limit", "image_format_limit", "image_dimension_limit", "image_optimization_failed", "persisted_project_state_invalid"].includes(rawErrorCode)
+        : ["page_count_limit", "pdf_byte_limit", "image_byte_limit", "total_image_byte_limit", "embedded_image_byte_limit", "image_format_limit", "image_dimension_limit", "image_optimization_failed", "persisted_project_state_invalid", "stale_generated_profile", "selected_family_no_longer_eligible", "storage_quota", "storage_unavailable"].includes(rawErrorCode)
           ? rawErrorCode
           : "pdf_export_failed";
       if (process.env.NODE_ENV !== "production") console.debug("[profile-export-failure]", { reasonCode });
@@ -1795,9 +1803,15 @@ persistGeneratedProfile(localStorage, generatedProfile);
               : reasonCode === "authored_visual_export_failed"
                 ? process.env.NODE_ENV !== "production" && authoredDevelopmentDiagnostic
                   ? authoredDevelopmentFailureMessage(authoredDevelopmentDiagnostic)
-                  : `Your project-based profile could not be rendered safely. No fallback PDF was created. Reference: ${rawErrorCode}`
+                  : `Your project-based profile could not be rendered safely. No fallback PDF was created. Reference: ${exportEventId}`
               : reasonCode === "persisted_project_state_invalid"
                 ? "Your saved project data is incomplete or damaged. Reopen the project, confirm its uploaded image, and save it again. No fallback PDF was created."
+              : reasonCode === "stale_generated_profile"
+                ? "Your saved profile is out of date. Generate it again after confirming your saved company and project data."
+              : reasonCode === "selected_family_no_longer_eligible"
+                ? "The selected template family is no longer eligible for the current project data. Choose an eligible family and try again."
+              : reasonCode === "storage_quota" || reasonCode === "storage_unavailable"
+                ? storageUserMessage(reasonCode)
               : `We couldn't create your PDF this time. Please try again. Reference: ${exportEventId}`);
     } finally {
       exportAttemptGuard.current.finish();
@@ -1864,7 +1878,7 @@ persistGeneratedProfile(localStorage, generatedProfile);
 )}
 {profile && (() => {
   const choices = familyChoicesForProfile(profile);
-  const choose = (choice: typeof choices[number]) => { if (!choice.eligible) return; localStorage.setItem("authoredFamilyDecision", choice.id); setSelectedFamily(choice.id); setFamilyMessage(`${choice.label} selected for this profile.`); };
+  const choose = (choice: typeof choices[number]) => { if (!choice.eligible) return; const saved = writeApplicationStorage(localStorage, "authoredFamilyDecision", choice.id); if (!saved.ok) { setFamilyMessage(storageUserMessage(saved.code)); return; } setSelectedFamily(choice.id); setFamilyMessage(`${choice.label} selected for this profile.`); };
   return <section aria-label="Template family selection" className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><h2 className="text-2xl font-semibold text-gray-900">Choose a template family</h2><p className="mt-2 text-sm text-gray-600">AI recommendation is based on structured content signals. Only safe, eligible families can be selected.</p><div className="mt-5 grid gap-4 md:grid-cols-3">{choices.map((choice) => <button key={choice.id} type="button" disabled={!choice.eligible} onClick={() => choose(choice)} className={`rounded-xl border p-4 text-left transition ${choice.eligible ? "hover:border-gray-900" : "cursor-not-allowed opacity-55"} ${selectedFamily === choice.id ? "border-gray-900 ring-2 ring-gray-200" : "border-gray-200"}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-gray-900">{choice.label}</span><span className="flex flex-wrap justify-end gap-1">{choice.recommended && <span className="rounded-full bg-green-100 px-2 py-1 text-[10px] font-bold uppercase text-green-800">AI recommended</span>}{selectedFamily === choice.id && <span className="rounded-full bg-gray-900 px-2 py-1 text-[10px] font-bold uppercase text-white">Selected</span>}</span></div><p className="mt-3 text-sm leading-6 text-gray-600">{choice.description}</p>{choice.recommended && choice.recommendationReason && <p className="mt-3 text-xs leading-5 text-gray-700">{choice.recommendationReason}</p>}{choice.eligible ? <p className="mt-3 text-xs font-medium text-green-700">Eligible</p> : <p className="mt-3 text-xs font-medium text-red-700">Unavailable: {choice.reason}</p>}</button>)}</div>{familyMessage && <p role="status" className="mt-4 text-sm text-green-700">{familyMessage}</p>}</section>;
 })()}
 {!profile && profileStructure && (

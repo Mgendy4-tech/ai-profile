@@ -8,6 +8,15 @@ const experienceValue = (value: string) => {
   return value.toUpperCase();
 };
 
+const compactFactValue = (value: string) => {
+  const normalized = clean(value);
+  const parts = normalized.split(/,|;|\band\b/i).map((part) => part.trim()).filter(Boolean);
+  const candidate = parts.length > 1 ? parts.slice(0, 2).join(" and ") : normalized;
+  if (candidate.length <= 24) return candidate;
+  const words = candidate.split(/\s+/).filter(Boolean);
+  return words.length > 2 ? words.slice(-2).join(" ") : candidate;
+};
+
 /** Fixed-priority, source-backed facts for the authored Visual sparse About variants. */
 export const extractVisualNarrativeFacts = (company: PersistedCompanyInput): readonly NarrativeFact[] => {
   const experience = clean(company.experience);
@@ -18,7 +27,7 @@ export const extractVisualNarrativeFacts = (company: PersistedCompanyInput): rea
   const candidates: NarrativeFact[] = [
     ...(experience ? [{ value: experienceValue(experience), label: "EXPERIENCE" }] : []),
     ...(industry ? [{ value: industry.toUpperCase(), label: "INDUSTRY" }] : companyType ? [{ value: companyType.toUpperCase(), label: "COMPANY TYPE" }] : []),
-    ...(customerType ? [{ value: customerType.toUpperCase(), label: "CLIENT FOCUS" }] : servicesProducts ? [{ value: servicesProducts.toUpperCase(), label: "SERVICE FOCUS" }] : []),
+    ...(customerType ? [{ value: compactFactValue(customerType).toUpperCase(), label: "CLIENT FOCUS" }] : servicesProducts ? [{ value: compactFactValue(servicesProducts).toUpperCase(), label: "SERVICE FOCUS" }] : []),
   ];
   return candidates.slice(0, 3);
 };

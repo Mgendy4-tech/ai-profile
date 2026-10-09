@@ -34,6 +34,8 @@ const missingExperience = extractVisualNarrativeFacts(company({ experience: "" }
 assert(missingExperience.every((fact) => fact.label !== "EXPERIENCE") && missingExperience.length === 2, "Missing experience must not create a blank fact.");
 const longIndustry = extractVisualNarrativeFacts(company({ industry: "Interior Architecture and Sustainable Spatial Design" }));
 assert(editorialInteriorsSparseNarrativeFacts3Template.prepare(narrative(longIndustry)).compatible, "A realistic long industry label must wrap within the fixed fact envelope.");
+const longCustomerType = extractVisualNarrativeFacts(company({ customerType: "Luxury residential clients" }));
+assert(longCustomerType.at(-1)?.value === "RESIDENTIAL CLIENTS" && editorialInteriorsSparseNarrativeFacts3Template.prepare(narrative(longCustomerType)).compatible, "Long customer-type facts must use concise source-grounded wording that fits the authored fact envelope.");
 
 const supporting = {
   contentId: "services:supporting", eyebrow: "CAPABILITIES / CONTINUED", heading: "Crafted around every interior.",
