@@ -4,7 +4,7 @@ import { mustBlockLegacyFallback } from "../authored-export-policy";
 import { isolateNewCompanyState } from "../profile-state-isolation";
 import { reconstructPersistedProjects, resolveProjectsForCompanySave } from "../persisted-projects";
 import { routeEditorialInteriorsV1Export } from "./export-orchestrator";
-import { containsGeneratedFillerCopy, containsInternalPresentationCopy, customerFacingSectionDescription } from "./presentation-copy";
+import { containsGeneratedFillerCopy, containsInternalPresentationCopy, customerFacingSectionCopy, customerFacingSectionDescription } from "./presentation-copy";
 
 const assert: (condition: unknown, message: string) => asserts condition = (condition, message) => { if (!condition) throw new Error(message); };
 const bytes = readFileSync(resolve("lib/test-fixtures/visual/aurelia-browser-upload.jpg"));
@@ -27,6 +27,10 @@ const plannerCopy = [
 ].join("\n");
 assert(!/(?:Describe |supplied residential expertise|supplied material-led|grounded in the supplied|supplied company and project information)/i.test(plannerCopy), "Aurelia planner copy must not expose internal instruction or grounding filler.");
 assert(plannerCopy.toLocaleLowerCase().includes("interior design") && plannerCopy.includes("Aurelia Interiors"), "Aurelia planner copy must remain source-grounded and personalized.");
+const presentedAurelia = sections().map((section) => customerFacingSectionCopy("visual-portfolio", company, section));
+const presentedAureliaText = presentedAurelia.map((section) => [section.title, section.description, section.content, ...section.items.map((item) => `${item.name} ${item.description}`)].join("\n")).join("\n");
+assert(!/\bsupplied\b/i.test(presentedAureliaText) && !containsInternalPresentationCopy(presentedAureliaText), "Aurelia UI presentation must not expose internal source/planner wording.");
+assert(presentedAureliaText.includes(project.name) && presentedAureliaText.includes(project.description), "Aurelia UI presentation must preserve project identity and description.");
 
 const main = async () => {
   // Mirrors Save Project -> Save Company -> JSON persistence -> Generate reconstruction.
