@@ -86,9 +86,9 @@ import { createGenerationAttemptGuard, exportProgressMessage, generationProgress
 import { optimizeAuthoredLogoImage, optimizeAuthoredProjectImages } from "@/lib/authored-image-optimization";
 import { authoredExportPolicyCode, mustBlockLegacyFallback } from "@/lib/authored-export-policy";
 import { readPersistedProjects } from "@/lib/persisted-projects";
-import { clearDerivedProfileState, removeApplicationStorage, storageUserMessage, writeApplicationStorage } from "@/lib/local-profile-data";
+import { clearDerivedProfileState, readApplicationStorage, removeApplicationStorage, storageUserMessage, writeApplicationStorage } from "@/lib/local-profile-data";
 import { authoredDevelopmentFailureMessage, createAuthoredRejectionDiagnostic, type AuthoredExportDevelopmentDiagnostic } from "@/lib/authored-export-diagnostics";
-import { createGeneratedProfileSourceFingerprint, generatedProjectEvidenceCount, isPersistedGeneratedProfileCurrent, persistGeneratedProfile, readPersistedGeneratedProfile } from "@/lib/generated-profile-storage";
+import { createGeneratedProfileSourceFingerprint, generatedProjectEvidenceCount, isPersistedGeneratedProfileCurrent, persistGeneratedProfile, readPersistedGeneratedProfile, reconcileGeneratedProfileToSource } from "@/lib/generated-profile-storage";
 import { familyChoices } from "@/lib/authored-templates/family-selection";
 import { customerFacingSectionCopy, customerFacingSectionDescription, dedupeCustomerFacingSectionCopy, type CustomerFacingFamily, type CompanyIdentity } from "@/lib/authored-templates/presentation-copy";
 
@@ -432,6 +432,7 @@ const postJsonWithTimeout = async <T,>(
 export default function GeneratePage() {
   const [profile, setProfile] = useState<GeneratedProfile | null>(null);
   const [savedCompanyData, setSavedCompanyData] = useState<CompanyData | null>(null);
+  const [sourceProjects, setSourceProjects] = useState<Project[]>([]);
   const [presentationCompany, setPresentationCompany] = useState<CompanyIdentity | null>(null);
 const [profileStructure, setProfileStructure] =
   useState<ProfileStructure | null>(null);
@@ -466,15 +467,16 @@ useEffect(() => {
     const generated = readPersistedGeneratedProfile(localStorage);
     const persistedCompany = readPersistedCompanyData(localStorage);
     const persistedProjects = readPersistedProjects(localStorage);
+    setSourceProjects(persistedProjects.projects);
     if (generated && persistedCompany && !persistedProjects.issues.length && isPersistedGeneratedProfileCurrent(generated, persistedCompany, persistedProjects.projects)) {
-      setProfile(generated as GeneratedProfile);
+      setProfile(reconcileGeneratedProfileToSource(generated, persistedCompany, persistedProjects.projects) as GeneratedProfile);
     } else if (generated && (!persistedCompany || persistedProjects.issues.length || !isPersistedGeneratedProfileCurrent(generated, persistedCompany ?? { name: "", logoUrl: "", about: "", companyType: "", industry: "", customerType: "", servicesProducts: "", activities: "", experience: "" }, persistedProjects.projects))) {
       clearDerivedProfileState(localStorage);
       setErrorMessage("Your saved profile is out of date. Analyze and generate it again after confirming your saved company and project data.");
     }
     setSavedCompanyData(persistedCompany);
     setPresentationCompany(persistedCompany);
-    setSelectedFamily(localStorage.getItem("authoredFamilyDecision"));
+    setSelectedFamily(readApplicationStorage(localStorage, "authoredFamilyDecision"));
     const persisted = readPersistedApprovedProfileStructure(localStorage);
     if (!persisted || validateApprovedStructure(persisted.structure) !== null) return;
     setProfileStructure(persisted.structure as ProfileStructure);
@@ -485,9 +487,9 @@ useEffect(() => {
 
 useEffect(() => {
   if (!profile || !selectedFamily) return;
-  const choices = familyChoicesForProfile(profile);
+  const choices = familyChoicesForProfile(profile, sourceProjects);
   if (!choices.some((choice) => choice.id === selectedFamily && choice.eligible)) { removeApplicationStorage(localStorage, "authoredFamilyDecision"); setSelectedFamily(null); setFamilyMessage("The previous family selection is no longer eligible for this profile. AI recommendation restored."); }
-}, [profile, selectedFamily]);
+}, [profile, selectedFamily, sourceProjects]);
 
 useEffect(() => {
   if (!loading) return;
@@ -535,6 +537,7 @@ const handleAnalyze = async () => {
     const savedProjects = readPersistedProjects(localStorage);
     if (savedProjects.issues.length) throw new Error("Your saved project data is incomplete. Reopen Projects and save the project again.");
     setSavedCompanyData(companyData);
+    setSourceProjects(savedProjects.projects);
     if (!companyData) {
       throw new Error("Please save your company information first.");
     }
@@ -598,6 +601,7 @@ setStructureConfirmed(false);
         if (savedProjects.issues.length) throw new Error("saved_project_state_invalid");
 
         setSavedCompanyData(companyData);
+        setSourceProjects(savedProjects.projects);
         if (!companyData) {
           setProfile(null);
           setErrorMessage("Please save your company information before generating a profile.");
@@ -739,7 +743,7 @@ setProfile(generatedProfile);
   };
 
   const getCustomerFacingProfile = (currentProfile: GeneratedProfile) => {
-    const choices = familyChoicesForProfile(currentProfile);
+    const choices = familyChoicesForProfile(currentProfile, sourceProjects);
     const storedFamily = selectedFamily === "visual-portfolio" || selectedFamily === "corporate-services" || selectedFamily === "product-tech" ? selectedFamily : null;
     const family = (storedFamily ?? choices.find((choice) => choice.recommended)?.id ?? "corporate-services") as CustomerFacingFamily;
     const company = presentationCompany ?? { name: currentProfile.companyName, companyType: currentProfile.companyType };
@@ -803,7 +807,7 @@ setProfile(generatedProfile);
       if (persistedProjects.issues.length) throw new Error("persisted_project_state_invalid");
       const authoredProjects = persistedProjects.projects;
       if (!persistedCompanyData || !isPersistedGeneratedProfileCurrent(profile, persistedCompanyData, authoredProjects)) throw new Error("stale_generated_profile");
-      const requestedFamilyId = localStorage.getItem("authoredFamilyDecision") as "visual-portfolio" | "corporate-services" | "product-tech" | null;
+      const requestedFamilyId = readApplicationStorage(localStorage, "authoredFamilyDecision") as "visual-portfolio" | "corporate-services" | "product-tech" | null;
       if (requestedFamilyId && !familyChoicesForProfile(profile, authoredProjects).some((choice) => choice.id === requestedFamilyId && choice.eligible)) {
         removeApplicationStorage(localStorage, "authoredFamilyDecision");
         setSelectedFamily(null);
@@ -1799,7 +1803,7 @@ setProfile(generatedProfile);
           : reasonCode === "embedded_image_byte_limit"
             ? "The optimized document images are still too large to export safely. Use lighter images and try again."
             : ["image_byte_limit", "total_image_byte_limit", "image_format_limit"].includes(reasonCode)
-              ? "One or more source images exceed the safe upload or storage limits. Use supported, smaller images and try again."
+              ? "One or more saved images are missing or invalid. Open Projects or Company Data and replace them with supported PNG or JPEG images, then try again."
               : reasonCode === "authored_visual_export_failed"
                 ? process.env.NODE_ENV !== "production" && authoredDevelopmentDiagnostic
                   ? authoredDevelopmentFailureMessage(authoredDevelopmentDiagnostic)
@@ -1818,6 +1822,19 @@ setProfile(generatedProfile);
       setIsExporting(false);
     }
   };
+
+  const exportReadiness = profile ? (() => {
+    const choices = familyChoicesForProfile(profile, sourceProjects);
+    const activeChoice = (selectedFamily ? choices.find((choice) => choice.id === selectedFamily) : undefined)
+      ?? choices.find((choice) => choice.recommended);
+    const imageIssues = savedCompanyData
+      ? validateAuthoredImageOperationalLimits(savedCompanyData, sourceProjects.map((project) => ({ ...project, imageUrl: project.imageUrl ?? "" })))
+      : [];
+    return {
+      ready: Boolean(activeChoice?.eligible) && imageIssues.length === 0,
+      blocked: !activeChoice?.eligible || imageIssues.length > 0,
+    };
+  })() : { ready: false, blocked: false };
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6 sm:py-14">
@@ -1877,7 +1894,7 @@ setProfile(generatedProfile);
 </button>
 )}
 {profile && (() => {
-  const choices = familyChoicesForProfile(profile);
+  const choices = familyChoicesForProfile(profile, sourceProjects);
   const choose = (choice: typeof choices[number]) => { if (!choice.eligible) return; const saved = writeApplicationStorage(localStorage, "authoredFamilyDecision", choice.id); if (!saved.ok) { setFamilyMessage(storageUserMessage(saved.code)); return; } setSelectedFamily(choice.id); setFamilyMessage(`${choice.label} selected for this profile.`); };
   return <section aria-label="Template family selection" className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><h2 className="text-2xl font-semibold text-gray-900">Choose a template family</h2><p className="mt-2 text-sm text-gray-600">AI recommendation is based on structured content signals. Only safe, eligible families can be selected.</p><div className="mt-5 grid gap-4 md:grid-cols-3">{choices.map((choice) => <button key={choice.id} type="button" disabled={!choice.eligible} onClick={() => choose(choice)} className={`rounded-xl border p-4 text-left transition ${choice.eligible ? "hover:border-gray-900" : "cursor-not-allowed opacity-55"} ${selectedFamily === choice.id ? "border-gray-900 ring-2 ring-gray-200" : "border-gray-200"}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-gray-900">{choice.label}</span><span className="flex flex-wrap justify-end gap-1">{choice.recommended && <span className="rounded-full bg-green-100 px-2 py-1 text-[10px] font-bold uppercase text-green-800">AI recommended</span>}{selectedFamily === choice.id && <span className="rounded-full bg-gray-900 px-2 py-1 text-[10px] font-bold uppercase text-white">Selected</span>}</span></div><p className="mt-3 text-sm leading-6 text-gray-600">{choice.description}</p>{choice.recommended && choice.recommendationReason && <p className="mt-3 text-xs leading-5 text-gray-700">{choice.recommendationReason}</p>}{choice.eligible ? <p className="mt-3 text-xs font-medium text-green-700">Eligible</p> : <p className="mt-3 text-xs font-medium text-red-700">Unavailable: {choice.reason}</p>}</button>)}</div>{familyMessage && <p role="status" className="mt-4 text-sm text-green-700">{familyMessage}</p>}</section>;
 })()}
@@ -2102,7 +2119,7 @@ setProfile(generatedProfile);
             <p id="structure-error" role="alert" aria-live="assertive" className="mt-6 text-sm text-red-600">{errorMessage}</p>
           )}
 
-          {profile && (
+{profile && (
             <div className="mt-10 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-inner">
               <div className="flex flex-col gap-5 border-b border-gray-200 bg-white px-5 py-6 sm:flex-row sm:items-end sm:justify-between sm:px-7">
                 <div>
@@ -2137,13 +2154,19 @@ setProfile(generatedProfile);
                   <button
                     type="button"
                     onClick={handleExportPdf}
-                    disabled={isExporting}
+                    disabled={isExporting || !exportReadiness.ready}
                     className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60"
                   >
                     {isExporting ? "Exporting..." : "Download PDF"}
                   </button>
                 </div>
               </div>
+
+              {exportReadiness.blocked && (
+                <p role="status" className="border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-800 sm:px-7">
+                  PDF export is blocked until each saved project has a valid PNG or JPEG image. Open Projects to replace the missing or damaged image, then try again.
+                </p>
+              )}
 
               <section className="space-y-10 px-5 py-7 text-gray-700 sm:px-7 sm:py-9">
   {getCustomerFacingProfile(profile).sections.map((section) => (
@@ -2230,7 +2253,7 @@ setProfile(generatedProfile);
                 <button
                   type="button"
                   onClick={handleExportPdf}
-                  disabled={isExporting}
+                  disabled={isExporting || !exportReadiness.ready}
                   aria-label="Download company profile PDF"
                   className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60"
                 >

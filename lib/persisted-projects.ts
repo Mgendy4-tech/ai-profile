@@ -2,6 +2,14 @@ import { type StorageWriteResult, writeApplicationStorage } from "./local-profil
 
 export type PersistedProject = { id: string; name: string; category?: string; description: string; imageUrl: string };
 export type PersistedProjectSnapshot = { projects: PersistedProject[]; persistedCount: number; issues: readonly string[] };
+export type PersistedImageState = "missing" | "valid" | "invalid";
+
+export const persistedImageState = (source: unknown): PersistedImageState => {
+  if (typeof source !== "string" || !source.trim()) return "missing";
+  return /^data:image\/(?:png|jpeg);base64,/i.test(source) ? "valid" : "invalid";
+};
+
+export const hasValidPersistedProjectImage = (source: unknown): source is string => persistedImageState(source) === "valid";
 
 export const reconstructPersistedProjects = (raw: string | null): PersistedProjectSnapshot => {
   if (!raw) return { projects: [], persistedCount: 0, issues: [] };

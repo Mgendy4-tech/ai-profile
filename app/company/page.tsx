@@ -3,9 +3,9 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearInheritedAssetsForIdentityEdit, isolateNewCompanyState, isSameCompanyIdentity } from '@/lib/profile-state-isolation';
-import { emptyCompanyData, experienceValidationMessage, inspectPersistedCompanyData, validateCompanyContacts, normalizeBrandColor, type CompanyData } from '@/lib/company-data';
+import { emptyCompanyData, experienceValidationMessage, inspectPersistedCompanyData, persistCompanyData, validateCompanyContacts, normalizeBrandColor, type CompanyData } from '@/lib/company-data';
 import { persistProjects, readPersistedProjects } from '@/lib/persisted-projects';
-import { clearDerivedProfileState, removeApplicationStorage, storageUserMessage, writeApplicationStorage } from '@/lib/local-profile-data';
+import { clearDerivedProfileState, readApplicationStorage, removeApplicationStorage, storageUserMessage, writeApplicationStorage } from '@/lib/local-profile-data';
 
 type Project = {
   id: string;
@@ -262,10 +262,10 @@ export default function CompanyPage() {
     loadedCompanyName.current = approvedCompanyData.name;
     logoExplicitlySelected.current = false;
     projectsExplicitlyEdited.current = false;
-    const previousCompanyRaw = localStorage.getItem('companyData');
-    const previousProjectsRaw = localStorage.getItem('projectsData');
-    const companySaved = writeApplicationStorage(localStorage, 'companyData', JSON.stringify(approvedCompanyData));
-    const projectsSaved = companySaved.ok ? writeApplicationStorage(localStorage, 'projectsData', JSON.stringify(approvedProjects)) : companySaved;
+    const previousCompanyRaw = readApplicationStorage(localStorage, 'companyData');
+    const previousProjectsRaw = readApplicationStorage(localStorage, 'projectsData');
+    const companySaved = persistCompanyData(localStorage, approvedCompanyData);
+    const projectsSaved = companySaved.ok ? persistProjects(localStorage, approvedProjects) : companySaved;
     if (!companySaved.ok || !projectsSaved.ok) {
       if (previousCompanyRaw === null) removeApplicationStorage(localStorage, 'companyData'); else writeApplicationStorage(localStorage, 'companyData', previousCompanyRaw);
       if (previousProjectsRaw === null) removeApplicationStorage(localStorage, 'projectsData'); else writeApplicationStorage(localStorage, 'projectsData', previousProjectsRaw);

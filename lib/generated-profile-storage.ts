@@ -1,5 +1,5 @@
 import type { CompanyData } from "./company-data";
-import type { PersistedProject } from "./persisted-projects";
+import { persistedImageState, type PersistedProject } from "./persisted-projects";
 
 export type PersistedGeneratedProfileItem = { id?: string; name: string; description: string; sourceEvidence?: string; imageUrl?: string };
 export type PersistedGeneratedProfileSection = { id: string; semanticRole?: string; title: string; description: string; content: string; items: PersistedGeneratedProfileItem[] };
@@ -40,14 +40,36 @@ export const persistGeneratedProfile = (storage: StorageWriter, profile: Persist
 
 export const createGeneratedProfileSourceFingerprint = (company: Pick<CompanyData, "name" | "about" | "companyType" | "industry" | "customerType" | "servicesProducts" | "activities" | "experience">, projects: readonly Pick<PersistedProject, "id" | "name" | "description" | "imageUrl">[]): string => JSON.stringify({
   company: [company.name, company.about, company.companyType, company.industry, company.customerType, company.servicesProducts, company.activities, company.experience].map((value) => value.trim()),
-  projects: projects.map((project) => [project.id, project.name.trim(), project.description.trim(), Boolean(project.imageUrl)]),
+  projects: projects.map((project) => [project.id, project.name.trim(), project.description.trim(), persistedImageState(project.imageUrl)]),
 });
 
 export const isPersistedGeneratedProfileCurrent = (profile: PersistedGeneratedProfile, company: CompanyData, projects: readonly PersistedProject[]): boolean => {
   if (profile.sourceFingerprint) return profile.sourceFingerprint === createGeneratedProfileSourceFingerprint(company, projects);
   if (profile.companyName.trim().toLowerCase() !== company.name.trim().toLowerCase()) return false;
+  if ((profile.logoUrl ?? "") !== company.logoUrl) return false;
   if (projects.length === 0) return true;
-  return profile.projects.length === projects.length && profile.projects.every((project, index) => project.name === projects[index]?.name && project.description === projects[index]?.description);
+  return profile.projects.length === projects.length && profile.projects.every((project, index) => project.name === projects[index]?.name && project.description === projects[index]?.description && persistedImageState(project.imageUrl) === persistedImageState(projects[index]?.imageUrl));
+};
+
+export const reconcileGeneratedProfileToSource = (profile: PersistedGeneratedProfile, company: CompanyData, projects: readonly PersistedProject[]): PersistedGeneratedProfile => {
+  const findProject = (candidate: { id?: string; name: string }) => projects.find((project) => (candidate.id && project.id === candidate.id) || project.name === candidate.name);
+  const reconciledProjects = profile.projects.map((project) => {
+    const source = findProject(project);
+    return source ? { ...project, id: source.id, imageUrl: source.imageUrl } : { ...project, imageUrl: undefined };
+  });
+  const projectSection = (section: PersistedGeneratedProfileSection) => section.id === "projects" || section.semanticRole === "projects";
+  return {
+    ...profile,
+    logoUrl: company.logoUrl,
+    projects: reconciledProjects,
+    sections: profile.sections.map((section) => projectSection(section) ? {
+      ...section,
+      items: section.items.map((item) => {
+        const source = findProject(item);
+        return source ? { ...item, id: source.id, imageUrl: source.imageUrl } : { ...item, imageUrl: undefined };
+      }),
+    } : section),
+  };
 };
 /** Counts only explicit generated project structures; narrative keyword scanning is forbidden. */
 export const generatedProjectEvidenceCount = (profile: PersistedGeneratedProfile): number => {

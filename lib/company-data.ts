@@ -1,3 +1,5 @@
+import { type StorageWriteResult, writeApplicationStorage } from "./local-profile-data";
+
 export type CompanyData = {
   name: string;
   logoUrl: string;
@@ -75,6 +77,8 @@ export const inspectPersistedCompanyData = (storage: CompanyDataStorageReader): 
 };
 
 export const readPersistedCompanyData = (storage: CompanyDataStorageReader): CompanyData | null => inspectPersistedCompanyData(storage).data;
+
+export const persistCompanyData = (storage: Pick<Storage, "setItem">, company: CompanyData): StorageWriteResult => writeApplicationStorage(storage, "companyData", JSON.stringify(company));
 
 export const companySemanticText = (company: CompanyData) => ({
   name: company.name,

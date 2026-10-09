@@ -5,6 +5,10 @@ export type ApplicationStorage = Pick<Storage, "getItem" | "setItem" | "removeIt
 export type StorageFailureCode = "storage_quota" | "storage_unavailable";
 export type StorageWriteResult = { ok: true } | { ok: false; code: StorageFailureCode };
 
+export const readApplicationStorage = (storage: Pick<Storage, "getItem">, key: ApplicationStorageKey): string | null => {
+  try { return storage.getItem(key); } catch { return null; }
+};
+
 const storageFailureCode = (error: unknown): StorageFailureCode => {
   const name = error && typeof error === "object" && "name" in error ? String((error as { name?: unknown }).name) : "";
   return name === "QuotaExceededError" || name === "NS_ERROR_DOM_QUOTA_REACHED" ? "storage_quota" : "storage_unavailable";

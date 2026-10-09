@@ -1,6 +1,7 @@
-import type { CompanyData } from "./company-data";
-import type { PersistedGeneratedProfile, PersistedGeneratedProfileSection } from "./generated-profile-storage";
-import { APPLICATION_STORAGE_KEYS, clearApplicationLocalData } from "./local-profile-data";
+import { persistCompanyData, type CompanyData } from "./company-data";
+import { persistGeneratedProfile, type PersistedGeneratedProfile, type PersistedGeneratedProfileSection } from "./generated-profile-storage";
+import { APPLICATION_STORAGE_KEYS, clearApplicationLocalData, readApplicationStorage, writeApplicationStorage } from "./local-profile-data";
+import { persistProjects } from "./persisted-projects";
 
 export type BetaFixtureId = "aurelia" | "northbridge" | "winx" | "aurelia-missing-image" | "aurelia-generated-only" | "legacy-control";
 export type BetaExpectedFamily = "visual-portfolio" | "corporate-services" | "product-tech" | "legacy";
@@ -105,11 +106,16 @@ export const createBetaFixture = (id: BetaFixtureId, validProjectImage: string):
 
 export const loadBetaFixture = (storage: BetaStorage, fixture: BetaFixture) => {
   clearApplicationLocalData(storage as Storage);
-  storage.setItem("companyData", JSON.stringify(fixture.company));
-  storage.setItem("projectsData", JSON.stringify(fixture.projects));
-  if (fixture.profileStructure) storage.setItem("profileStructure", JSON.stringify(fixture.profileStructure));
-  storage.setItem("generatedProfile", JSON.stringify(fixture.generatedProfile));
-  return APPLICATION_STORAGE_KEYS.filter((key) => storage.getItem(key) !== null);
+  const companySaved = persistCompanyData(storage, fixture.company);
+  if (!companySaved.ok) throw new Error(companySaved.code);
+  const projectsSaved = persistProjects(storage, fixture.projects);
+  if (!projectsSaved.ok) throw new Error(projectsSaved.code);
+  if (fixture.profileStructure) {
+    const structureSaved = writeApplicationStorage(storage, "profileStructure", JSON.stringify(fixture.profileStructure));
+    if (!structureSaved.ok) throw new Error(structureSaved.code);
+  }
+  persistGeneratedProfile(storage, fixture.generatedProfile);
+  return APPLICATION_STORAGE_KEYS.filter((key) => readApplicationStorage(storage, key) !== null);
 };
 
 export const betaFixtureImageState = (projects: readonly { imageUrl?: string }[]): "none" | "valid_data_url" | "missing_or_corrupt" => {

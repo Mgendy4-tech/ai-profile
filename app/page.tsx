@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { readApplicationStorage } from "@/lib/local-profile-data";
 
 const defaultTitle = "AI Company Profile";
 
@@ -11,7 +12,7 @@ export default function Home() {
   useEffect(() => {
     const loadCompanyName = () => {
       try {
-        const savedCompanyData = localStorage.getItem("companyData");
+        const savedCompanyData = readApplicationStorage(localStorage, "companyData");
 
         if (!savedCompanyData) {
           return;

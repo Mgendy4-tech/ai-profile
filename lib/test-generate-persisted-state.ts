@@ -4,7 +4,8 @@ import { companySemanticText, readPersistedCompanyData } from "./company-data";
 import { familyChoices } from "./authored-templates/family-selection";
 import { createGeneratedProfileSourceFingerprint, generatedProjectEvidenceCount, isPersistedGeneratedProfileCurrent, readPersistedGeneratedProfile } from "./generated-profile-storage";
 import { APPLICATION_STORAGE_KEYS, clearApplicationLocalData } from "./local-profile-data";
-import { readPersistedProjects } from "./persisted-projects";
+import { persistedImageState, readPersistedProjects } from "./persisted-projects";
+import { validateAuthoredImageOperationalLimits } from "./production-limits";
 
 const values = new Map<string, string>();
 const storage = {
@@ -36,6 +37,26 @@ assert(isPersistedGeneratedProfileCurrent({ ...generated, sourceFingerprint: cre
 assert(!isPersistedGeneratedProfileCurrent({ ...generated, sourceFingerprint: createGeneratedProfileSourceFingerprint({ ...savedCompany, about: "Changed source" }, fixture.projects) }, savedCompany, fixture.projects), "Changed company source must invalidate generated state.");
 values.set("projectsData", "{malformed");
 assert(readPersistedGeneratedProfile(storage) && readPersistedProjects(storage).issues.length === 1, "Malformed project storage must be isolated from generated-profile persistence.");
+
+clearApplicationLocalData(storage as Storage);
+const missingFixture = createBetaFixture("aurelia-missing-image", "data:image/png;base64,QUJD");
+loadBetaFixture(storage as Storage, missingFixture);
+const missingCompany = readPersistedCompanyData(storage);
+const missingProjects = readPersistedProjects(storage).projects;
+const missingProfile = readPersistedGeneratedProfile(storage);
+assert(missingCompany && missingProjects.length === 1 && missingProfile, "The missing-image fixture must preserve the company, project, and generated evidence envelopes.");
+assert.equal(persistedImageState(missingProjects[0]?.imageUrl), "invalid", "The missing-image fixture must persist an invalid source image rather than a valid fallback.");
+assert(validateAuthoredImageOperationalLimits(missingCompany, missingProjects).some((issue) => issue.code === "image_format_limit"), "Current-source export validation must reject the invalid project image.");
+assert(!isPersistedGeneratedProfileCurrent(missingProfile, missingCompany, [{ ...missingProjects[0], imageUrl: "data:image/png;base64,QUJD" }]), "A generated profile cannot make an invalid current source image valid again.");
+
+clearApplicationLocalData(storage as Storage);
+loadBetaFixture(storage as Storage, fixture);
+const staleCompany = readPersistedCompanyData(storage);
+const staleProfile = readPersistedGeneratedProfile(storage);
+values.set("projectsData", JSON.stringify([{ ...fixture.projects[0], imageUrl: "corrupt://removed" }]));
+const staleProjects = readPersistedProjects(storage).projects;
+assert(staleCompany && staleProfile && !isPersistedGeneratedProfileCurrent(staleProfile, staleCompany, staleProjects), "Removing a current source image must invalidate an older generated profile.");
+assert.equal(persistedImageState(staleProjects[0]?.imageUrl), "invalid", "Stale-state checks must observe the current invalid source image.");
 
 clearApplicationLocalData(storage as Storage);
 assert.equal(readPersistedCompanyData(storage), null, "Empty storage must remain an absent-company state.");
