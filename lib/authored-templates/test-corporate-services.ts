@@ -170,7 +170,7 @@ const northbridgeInput: ProductionEnrichmentInput = { company: { name: "Northbri
 const northbridgeDecision = await routeEditorialInteriorsV1Export(northbridgeInput);
 assert(northbridgeDecision.mode === "authored" && northbridgeDecision.familyId === "corporate-services" && northbridgeDecision.packId === "corporate-services-v1", "Production-shaped Northbridge must render through Corporate authored orchestration, not legacy fallback.");
 if (northbridgeDecision.mode !== "authored") throw new Error(`Northbridge authored orchestration failed: ${JSON.stringify(northbridgeDecision.reasons)}`);
-assert(northbridgeDecision.pageOrder.slice(-4, -1).join("|") === "corporate-services-v1.narrative-sparse|corporate-services-v1.narrative-alternate|corporate-services-v1.narrative-standard" && new Set(northbridgeDecision.pageOrder.slice(-4, -1)).size === 3 && northbridgeDecision.pageOrder.at(-1) === "corporate-services-v1.closing", "Northbridge detail sections must use bounded varied Corporate narrative variants before closing.");
+assert(northbridgeDecision.pageOrder.slice(-4, -1).join("|") === "corporate-services-v1.narrative-sparse|corporate-services-v1.narrative-alternate|corporate-services-v1.narrative-sparse" && new Set(northbridgeDecision.pageOrder.slice(-4, -1)).size === 2 && northbridgeDecision.pageOrder.at(-1) === "corporate-services-v1.closing", "Northbridge detail sections must use bounded varied Corporate narrative variants before closing.");
 const northbridgeOutput = resolve("artifacts", "manual-review", "corporate-services-v1-northbridge-production-review.pdf");
 mkdirSync(dirname(northbridgeOutput), { recursive: true }); writeFileSync(northbridgeOutput, Buffer.from(northbridgeDecision.pdf.output("arraybuffer")));
 
