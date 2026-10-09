@@ -8,16 +8,17 @@ export type ProductFeatureCell = { x: number; y: number; bottom: number };
 const PRIMARY_CELLS: readonly ProductFeatureCell[] = [
   { x: 19, y: 120, bottom: 190 }, { x: 110, y: 120, bottom: 190 }, { x: 19, y: 202, bottom: 274 }, { x: 110, y: 202, bottom: 274 },
 ] as const;
-type FeaturePageGeometry = { cells: readonly ProductFeatureCell[]; horizontalRules: readonly number[]; verticalRules: readonly { x: number; y1: number; y2: number }[] };
-const FOUR_GRID: FeaturePageGeometry = { cells: PRIMARY_CELLS, horizontalRules: [108, 190, 274], verticalRules: [{ x: 100, y1: 108, y2: 274 }] };
+type FeaturePageGeometry = { cells: readonly ProductFeatureCell[]; textWidth: number; horizontalRules: readonly number[]; verticalRules: readonly { x: number; y1: number; y2: number }[] };
+const FOUR_GRID: FeaturePageGeometry = { cells: PRIMARY_CELLS, textWidth: 70, horizontalRules: [108, 190, 274], verticalRules: [{ x: 100, y1: 108, y2: 274 }] };
 export const PRODUCT_FEATURE_CONTINUATION_GEOMETRY: Readonly<Record<1 | 2 | 3 | 4, FeaturePageGeometry>> = {
-  1: { cells: [{ x: 61, y: 160, bottom: 274 }], horizontalRules: [108, 274], verticalRules: [{ x: 52, y1: 108, y2: 274 }, { x: 158, y1: 108, y2: 274 }] },
-  2: { cells: [{ x: 19, y: 160, bottom: 274 }, { x: 110, y: 160, bottom: 274 }], horizontalRules: [108, 274], verticalRules: [{ x: 100, y1: 108, y2: 274 }] },
-  3: { cells: [{ x: 61, y: 126, bottom: 190 }, { x: 19, y: 210, bottom: 274 }, { x: 110, y: 210, bottom: 274 }], horizontalRules: [108, 190, 274], verticalRules: [{ x: 52, y1: 108, y2: 190 }, { x: 158, y1: 108, y2: 190 }, { x: 100, y1: 190, y2: 274 }] },
+  1: { cells: [{ x: 61, y: 160, bottom: 274 }], textWidth: 70, horizontalRules: [108, 274], verticalRules: [{ x: 52, y1: 108, y2: 274 }, { x: 158, y1: 108, y2: 274 }] },
+  2: { cells: [{ x: 19, y: 160, bottom: 274 }, { x: 110, y: 160, bottom: 274 }], textWidth: 70, horizontalRules: [108, 274], verticalRules: [{ x: 100, y1: 108, y2: 274 }] },
+  3: { cells: [{ x: 19, y: 126, bottom: 274 }, { x: 80, y: 126, bottom: 274 }, { x: 140, y: 126, bottom: 274 }], textWidth: 52, horizontalRules: [108, 274], verticalRules: [{ x: 74, y1: 108, y2: 274 }, { x: 134, y1: 108, y2: 274 }] },
   4: FOUR_GRID,
 };
 
 const templateFor = (definition: Definition): AuthoredPageTemplate<ProductFeaturesPageContent> => {
+  const geometry = definition.continuation ? PRODUCT_FEATURE_CONTINUATION_GEOMETRY[definition.count] : FOUR_GRID;
   const envelope: ContentEnvelope = { slots: [
     ...(!definition.continuation ? [
       { id: "heading", path: "heading", kind: "text" as const, required: true, fontFamily: "helvetica", fontStyle: "bold" as const, fontSize: 25, widthMm: 130, maxLines: 2 },
@@ -25,8 +26,8 @@ const templateFor = (definition: Definition): AuthoredPageTemplate<ProductFeatur
     ] : []),
     { id: "features", path: "features", kind: "collection", required: true, minItems: definition.count, maxItems: definition.count },
     ...Array.from({ length: definition.count }, (_, index) => [
-      { id: `feature${index}Title`, path: `features.${index}.title`, kind: "text" as const, required: true, fontFamily: "helvetica", fontStyle: "bold" as const, fontSize: 14, widthMm: 70, maxLines: 2 },
-      { id: `feature${index}Description`, path: `features.${index}.description`, kind: "text" as const, required: true, fontFamily: "helvetica", fontStyle: "normal" as const, fontSize: 8.25, widthMm: 70, maxLines: 6 },
+      { id: `feature${index}Title`, path: `features.${index}.title`, kind: "text" as const, required: true, fontFamily: "helvetica", fontStyle: "bold" as const, fontSize: 14, widthMm: geometry.textWidth, maxLines: 2 },
+      { id: `feature${index}Description`, path: `features.${index}.description`, kind: "text" as const, required: true, fontFamily: "helvetica", fontStyle: "normal" as const, fontSize: 8.25, widthMm: geometry.textWidth, maxLines: 6 },
     ]).flat(),
   ] };
   return {
@@ -34,7 +35,6 @@ const templateFor = (definition: Definition): AuthoredPageTemplate<ProductFeatur
     prepare: (input) => evaluateContentEnvelope(definition.id, envelope, input, createProductMeasurementContext(), input.features.map((feature) => feature.contentId)),
     render: (pdf, instance): TemplateRenderAudit => {
       paintProductPaper(pdf); const audit: Record<string, readonly string[]> = {};
-      const geometry = definition.continuation ? PRODUCT_FEATURE_CONTINUATION_GEOMETRY[definition.count] : FOUR_GRID;
       pdf.setFillColor(...v.palette.ink); pdf.rect(0, 0, 210, 34, "F"); pdf.setFillColor(...v.palette.signal); pdf.rect(176, 16, 15, 2.5, "F");
       pdf.setTextColor(...v.palette.white); pdf.setFont("courier", "bold"); pdf.setFontSize(7.5); pdf.text(definition.continuation ? "FEATURES / CONTINUED" : "02 / FEATURES", 19, 21);
       if (definition.continuation) {

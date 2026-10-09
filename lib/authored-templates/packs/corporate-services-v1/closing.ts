@@ -18,7 +18,12 @@ export const corporateServicesClosingTemplate: AuthoredPageTemplate<CorporateClo
     const descriptor = instance.preparedSlots.descriptor; if (descriptor?.kind === "text") { pdf.setTextColor(...visual.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setLineHeightFactor(1.35); pdf.text([...descriptor.lines], 31, 158); }
     pdf.setDrawColor(...visual.palette.cobalt); pdf.setLineWidth(1); pdf.line(31, 173, 92, 173);
     const logo = instance.preparedSlots.logo; if (logo?.kind === "image") { const width = Math.min(48, 25 * logo.aspectRatio); pdf.addImage(logo.source.source, logo.source.format, 31, 230 - width / logo.aspectRatio, width, width / logo.aspectRatio); }
-    const contacts = instance.preparedSlots.contactLines; if (contacts?.kind === "text") { pdf.setTextColor(...visual.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.text([...contacts.lines], 31, 215); }
+    const contacts = instance.preparedSlots.contactLines;
+    if (contacts?.kind === "text") {
+      pdf.setDrawColor(...visual.palette.mist); pdf.setLineWidth(0.35); pdf.line(31, visual.layout.closing.contactRuleY, visual.layout.right, visual.layout.closing.contactRuleY);
+      pdf.setTextColor(...visual.palette.cobalt); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7); pdf.setCharSpace(0.6); pdf.text("CONTACT", 31, visual.layout.closing.contactLabelY); pdf.setCharSpace(0);
+      pdf.setTextColor(...visual.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5); pdf.text([...contacts.lines], 31, visual.layout.closing.contactTextY);
+    }
     pdf.setTextColor(...visual.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.text("COMPANY PROFILE", 31, 263);
     return { templateId: instance.templateId, renderedTextBySlot: { companyName: name.lines, ...(descriptor?.kind === "text" ? { descriptor: descriptor.lines } : {}), ...(contacts?.kind === "text" ? { contactLines: contacts.lines } : {}) } };
   },

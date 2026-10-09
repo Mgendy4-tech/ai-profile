@@ -141,6 +141,12 @@ const render = (
   pdf.setDrawColor(...visual.palette.hairline);
   pdf.setLineWidth(0.25);
   pdf.line(19, 231, 191, 231);
+  pdf.setTextColor(...visual.palette.ochre);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(7);
+  pdf.setCharSpace(0.55);
+  pdf.text("PROJECT SUMMARY", 19, 239);
+  pdf.setCharSpace(0);
   pdf.setTextColor(...visual.palette.charcoal);
   pdf.setFont("times", "bold");
   pdf.setFontSize(12);

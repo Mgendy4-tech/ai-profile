@@ -21,7 +21,20 @@ export const productTechV1VisualSystem = {
     line: [199, 208, 220],
     white: [255, 255, 255],
   },
-} as const satisfies TemplatePackVisualSystem;
+  layout: {
+    margin: 19,
+    right: 191,
+    headerHeight: 34,
+    bottomRuleY: 274,
+    closing: {
+      contactRuleY: 198,
+      contactLabelY: 207,
+      contactTextY: 215,
+    },
+  },
+} as const satisfies TemplatePackVisualSystem & {
+  layout: { margin: number; right: number; headerHeight: number; bottomRuleY: number; closing: { contactRuleY: number; contactLabelY: number; contactTextY: number } };
+};
 
 export const createProductMeasurementContext = (): MeasurementContext => createJsPDFMeasurementContext(new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" }));
 export const paintProductPaper = (pdf: jsPDF) => { pdf.setFillColor(...productTechV1VisualSystem.palette.paper); pdf.rect(0, 0, 210, 297, "F"); };

@@ -50,3 +50,30 @@ const createNarrativeTemplate = (variant: "sparse" | "standard" | "dense", maxLi
 export const corporateServicesNarrativeStandardTemplate = createNarrativeTemplate("standard", 24);
 export const corporateServicesNarrativeDenseTemplate = createNarrativeTemplate("dense", 56);
 export const corporateServicesNarrativeSparseTemplate = createNarrativeTemplate("sparse", 10);
+
+const alternateNarrativeEnvelope: ContentEnvelope = { slots: [
+  { id: "title", path: "title", kind: "text", required: true, fontFamily: "times", fontStyle: "bold", fontSize: 29, widthMm: 120, maxLines: 3 },
+  { id: "supportingLine", path: "supportingLine", kind: "text", required: false, fontFamily: "helvetica", fontStyle: "normal", fontSize: 9.5, widthMm: 38, maxLines: 7 },
+  { id: "body", path: "body", kind: "text", required: true, fontFamily: "helvetica", fontStyle: "normal", fontSize: 9.5, widthMm: 112, maxLines: 13 },
+] };
+
+export const corporateServicesNarrativeAlternateTemplate: AuthoredPageTemplate<CorporateNarrativeContent> = {
+  id: "corporate-services-v1.narrative-alternate", pageRole: "narrative", family: "corporate_narrative", priority: 95, envelope: alternateNarrativeEnvelope,
+  prepare: (input) => evaluateContentEnvelope("corporate-services-v1.narrative-alternate", alternateNarrativeEnvelope, input, createCorporateMeasurementContext(), [input.contentId]),
+  render: (pdf, instance): TemplateRenderAudit => {
+    paintCorporatePaper(pdf);
+    pdf.setFillColor(...v.palette.navy); pdf.rect(0, 0, 210, 30, "F");
+    pdf.setTextColor(...v.palette.white); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7.5); pdf.setCharSpace(0.55); pdf.text("BUSINESS PROFILE / CONTINUED", 19, 20); pdf.setCharSpace(0);
+    const title = preparedCorporateText(instance, "title");
+    pdf.setTextColor(...v.palette.ink); pdf.setFont("times", "bold"); pdf.setFontSize(29); pdf.setLineHeightFactor(1); pdf.text([...title.lines], 19, 67);
+    pdf.setDrawColor(...v.palette.cobalt); pdf.setLineWidth(0.8); pdf.line(19, 91, 51, 91);
+    const body = preparedCorporateText(instance, "body");
+    pdf.setTextColor(...v.palette.ink); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.5); pdf.setLineHeightFactor(1.55); pdf.text([...body.lines], 19, 119);
+    const supporting = preparedCorporateText(instance, "supportingLine");
+    pdf.setFillColor(...v.palette.mist); pdf.rect(148, 91, 43, 136, "F");
+    pdf.setTextColor(...v.palette.cobalt); pdf.setFont("helvetica", "bold"); pdf.setFontSize(7.5); pdf.text("FOCUS", 158, 112);
+    pdf.setTextColor(...v.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setLineHeightFactor(1.45); pdf.text([...supporting.lines], 158, 130);
+    pdf.setDrawColor(...v.palette.mist); pdf.setLineWidth(0.35); pdf.line(19, 270, 191, 270);
+    return { templateId: instance.templateId, renderedTextBySlot: { title: title.lines, supportingLine: supporting.lines, body: body.lines } };
+  },
+};

@@ -30,6 +30,7 @@ const templateFor = (definition: Definition): AuthoredPageTemplate<ProductUseCas
         pdf.setTextColor(...v.palette.secondary); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.25); pdf.setLineHeightFactor(1.35); pdf.text([...support.lines], 19, 84);
       }
       const top = 111; const rowHeight = 158 / definition.count;
+      pdf.setDrawColor(...v.palette.line); pdf.setLineWidth(0.3); pdf.line(96, top, 96, 269);
       instance.source.useCases.forEach((useCase, index) => {
         const y = top + index * rowHeight; if (index === 0) pdf.setDrawColor(...v.palette.electric); else pdf.setDrawColor(...v.palette.line); pdf.setLineWidth(index === 0 ? 0.8 : 0.35); pdf.line(19, y, 191, y);
         pdf.setTextColor(...v.palette.electric); pdf.setFont("courier", "bold"); pdf.setFontSize(8); pdf.text(useCase.index, 19, y + 16);

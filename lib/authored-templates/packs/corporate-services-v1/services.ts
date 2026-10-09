@@ -25,6 +25,14 @@ export const CORPORATE_SERVICES_TEXT_GEOMETRY = {
   descriptionYOffset: 12,
 } as const;
 
+export const CORPORATE_SINGLE_CONTINUATION_GEOMETRY = {
+  card: { x: 19, y: 106, width: 172, height: 126 },
+  index: { x: 35, y: 139 },
+  title: { x: 55, y: 144 },
+  description: { x: 55, y: 166 },
+  dividerY: 197,
+} as const;
+
 const templateFor = (definition: Definition): AuthoredPageTemplate<CorporateServicesPageContent> => {
   const envelope: ContentEnvelope = { slots: [
     ...(!definition.continuation ? [
@@ -53,7 +61,18 @@ const templateFor = (definition: Definition): AuthoredPageTemplate<CorporateServ
         const supporting = preparedCorporateText(instance, "supportingLine"); audit.supportingLine = supporting.lines;
         pdf.setTextColor(...v.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.5); pdf.setLineHeightFactor(1.35); pdf.text([...supporting.lines], 19, 88);
       }
-      instance.source.services.forEach((service, index) => {
+      if (definition.continuation && definition.count === 1) {
+        const service = instance.source.services[0];
+        const geometry = CORPORATE_SINGLE_CONTINUATION_GEOMETRY;
+        pdf.setFillColor(...v.palette.mist); pdf.rect(geometry.card.x, geometry.card.y, geometry.card.width, geometry.card.height, "F");
+        pdf.setFillColor(...v.palette.cobalt); pdf.rect(geometry.card.x, geometry.card.y, 5, geometry.card.height, "F");
+        pdf.setTextColor(...v.palette.cobalt); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8); pdf.text(service.index, geometry.index.x, geometry.index.y);
+        const title = preparedCorporateText(instance, "service0Title"); const description = preparedCorporateText(instance, "service0Description");
+        audit.service0Title = title.lines; audit.service0Description = description.lines;
+        pdf.setTextColor(...v.palette.ink); pdf.setFont("times", "bold"); pdf.setFontSize(17); pdf.setLineHeightFactor(1); pdf.text([...title.lines], geometry.title.x, geometry.title.y);
+        pdf.setTextColor(...v.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(8.5); pdf.setLineHeightFactor(1.3); pdf.text([...description.lines], geometry.description.x, geometry.description.y);
+        pdf.setDrawColor(...v.palette.cobalt); pdf.setLineWidth(0.8); pdf.line(geometry.title.x, geometry.dividerY, 175, geometry.dividerY);
+      } else instance.source.services.forEach((service, index) => {
         const y = definition.rowTops[index];
         if (index === 0) pdf.setDrawColor(...v.palette.cobalt); else pdf.setDrawColor(...v.palette.mist); pdf.setLineWidth(index === 0 ? 0.8 : 0.35); pdf.line(19, y, 191, y);
         pdf.setTextColor(...v.palette.cobalt); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8); pdf.text(service.index, CORPORATE_SERVICES_TEXT_GEOMETRY.indexX, y + CORPORATE_SERVICES_TEXT_GEOMETRY.titleYOffset);

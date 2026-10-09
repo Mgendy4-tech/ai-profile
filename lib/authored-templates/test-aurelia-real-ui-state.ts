@@ -27,6 +27,8 @@ const plannerCopy = [
 ].join("\n");
 assert(!/(?:Describe |supplied residential expertise|supplied material-led|grounded in the supplied|supplied company and project information)/i.test(plannerCopy), "Aurelia planner copy must not expose internal instruction or grounding filler.");
 assert(plannerCopy.toLocaleLowerCase().includes("interior design") && plannerCopy.includes("Aurelia Interiors"), "Aurelia planner copy must remain source-grounded and personalized.");
+const naturalApproach = customerFacingSectionCopy("visual-portfolio", { ...company, servicesProducts: "Seven supplied capabilities", activities: "Seven supplied capabilities" }, { title: "Design Approach", description: "Planner detail.", content: "A calm, material-led design approach grounded in supplied information.", items: [] });
+assert(/design approach balances refined residential interiors/i.test(naturalApproach.content) && !/\bsupplied\b/i.test(naturalApproach.content), "Aurelia Design Approach copy must remain natural and free of supplied wording.");
 const presentedAurelia = sections().map((section) => customerFacingSectionCopy("visual-portfolio", company, section));
 const presentedAureliaText = presentedAurelia.map((section) => [section.title, section.description, section.content, ...section.items.map((item) => `${item.name} ${item.description}`)].join("\n")).join("\n");
 assert(!/\bsupplied\b/i.test(presentedAureliaText) && !containsInternalPresentationCopy(presentedAureliaText), "Aurelia UI presentation must not expose internal source/planner wording.");
@@ -66,7 +68,7 @@ const main = async () => {
   const raw = Buffer.from(first.pdf.output("arraybuffer")).toString("latin1");
   assert(raw.includes("Riverside Residence") && !/pexels|image credits/i.test(raw), "Authored output must contain Riverside and no legacy contextual markers.");
   const renderedCopy = ((first.pdf.internal as unknown as { pages: string[][] }).pages).flat().join("\n");
-  assert(!containsInternalPresentationCopy(renderedCopy) && !containsGeneratedFillerCopy(renderedCopy), "Visual PDF must not expose planning instructions or generated filler.");
+  assert(!containsInternalPresentationCopy(renderedCopy) && !containsGeneratedFillerCopy(renderedCopy) && !/\bsupplied\b/i.test(renderedCopy), "Visual PDF must not expose planning instructions, generated filler, or supplied wording.");
   assert(first.pageOrder.length === first.pdf.getNumberOfPages(), "Visual planned and rendered page counts must match.");
   assert(!/(?:example\.com|info@company|\+1 000)/i.test(renderedCopy), "Visual PDF must not invent contact placeholders.");
   const identityTransitionDecision = await routeEditorialInteriorsV1Export(input(realBrowserReconstruction.projects.map((entry) => ({ ...entry, category: entry.category ?? "" }))), decode);

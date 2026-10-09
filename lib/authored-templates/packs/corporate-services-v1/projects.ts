@@ -44,7 +44,7 @@ const templateFor = (count: Count): AuthoredPageTemplate<CorporateProjectsPageCo
         pdf.setTextColor(...v.palette.ink); pdf.setFont("times", "bold"); pdf.setFontSize(18); pdf.setLineHeightFactor(1.05); pdf.text([...name.lines], x, 145);
         pdf.setTextColor(...v.palette.muted); pdf.setFont("helvetica", "normal"); pdf.setFontSize(8.5); pdf.setLineHeightFactor(1.4); pdf.text([...description.lines], x, 180, { maxWidth: width });
       });
-      pdf.setDrawColor(...v.palette.mist); pdf.setLineWidth(0.35); pdf.line(19, 270, 191, 270);
+      pdf.setDrawColor(...v.palette.mist); pdf.setLineWidth(0.35); pdf.line(v.layout.margin, v.layout.bottomRuleY, v.layout.right, v.layout.bottomRuleY);
       return { templateId: id, renderedTextBySlot: audit };
     },
   };

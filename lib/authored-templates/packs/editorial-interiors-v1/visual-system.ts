@@ -35,6 +35,21 @@ export const editorialInteriorsV1VisualSystem = {
     width: 23,
     lineWidth: 0.7,
   },
+  layout: {
+    margin: 19,
+    right: 191,
+    headerLabelY: 25,
+    headerRuleY: 30,
+    bottomRuleY: 274,
+    closing: {
+      accentX: 151,
+      accentWidth: 59,
+      accentHeight: 112,
+      contactRuleY: 198,
+      contactLabelY: 207,
+      contactTextY: 218,
+    },
+  },
   crops: {
     cover: {
       frame: { x: 0, y: 0, width: 122, height: 297 },
@@ -61,6 +76,14 @@ export const editorialInteriorsV1VisualSystem = {
       image: { x: number; y: number; width: number; height: number };
       sourceAspectRange: { minimum: number; maximum: number };
     };
+  };
+  layout: {
+    margin: number;
+    right: number;
+    headerLabelY: number;
+    headerRuleY: number;
+    bottomRuleY: number;
+    closing: { accentX: number; accentWidth: number; accentHeight: number; contactRuleY: number; contactLabelY: number; contactTextY: number };
   };
 };
 

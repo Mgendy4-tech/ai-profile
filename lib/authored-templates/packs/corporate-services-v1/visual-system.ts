@@ -21,7 +21,20 @@ export const corporateServicesV1VisualSystem = {
     mist: [225, 229, 229],
     white: [255, 255, 255],
   },
-} as const satisfies TemplatePackVisualSystem;
+  layout: {
+    margin: 19,
+    right: 191,
+    headerHeight: 36,
+    bottomRuleY: 270,
+    closing: {
+      contactRuleY: 196,
+      contactLabelY: 205,
+      contactTextY: 215,
+    },
+  },
+} as const satisfies TemplatePackVisualSystem & {
+  layout: { margin: number; right: number; headerHeight: number; bottomRuleY: number; closing: { contactRuleY: number; contactLabelY: number; contactTextY: number } };
+};
 
 export const createCorporateMeasurementContext = (): MeasurementContext => createJsPDFMeasurementContext(new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" }));
 

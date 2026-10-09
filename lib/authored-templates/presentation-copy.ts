@@ -12,11 +12,19 @@ const companyDescriptor = (company: CompanyIdentity, fallback: string) => unique
 const possessive = (name: string) => `${name}${/s$/i.test(name) ? "'" : "'s"}`;
 const audience = (company: CompanyIdentity) => company.customerType ? ` for ${normalized(company.customerType)}` : "";
 const compactFacts = (value: string, limit = 2) => unique(value.split(/,|;|\band\b/i)).slice(0, limit).join(" and ");
-const capabilityFacts = (company: CompanyIdentity) => compactFacts(company.servicesProducts || company.activities || company.industry || company.companyType || "design services");
+const safeFact = (value: string): boolean => Boolean(normalized(value)) && !/\b(?:supplied|source-backed|provided|grounded|based on)\b/i.test(value);
+const safeCompanyFacts = (company: CompanyIdentity) => [company.servicesProducts, company.activities, company.industry, company.companyType].filter((value): value is string => typeof value === "string" && safeFact(value));
+const capabilityFacts = (company: CompanyIdentity) => compactFacts(safeCompanyFacts(company).join(", ") || "design services");
 const approachFacts = (company: CompanyIdentity) => {
   const about = normalized(company.about ?? "");
   const match = about.match(/\b(?:around|with a focus on|focused on|using|through)\s+(.+?)(?:\.|$)/i);
-  return match?.[1] || compactFacts(company.activities || company.servicesProducts || company.industry || "materials and function");
+  const extracted = match?.[1];
+  const created = about.match(/\b(?:creates|shapes|develops|delivers)\s+(.+?)(?:\.|$)/i)?.[1];
+  if (created && safeFact(created)) return created;
+  if (extracted && safeFact(extracted)) return extracted;
+  const candidates = safeCompanyFacts(company);
+  const designCandidate = candidates.find((value) => /design|interior|material|lighting|furniture|space|residential|palette|function|style/i.test(value));
+  return compactFacts(designCandidate || candidates[0] || "materials and function");
 };
 const projectFacts = (item: PresentationItem) => normalized(item.description).replace(/^an?\s+/i, "").replace(/\.$/, "") || "the available design details";
 const sectionLabel = (title: string) => normalized(title).replace(/^(?:our|the)\s+/i, "").toLocaleLowerCase() || "practice";
@@ -51,11 +59,30 @@ const familySupportingLine = (family: CustomerFacingFamily, company: CompanyIden
   return `${possessive(company.name)} product capabilities${audience(company)}.`;
 };
 
+const isGenericFallbackDescription = (family: CustomerFacingFamily, item: PresentationItem, description: string) => {
+  if (family === "corporate-services") return /^advisory support for\s+.+\.?$/i.test(description);
+  if (family === "product-tech") return /^.+\s+supports sales and customer acquisition workflows\.?$/i.test(description);
+  return false;
+};
+const itemEvidence = (company: CompanyIdentity, item: PresentationItem) => {
+  const explicit = normalized(item.sourceEvidence ?? "");
+  if (explicit && safeFact(explicit)) return explicit;
+  const terms = item.name.toLocaleLowerCase().split(/\s+/).filter((term) => term.length > 3);
+  return safeCompanyFacts(company).flatMap((value) => value.split(/,|;/).map(normalized)).find((value) => terms.some((term) => value.toLocaleLowerCase().includes(term))) ?? "";
+};
+const specificFallbackDescription = (family: CustomerFacingFamily, company: CompanyIdentity, item: PresentationItem) => {
+  const evidence = itemEvidence(company, item);
+  if (!evidence) return family === "corporate-services" ? `Advisory capability within ${possessive(company.name)} offering.` : `Platform capability within ${possessive(company.name)} product system.`;
+  if (family === "corporate-services") return `Advisory support focused on ${evidence}.`;
+  return `Platform capability focused on ${evidence}.`;
+};
+
 export const customerFacingSectionLine = (family: CustomerFacingFamily, company: CompanyIdentity, items: readonly PresentationItem[] = []) => familySupportingLine(family, company, items);
 
 export const customerFacingItemDescription = (family: CustomerFacingFamily, company: CompanyIdentity, item: PresentationItem) => {
   const description = normalized(item.description);
-  if (!needsCustomerFacingRewrite(description, company)) return description;
+  if (!needsCustomerFacingRewrite(description, company) && !isGenericFallbackDescription(family, item, description)) return description;
+  if (!needsCustomerFacingRewrite(description, company) && isGenericFallbackDescription(family, item, description)) return specificFallbackDescription(family, company, item);
   if (family === "visual-portfolio") return `Design capability within ${possessive(company.name)} practice.`;
   if (family === "corporate-services") return `Advisory capability within ${possessive(company.name)} offering.`;
   return `Platform capability within ${possessive(company.name)} product system.`;

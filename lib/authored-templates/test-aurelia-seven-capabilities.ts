@@ -35,7 +35,7 @@ const main = async () => {
   assert(firstBytes.equals(secondBytes), "Seven-capability Aurelia PDF must be byte deterministic.");
   const raw = firstBytes.toString("latin1");
   capabilityNames.forEach((name) => assert.equal(raw.split(name).length - 1, 1, `${name} must render exactly once.`));
-  assert(raw.includes("Riverside Residence") && raw.includes("/Subtype /Image"), "Riverside text and uploaded raster must render on the project page.");
+  assert(raw.includes("Riverside Residence") && raw.includes("/Subtype /Image") && !/supplied/i.test(raw), "Riverside text and uploaded raster must render without residual supplied wording.");
   assert(!/pexels|image credits/i.test(raw), "No contextual imagery or image credits may enter Visual authored output.");
   const reviewPath = resolve("artifacts/manual-review/visual-portfolio-v1-aurelia-seven-capabilities-closing-review.pdf");
   mkdirSync(resolve("artifacts/manual-review"), { recursive: true });

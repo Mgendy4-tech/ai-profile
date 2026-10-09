@@ -55,7 +55,7 @@ export const createCorporateServicesDocumentPlan = (input: CorporateServicesPlan
   }
   if (input.approach) pages.push({ pageId: "approach", templateId: "corporate-services-v1.approach", pageRole: "narrative", candidate: input.approach, claims: company ? [{ contentId: company.id, mode: "reference", slotId: "activities" }] : [] });
   details.forEach((detail, index) => {
-    const templateId = detail.body.length <= 300 ? "corporate-services-v1.narrative-sparse" : detail.body.length <= 900 ? "corporate-services-v1.narrative-standard" : "corporate-services-v1.narrative-dense";
+    const templateId = index % 2 === 1 ? "corporate-services-v1.narrative-alternate" : detail.body.length <= 300 ? "corporate-services-v1.narrative-sparse" : detail.body.length <= 900 ? "corporate-services-v1.narrative-standard" : "corporate-services-v1.narrative-dense";
     pages.push({ pageId: `detail:${index}`, templateId, pageRole: "narrative", candidate: detail, claims: [{ contentId: detail.contentId, mode: "consume", slotId: "body" }] });
   });
   let projectOffset = 0; let projectSequence = 0;

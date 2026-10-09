@@ -18,7 +18,12 @@ export const productTechClosingTemplate: AuthoredPageTemplate<ProductClosingCont
     const descriptor = instance.preparedSlots.descriptor; if (descriptor?.kind === "text") { pdf.setTextColor(...visual.palette.secondary); pdf.setFont("courier", "normal"); pdf.setFontSize(8.5); pdf.setLineHeightFactor(1.35); pdf.text([...descriptor.lines], 31, 159); }
     pdf.setDrawColor(...visual.palette.line); pdf.setLineWidth(0.4); pdf.line(31, 176, 191, 176);
     const logo = instance.preparedSlots.logo; if (logo?.kind === "image") { const width = Math.min(48, 25 * logo.aspectRatio); pdf.addImage(logo.source.source, logo.source.format, 31, 231 - width / logo.aspectRatio, width, width / logo.aspectRatio); }
-    const contacts = instance.preparedSlots.contactLines; if (contacts?.kind === "text") { pdf.setTextColor(...visual.palette.secondary); pdf.setFont("courier", "normal"); pdf.setFontSize(7.5); pdf.text([...contacts.lines], 31, 215); }
+    const contacts = instance.preparedSlots.contactLines;
+    if (contacts?.kind === "text") {
+      pdf.setDrawColor(...visual.palette.line); pdf.setLineWidth(0.3); pdf.line(31, visual.layout.closing.contactRuleY, visual.layout.right, visual.layout.closing.contactRuleY);
+      pdf.setTextColor(...visual.palette.electric); pdf.setFont("courier", "bold"); pdf.setFontSize(7); pdf.setCharSpace(0.5); pdf.text("CONTACT", 31, visual.layout.closing.contactLabelY); pdf.setCharSpace(0);
+      pdf.setTextColor(...visual.palette.secondary); pdf.setFont("courier", "normal"); pdf.setFontSize(7.5); pdf.text([...contacts.lines], 31, visual.layout.closing.contactTextY);
+    }
     pdf.setTextColor(...visual.palette.secondary); pdf.setFont("courier", "bold"); pdf.setFontSize(8); pdf.text("END OF PROFILE", 31, 264);
     return { templateId: instance.templateId, renderedTextBySlot: { companyName: name.lines, ...(descriptor?.kind === "text" ? { descriptor: descriptor.lines } : {}), ...(contacts?.kind === "text" ? { contactLines: contacts.lines } : {}) } };
   },
