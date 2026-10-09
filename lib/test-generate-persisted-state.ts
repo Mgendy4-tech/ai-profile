@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createBetaFixture, loadBetaFixture } from "./beta-test-fixtures";
 import { companySemanticText, readPersistedCompanyData } from "./company-data";
 import { familyChoices } from "./authored-templates/family-selection";
-import { createGeneratedProfileSourceFingerprint, generatedProjectEvidenceCount, isPersistedGeneratedProfileCurrent, readPersistedGeneratedProfile } from "./generated-profile-storage";
+import { createGeneratedProfileSourceFingerprint, generatedProjectEvidenceCount, isPersistedGeneratedProfileCurrent, readPersistedGeneratedProfile, reconcileGeneratedProfileToSource } from "./generated-profile-storage";
 import { APPLICATION_STORAGE_KEYS, clearApplicationLocalData } from "./local-profile-data";
 import { persistedImageState, readPersistedProjects } from "./persisted-projects";
 import { validateAuthoredImageOperationalLimits } from "./production-limits";
@@ -48,6 +48,9 @@ assert(missingCompany && missingProjects.length === 1 && missingProfile, "The mi
 assert.equal(persistedImageState(missingProjects[0]?.imageUrl), "invalid", "The missing-image fixture must persist an invalid source image rather than a valid fallback.");
 assert(validateAuthoredImageOperationalLimits(missingCompany, missingProjects).some((issue) => issue.code === "image_format_limit"), "Current-source export validation must reject the invalid project image.");
 assert(!isPersistedGeneratedProfileCurrent(missingProfile, missingCompany, [{ ...missingProjects[0], imageUrl: "data:image/png;base64,QUJD" }]), "A generated profile cannot make an invalid current source image valid again.");
+const reconciledMissing = reconcileGeneratedProfileToSource(missingProfile, missingCompany, missingProjects);
+assert.equal(reconciledMissing.projects[0]?.imageUrl, undefined, "Reconciliation must never copy an invalid canonical image into derived project state.");
+assert.equal(reconciledMissing.sections.find((section) => section.id === "projects")?.items[0]?.imageUrl, undefined, "Reconciliation must never expose an invalid canonical image to the rendered project section.");
 
 clearApplicationLocalData(storage as Storage);
 loadBetaFixture(storage as Storage, fixture);

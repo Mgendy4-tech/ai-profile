@@ -1,5 +1,5 @@
 import type { CompanyData } from "./company-data";
-import { persistedImageState, type PersistedProject } from "./persisted-projects";
+import { hasValidPersistedProjectImage, persistedImageState, type PersistedProject } from "./persisted-projects";
 
 export type PersistedGeneratedProfileItem = { id?: string; name: string; description: string; sourceEvidence?: string; imageUrl?: string };
 export type PersistedGeneratedProfileSection = { id: string; semanticRole?: string; title: string; description: string; content: string; items: PersistedGeneratedProfileItem[] };
@@ -55,7 +55,7 @@ export const reconcileGeneratedProfileToSource = (profile: PersistedGeneratedPro
   const findProject = (candidate: { id?: string; name: string }) => projects.find((project) => (candidate.id && project.id === candidate.id) || project.name === candidate.name);
   const reconciledProjects = profile.projects.map((project) => {
     const source = findProject(project);
-    return source ? { ...project, id: source.id, imageUrl: source.imageUrl } : { ...project, imageUrl: undefined };
+    return source ? { ...project, id: source.id, imageUrl: hasValidPersistedProjectImage(source.imageUrl) ? source.imageUrl : undefined } : { ...project, imageUrl: undefined };
   });
   const projectSection = (section: PersistedGeneratedProfileSection) => section.id === "projects" || section.semanticRole === "projects";
   return {
@@ -66,7 +66,7 @@ export const reconcileGeneratedProfileToSource = (profile: PersistedGeneratedPro
       ...section,
       items: section.items.map((item) => {
         const source = findProject(item);
-        return source ? { ...item, id: source.id, imageUrl: source.imageUrl } : { ...item, imageUrl: undefined };
+        return source ? { ...item, id: source.id, imageUrl: hasValidPersistedProjectImage(source.imageUrl) ? source.imageUrl : undefined } : { ...item, imageUrl: undefined };
       }),
     } : section),
   };
