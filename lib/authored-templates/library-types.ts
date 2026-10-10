@@ -104,6 +104,7 @@ export type AuthoredPagePlan<TCandidate extends object = object> = {
 export type AuthoredDocumentPlan = {
   familyId: TemplateFamilyId;
   packId: string;
+  variantId?: string;
   pages: readonly AuthoredPagePlan[];
 };
 

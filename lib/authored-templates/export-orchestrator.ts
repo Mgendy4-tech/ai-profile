@@ -13,6 +13,7 @@ import type { FamilyRankingExplanation } from "./library-types";
 import { selectAuthoredCover, type AuthoredCoverContent, type CurrentFamilyId } from "./cover-library";
 import { extractVisualNarrativeFacts } from "./visual-narrative-facts";
 import { customerFacingItemDescription, customerFacingSectionBody, customerFacingSectionLine } from "./presentation-copy";
+import { getAuthoredVariant, normalizeAuthoredVariant, type AuthoredVariantId } from "./variant-registry";
 
 export type AuthoredExportFallbackReason = { stage: "operational" | "normalization" | "enrichment" | "ranking" | "planning" | "compatibility"; code: string; path: string; pageRole: PageRole | null };
 export type AuthoredFallbackCategory = "expected_unsupported_content_shape" | "missing_authentic_asset" | "authored_capacity_incompatibility" | "ambiguous_semantic_normalization" | "runtime_system_error";
@@ -24,7 +25,7 @@ export const classifyAuthoredFallbackReason = (reason: AuthoredExportFallbackRea
   return "runtime_system_error";
 };
 export type AuthoredExportDecision =
-  | { mode: "authored"; familyId: "visual-portfolio" | "corporate-services" | "product-tech"; packId: "editorial-interiors-v1" | "corporate-services-v1" | "product-tech-v1"; pdf: jsPDF; pageOrder: readonly string[]; reasons: []; ranking: FamilyRankingExplanation }
+  | { mode: "authored"; familyId: "visual-portfolio" | "corporate-services" | "product-tech"; variantId: AuthoredVariantId; packId: "editorial-interiors-v1" | "corporate-services-v1" | "product-tech-v1"; pdf: jsPDF; pageOrder: readonly string[]; reasons: []; ranking: FamilyRankingExplanation }
   | { mode: "fallback"; familyId: null; packId: "editorial-interiors-v1"; pdf: null; pageOrder: null; reasons: readonly AuthoredExportFallbackReason[]; ranking: FamilyRankingExplanation | null };
 
 const fallback = (reasons: readonly AuthoredExportFallbackReason[], ranking: FamilyRankingExplanation | null = null): AuthoredExportDecision => ({ mode: "fallback", familyId: null, packId: "editorial-interiors-v1", pdf: null, pageOrder: null, reasons, ranking });
@@ -38,7 +39,7 @@ const contactLines = (company: ProductionEnrichmentInput["company"]): string => 
   company.address && `Address: ${company.address}`, company.socialUrl && `Profile: ${company.socialUrl}`,
 ].filter((line): line is string => Boolean(line)).join("\n");
 
-export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmentInput, decodeDimensions?: ImageMetadataDecoder, imageBoundary: "source" | "optimized_embed" = "source", requestedFamilyId?: CurrentFamilyId): Promise<AuthoredExportDecision> => {
+export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmentInput, decodeDimensions?: ImageMetadataDecoder, imageBoundary: "source" | "optimized_embed" = "source", requestedFamilyId?: CurrentFamilyId, requestedVariantId?: string): Promise<AuthoredExportDecision> => {
   const operationalIssues = imageBoundary === "optimized_embed"
     ? validateAuthoredEmbeddedImageLimits(input.company, input.projects)
     : validateAuthoredImageOperationalLimits(input.company, input.projects);
@@ -78,13 +79,24 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
   const ranking = explainAuthoredTemplateFamilyRanking(authoredTemplateFamilies, createContentShape(units, null, productTechSignal));
   const selectedFamily = requestedFamilyId && ranking.eligibleFamilies.some((family) => family.familyId === requestedFamilyId) ? requestedFamilyId : ranking.selectedFamilyId;
   if (!selectedFamily) return fallback([{ stage: "ranking", code: "no_eligible_authored_family", path: "contentShape", pageRole: null }], ranking);
-  const coverSelection = selectAuthoredCover({ familyId: selectedFamily as CurrentFamilyId, companyName: input.company.name, companyType: input.profile.companyType, hasLogo: Boolean(enriched.adapterInput.company.logo) });
+  const variantSignals = {
+    projectCount: input.projects.length,
+    authenticProjectImageCount: visualByProjectId.size,
+    serviceCount: servicesEntry?.section.items.length ?? 0,
+    corporateDetailCount: corporateDetailEntries.length,
+    productFeatureCount: featuresEntry?.section.items.length ?? 0,
+    useCaseCount: useCasesEntry?.section.items.length ?? 0,
+    narrativeCharacterCount: narrativeEntry.section.content.length,
+  };
+  const variant = normalizeAuthoredVariant(selectedFamily as CurrentFamilyId, requestedVariantId, variantSignals);
+  const variantDefinition = getAuthoredVariant(variant.variantId);
+  const coverSelection = selectAuthoredCover({ familyId: selectedFamily as CurrentFamilyId, companyName: input.company.name, companyType: input.profile.companyType, preferredTemplateId: variantDefinition?.coverTemplateId, hasLogo: Boolean(enriched.adapterInput.company.logo) });
   if (!coverSelection.compatible) return fallback([{ stage: "compatibility", code: "cover_name_capacity_unsupported", path: "company.name", pageRole: "cover" }], ranking);
   const cover: AuthoredCoverContent = { contentId: "company", documentLabel: selectedFamily === "product-tech" ? "PRODUCT SYSTEM / 01" : selectedFamily === "corporate-services" ? "CORPORATE / SERVICES" : "COMPANY PROFILE", companyName: input.company.name, companyType: input.profile.companyType, paletteId: coverSelection.paletteId, ...(enriched.adapterInput.company.logo ? { logo: enriched.adapterInput.company.logo } : {}) };
 
   if (selectedFamily === "product-tech") {
     if (!featuresEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
-    const planning = createProductTechDocumentPlan({ units, contactLines: contactLines(input.company),
+    const planning = createProductTechDocumentPlan({ units, variantId: variant.variantId as "product-system" | "product-launch", contactLines: contactLines(input.company),
       cover, coverTemplateId: coverSelection.templateId,
       overview: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: customerFacingSectionBody("product-tech", input.company, narrativeEntry.section), supportingLine: customerFacingSectionLine("product-tech", input.company) },
       featuresHeading: featuresEntry.section.title, featuresSupportingLine: customerFacingSectionLine("product-tech", input.company, featuresEntry.section.items),
@@ -92,12 +104,12 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
       ...(useCasesEntry?.section.items.length ? { useCases: { heading: useCasesEntry.section.title, supportingLine: "Applications across the platform's intended customer contexts.", items: useCasesEntry.section.items.map((item, index) => ({ contentId: `${useCasesEntry.section.id}:item:${index}`, index: String(index + 1).padStart(2, "0"), title: item.name, description: customerFacingItemDescription("product-tech", input.company, item) })) } } : {}),
     });
     if (!planning.compatible) return fallback(planning.issues.map(planningReason), ranking); const prepared = prepareProductTechDocumentPlan(planning.plan); if (!prepared.compatible) return fallback(prepared.issues.map(compatibilityReason), ranking); const rendered = renderPreparedProductTechPlan(prepared.prepared);
-    const limits = renderedLimitReasons(rendered.pdf); if (limits.length) return fallback(limits, ranking); return { mode: "authored", familyId: "product-tech", packId: "product-tech-v1", pdf: rendered.pdf, pageOrder: planning.plan.pages.map((page) => page.templateId), reasons: [], ranking };
+    const limits = renderedLimitReasons(rendered.pdf); if (limits.length) return fallback(limits, ranking); return { mode: "authored", familyId: "product-tech", variantId: variant.variantId, packId: "product-tech-v1", pdf: rendered.pdf, pageOrder: planning.plan.pages.map((page) => page.templateId), reasons: [], ranking };
   }
 
   if (selectedFamily === "corporate-services") {
     if (!servicesEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
-    const planning = createCorporateServicesDocumentPlan({ contactLines: contactLines(input.company),
+    const planning = createCorporateServicesDocumentPlan({ variantId: variant.variantId as "corporate-structured" | "corporate-executive", contactLines: contactLines(input.company),
       units,
       cover, coverTemplateId: coverSelection.templateId,
       narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: customerFacingSectionBody("corporate-services", input.company, narrativeEntry.section), supportingLine: customerFacingSectionLine("corporate-services", input.company) },
@@ -111,7 +123,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     const prepared = prepareCorporateServicesDocumentPlan(planning.plan);
     if (!prepared.compatible) return fallback(prepared.issues.map(compatibilityReason), ranking);
     const rendered = renderPreparedCorporateServicesPlan(prepared.prepared);
-    const limits = renderedLimitReasons(rendered.pdf); if (limits.length) return fallback(limits, ranking); return { mode: "authored", familyId: "corporate-services", packId: "corporate-services-v1", pdf: rendered.pdf, pageOrder: planning.plan.pages.map((page) => page.templateId), reasons: [], ranking };
+    const limits = renderedLimitReasons(rendered.pdf); if (limits.length) return fallback(limits, ranking); return { mode: "authored", familyId: "corporate-services", variantId: variant.variantId, packId: "corporate-services-v1", pdf: rendered.pdf, pageOrder: planning.plan.pages.map((page) => page.templateId), reasons: [], ranking };
   }
 
   if (!servicesEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
@@ -135,7 +147,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
     const items = continuationItems.slice(pageIndex * 4, pageIndex * 4 + 4);
     return { contentId: `${servicesEntry.section.id}:continuation:${pageIndex}`, eyebrow: "CAPABILITIES / CONTINUED", heading: "More ways we shape interiors.", supportingLine: customerFacingSectionLine("visual-portfolio", input.company, items), capabilities: items.map((item, itemIndex) => ({ index: String((useSupportingDetail ? 7 : 5) + pageIndex * 4 + itemIndex).padStart(2, "0"), title: item.name, description: customerFacingItemDescription("visual-portfolio", input.company, item), items: [] })) };
   });
-  const planning = createVisualPortfolioDocumentPlan({ contactLines: contactLines(input.company),
+  const planning = createVisualPortfolioDocumentPlan({ variantId: variant.variantId as "visual-editorial" | "visual-gallery", contactLines: contactLines(input.company),
     units,
     cover, coverTemplateId: coverSelection.templateId,
     narrative: { contentId: narrativeEntry.section.id, title: narrativeEntry.section.title, body: customerFacingSectionBody("visual-portfolio", input.company, narrativeEntry.section), facts: extractVisualNarrativeFacts(input.company), ...(narrativeEntry.section.items[0] ? { secondaryBlock: { title: narrativeEntry.section.items[0].name, body: customerFacingItemDescription("visual-portfolio", input.company, narrativeEntry.section.items[0]) } } : {}) },
@@ -155,5 +167,5 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
   const prepared = prepareVisualPortfolioDocumentPlan(planning.plan);
   if (!prepared.compatible) return fallback(prepared.issues.map(compatibilityReason), ranking);
   const rendered = renderPreparedVisualPortfolioPlan(prepared.prepared);
-  const limits = renderedLimitReasons(rendered.pdf); if (limits.length) return fallback(limits, ranking); return { mode: "authored", familyId: "visual-portfolio", packId: "editorial-interiors-v1", pdf: rendered.pdf, pageOrder: planning.plan.pages.map((page) => page.templateId), reasons: [], ranking };
+  const limits = renderedLimitReasons(rendered.pdf); if (limits.length) return fallback(limits, ranking); return { mode: "authored", familyId: "visual-portfolio", variantId: variant.variantId, packId: "editorial-interiors-v1", pdf: rendered.pdf, pageOrder: planning.plan.pages.map((page) => page.templateId), reasons: [], ranking };
 };

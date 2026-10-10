@@ -1,4 +1,4 @@
-export const APPLICATION_STORAGE_KEYS = ["companyData", "projectsData", "profileStructure", "generatedProfile", "authoredFamilyDecision", "exportDecision"] as const;
+export const APPLICATION_STORAGE_KEYS = ["companyData", "projectsData", "profileStructure", "generatedProfile", "authoredFamilyDecision", "authoredVariantDecision", "exportDecision"] as const;
 export type ApplicationStorageKey = (typeof APPLICATION_STORAGE_KEYS)[number];
 export type StorageRemoval = Pick<Storage, "removeItem" | "getItem">;
 export type ApplicationStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -23,7 +23,7 @@ export const removeApplicationStorage = (storage: Pick<Storage, "removeItem">, k
 };
 
 export const clearDerivedProfileState = (storage: Pick<Storage, "removeItem">): void => {
-  (['profileStructure', 'generatedProfile', 'authoredFamilyDecision', 'exportDecision'] as const).forEach((key) => removeApplicationStorage(storage, key));
+  (['profileStructure', 'generatedProfile', 'authoredFamilyDecision', 'authoredVariantDecision', 'exportDecision'] as const).forEach((key) => removeApplicationStorage(storage, key));
 };
 
 export const storageUserMessage = (code: StorageFailureCode): string =>

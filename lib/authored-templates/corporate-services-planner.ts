@@ -6,6 +6,7 @@ import { corporateServicesV1Pack } from "./packs/corporate-services-v1";
 import type { CorporateApproachContent, CorporateCoverContent, CorporateNarrativeContent, CorporateProject, CorporateProjectsPageContent, CorporateService, CorporateServicesPageContent } from "./packs/corporate-services-v1/content";
 import type { AuthoredPageTemplate, ContractIssue, TemplateInstance, TemplateRenderAudit } from "./types";
 import type { AuthoredCoverContent, CoverTemplateId } from "./cover-library";
+import type { AuthoredVariantId } from "./variant-registry";
 
 export type CorporateServicesPlanningInput = {
   units: readonly NormalizedContentUnit[];
@@ -21,6 +22,7 @@ export type CorporateServicesPlanningInput = {
   projectsHeading?: string;
   projectsSupportingLine?: string;
   contactLines?: string;
+  variantId?: Extract<AuthoredVariantId, "corporate-structured" | "corporate-executive">;
 };
 
 export type CorporateServicesPlanningIssue = CoverageIssue | { code: "service_count_unsupported" | "project_count_unsupported" | "normalized_service_mismatch" | "normalized_detail_mismatch" | "normalized_project_mismatch" | "invalid_document_plan"; path: string; message: string };
@@ -55,7 +57,9 @@ export const createCorporateServicesDocumentPlan = (input: CorporateServicesPlan
   }
   if (input.approach) pages.push({ pageId: "approach", templateId: "corporate-services-v1.approach", pageRole: "narrative", candidate: input.approach, claims: company ? [{ contentId: company.id, mode: "reference", slotId: "activities" }] : [] });
   details.forEach((detail, index) => {
-    const templateId = index % 2 === 1 ? "corporate-services-v1.narrative-alternate" : detail.body.length <= 300 ? "corporate-services-v1.narrative-sparse" : detail.body.length <= 900 ? "corporate-services-v1.narrative-standard" : "corporate-services-v1.narrative-dense";
+    const templateId = input.variantId === "corporate-executive"
+      ? "corporate-services-v1.narrative-alternate"
+      : index % 2 === 1 ? "corporate-services-v1.narrative-alternate" : detail.body.length <= 300 ? "corporate-services-v1.narrative-sparse" : detail.body.length <= 900 ? "corporate-services-v1.narrative-standard" : "corporate-services-v1.narrative-dense";
     pages.push({ pageId: `detail:${index}`, templateId, pageRole: "narrative", candidate: detail, claims: [{ contentId: detail.contentId, mode: "consume", slotId: "body" }] });
   });
   let projectOffset = 0; let projectSequence = 0;
@@ -67,7 +71,7 @@ export const createCorporateServicesDocumentPlan = (input: CorporateServicesPlan
     projectOffset += count; projectSequence += 1;
   }
   pages.push({ pageId: "closing", templateId: "corporate-services-v1.closing", pageRole: "closing", candidate: { contentId: input.cover.contentId, companyName: input.cover.companyName, descriptor: input.cover.companyType, logo: input.cover.logo, ...(input.contactLines ? { contactLines: input.contactLines } : {}) }, claims: company ? [{ contentId: company.id, mode: "reference", slotId: "companyName" }] : [] });
-  const plan: AuthoredDocumentPlan = { familyId: "corporate-services", packId: corporateServicesV1Pack.id, pages };
+  const plan: AuthoredDocumentPlan = { familyId: "corporate-services", packId: corporateServicesV1Pack.id, ...(input.variantId ? { variantId: input.variantId } : {}), pages };
   const structure = validateAuthoredDocumentPlan(plan, [corporateServicesV1Pack]);
   if (structure.length) return { compatible: false, plan: null, issues: structure.map((issue) => ({ code: "invalid_document_plan", path: issue.path, message: issue.message })) };
   const coverage = validateDocumentCoverage(input.units, plan);

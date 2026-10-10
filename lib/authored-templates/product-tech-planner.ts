@@ -6,8 +6,9 @@ import { productTechV1Pack } from "./packs/product-tech-v1";
 import type { ProductFeature, ProductFeaturesPageContent, ProductOverviewContent, ProductTechCoverContent, ProductUseCase, ProductUseCasesPageContent } from "./packs/product-tech-v1/content";
 import type { AuthoredPageTemplate, ContractIssue, TemplateInstance, TemplateRenderAudit } from "./types";
 import type { AuthoredCoverContent, CoverTemplateId } from "./cover-library";
+import type { AuthoredVariantId } from "./variant-registry";
 
-export type ProductTechPlanningInput = { units: readonly NormalizedContentUnit[]; cover: AuthoredCoverContent | ProductTechCoverContent; coverTemplateId?: CoverTemplateId; overview: ProductOverviewContent; featuresHeading: string; featuresSupportingLine: string; features: readonly ProductFeature[]; useCases?: { heading: string; supportingLine: string; items: readonly ProductUseCase[] }; contactLines?: string };
+export type ProductTechPlanningInput = { units: readonly NormalizedContentUnit[]; cover: AuthoredCoverContent | ProductTechCoverContent; coverTemplateId?: CoverTemplateId; overview: ProductOverviewContent; featuresHeading: string; featuresSupportingLine: string; features: readonly ProductFeature[]; useCases?: { heading: string; supportingLine: string; items: readonly ProductUseCase[] }; contactLines?: string; variantId?: Extract<AuthoredVariantId, "product-system" | "product-launch"> };
 export type ProductTechPlanningIssue = CoverageIssue | { code: "feature_count_unsupported" | "normalized_feature_mismatch" | "normalized_use_case_mismatch" | "project_content_unsupported" | "service_content_unsupported" | "invalid_document_plan"; path: string; message: string };
 export type ProductTechPlanResult = { compatible: true; plan: AuthoredDocumentPlan; issues: [] } | { compatible: false; plan: null; issues: readonly ProductTechPlanningIssue[] };
 
@@ -28,10 +29,11 @@ export const createProductTechDocumentPlan = (input: ProductTechPlanningInput): 
     let offset = 0; let sequence = 0;
     while (offset < items.length) { const count = Math.min(limit, items.length - offset); const chunk = items.slice(offset, offset + count); const candidate: ProductFeaturesPageContent | ProductUseCasesPageContent = kind === "features" ? { contentId: `features-page:${sequence}`, heading: input.featuresHeading, supportingLine: input.featuresSupportingLine, features: chunk as readonly ProductFeature[] } : { contentId: `use-cases-page:${sequence}`, heading: input.useCases!.heading, supportingLine: input.useCases!.supportingLine, useCases: chunk as readonly ProductUseCase[] }; pages.push({ pageId: `${kind}:${sequence}`, templateId: `${sequence ? continuationPrefix : primaryPrefix}${count}`, pageRole: sequence ? "continuation" : "capabilities", candidate, claims: chunk.map((item, index) => ({ contentId: item.contentId, mode: "consume", slotId: `${kind}.${index}` })) }); offset += count; sequence += 1; }
   };
+  if (input.variantId === "product-launch" && useCases.length) addChunks(useCases, 3, "product-tech-v1.use-cases-", "product-tech-v1.use-cases-continuation-", "useCases");
   addChunks(input.features, 4, "product-tech-v1.features-", "product-tech-v1.features-continuation-", "features");
-  if (useCases.length) addChunks(useCases, 3, "product-tech-v1.use-cases-", "product-tech-v1.use-cases-continuation-", "useCases");
+  if (input.variantId !== "product-launch" && useCases.length) addChunks(useCases, 3, "product-tech-v1.use-cases-", "product-tech-v1.use-cases-continuation-", "useCases");
   pages.push({ pageId: "closing", templateId: "product-tech-v1.closing", pageRole: "closing", candidate: { contentId: input.cover.contentId, companyName: input.cover.companyName, descriptor: input.cover.companyType, logo: input.cover.logo, ...(input.contactLines ? { contactLines: input.contactLines } : {}) }, claims: company ? [{ contentId: company.id, mode: "reference", slotId: "companyName" }] : [] });
-  const plan: AuthoredDocumentPlan = { familyId: "product-tech", packId: productTechV1Pack.id, pages };
+  const plan: AuthoredDocumentPlan = { familyId: "product-tech", packId: productTechV1Pack.id, ...(input.variantId ? { variantId: input.variantId } : {}), pages };
   const structure = validateAuthoredDocumentPlan(plan, [productTechV1Pack]); if (structure.length) return { compatible: false, plan: null, issues: structure.map((issue) => ({ code: "invalid_document_plan", path: issue.path, message: issue.message })) };
   const coverage = validateDocumentCoverage(input.units, plan); return coverage.complete ? { compatible: true, plan, issues: [] } : { compatible: false, plan: null, issues: coverage.issues };
 };

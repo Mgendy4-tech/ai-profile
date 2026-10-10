@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { APPLICATION_STORAGE_KEYS, clearApplicationLocalData, readApplicationStorage, storageUserMessage, writeApplicationStorage } from "./local-profile-data";
-assert.deepEqual(APPLICATION_STORAGE_KEYS, ["companyData", "projectsData", "profileStructure", "generatedProfile", "authoredFamilyDecision", "exportDecision"]);
+assert.deepEqual(APPLICATION_STORAGE_KEYS, ["companyData", "projectsData", "profileStructure", "generatedProfile", "authoredFamilyDecision", "authoredVariantDecision", "exportDecision"]);
 assert.equal(new Set(APPLICATION_STORAGE_KEYS).size, APPLICATION_STORAGE_KEYS.length);
 const values = new Map<string,string>([["unrelated-app", "keep"], ...APPLICATION_STORAGE_KEYS.map((key) => [key, `value:${key}`] as [string,string])]);
 const storage = { getItem: (key: string) => values.get(key) ?? null, removeItem: (key: string) => { values.delete(key); } };

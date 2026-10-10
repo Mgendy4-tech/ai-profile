@@ -7,7 +7,7 @@ export type DocumentPlanStructureIssue = {
   message: string;
 };
 
-const ROOT_KEYS = new Set(["familyId", "packId", "pages"]);
+const ROOT_KEYS = new Set(["familyId", "packId", "variantId", "pages"]);
 const PAGE_KEYS = new Set(["pageId", "templateId", "pageRole", "candidate", "claims"]);
 const FORBIDDEN_LAYOUT_KEYS = new Set(["x", "y", "width", "height", "spacing", "fontSize", "columns", "ratio", "geometry", "layout"]);
 

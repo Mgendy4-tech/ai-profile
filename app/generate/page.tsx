@@ -90,6 +90,7 @@ import { clearDerivedProfileState, readApplicationStorage, removeApplicationStor
 import { authoredDevelopmentFailureMessage, createAuthoredRejectionDiagnostic, type AuthoredExportDevelopmentDiagnostic } from "@/lib/authored-export-diagnostics";
 import { createGeneratedProfileSourceFingerprint, generatedProjectEvidenceCount, isPersistedGeneratedProfileCurrent, persistGeneratedProfile, readPersistedGeneratedProfile, reconcileGeneratedProfileToSource } from "@/lib/generated-profile-storage";
 import { familyChoices } from "@/lib/authored-templates/family-selection";
+import { normalizeAuthoredVariant, recommendAuthoredVariant, variantsForFamily, type AuthoredVariantId, type AuthoredVariantSignals } from "@/lib/authored-templates/variant-registry";
 import { customerFacingSectionCopy, customerFacingSectionDescription, dedupeCustomerFacingSectionCopy, type CustomerFacingFamily, type CompanyIdentity } from "@/lib/authored-templates/presentation-copy";
 import OnboardingProgress from "@/app/components/onboarding-progress";
 import { deriveOnboardingProgress } from "@/lib/onboarding-progress";
@@ -148,6 +149,16 @@ const familyChoicesForProfile = (currentProfile: GeneratedProfile, sourceProject
     useCaseCount: currentProfile.sections.find((section) => section.id === "useCases")?.items.length ?? 0,
   });
 };
+
+const authoredVariantSignalsForProfile = (currentProfile: GeneratedProfile, sourceProjects: readonly Project[] = currentProfile.projects ?? []): AuthoredVariantSignals => ({
+  projectCount: sourceProjects.length,
+  authenticProjectImageCount: sourceProjects.filter((project) => typeof project.imageUrl === "string" && project.imageUrl.startsWith("data:image/")).length,
+  serviceCount: currentProfile.sections.find((section) => section.id === "services")?.items.length ?? 0,
+  corporateDetailCount: currentProfile.sections.filter((section) => ["expertise", "approach", "howItWorks", "solutions"].includes(section.id)).length,
+  productFeatureCount: currentProfile.sections.find((section) => section.id === "features")?.items.length ?? 0,
+  useCaseCount: currentProfile.sections.find((section) => section.id === "useCases")?.items.length ?? 0,
+  narrativeCharacterCount: currentProfile.sections.find((section) => section.id === "about")?.content.length ?? 0,
+});
 
 const userFacingGenerationError = (error: unknown, fallback: string): string => {
   const code = error instanceof Error ? error.message : "";
@@ -462,6 +473,7 @@ const [loading, setLoading] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
   const [exportMessageTone, setExportMessageTone] = useState<"status" | "success" | "error">("status");
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
+  const [selectedVariant, setSelectedVariant] = useState<AuthoredVariantId | null>(null);
   const [familyMessage, setFamilyMessage] = useState("");
 
 useEffect(() => {
@@ -479,6 +491,8 @@ useEffect(() => {
     setSavedCompanyData(persistedCompany);
     setPresentationCompany(persistedCompany);
     setSelectedFamily(readApplicationStorage(localStorage, "authoredFamilyDecision"));
+    const persistedVariant = readApplicationStorage(localStorage, "authoredVariantDecision");
+    setSelectedVariant((persistedVariant as AuthoredVariantId | null) ?? null);
     const persisted = readPersistedApprovedProfileStructure(localStorage);
     if (!persisted || validateApprovedStructure(persisted.structure) !== null) return;
     setProfileStructure(persisted.structure as ProfileStructure);
@@ -488,10 +502,25 @@ useEffect(() => {
 }, []);
 
 useEffect(() => {
-  if (!profile || !selectedFamily) return;
+  if (!profile) return;
   const choices = familyChoicesForProfile(profile, sourceProjects);
-  if (!choices.some((choice) => choice.id === selectedFamily && choice.eligible)) { removeApplicationStorage(localStorage, "authoredFamilyDecision"); setSelectedFamily(null); setFamilyMessage("The previous family selection is no longer eligible for this profile. AI recommendation restored."); }
-}, [profile, selectedFamily, sourceProjects]);
+  const storedChoice = selectedFamily ? choices.find((choice) => choice.id === selectedFamily && choice.eligible) : undefined;
+  if (selectedFamily && !storedChoice) {
+    removeApplicationStorage(localStorage, "authoredFamilyDecision");
+    removeApplicationStorage(localStorage, "authoredVariantDecision");
+    setSelectedFamily(null);
+    setSelectedVariant(null);
+    setFamilyMessage("The previous family selection is no longer eligible for this profile. AI recommendation restored.");
+    return;
+  }
+  const activeFamily = (storedChoice?.id ?? choices.find((choice) => choice.recommended && choice.eligible)?.id) as "visual-portfolio" | "corporate-services" | "product-tech" | undefined;
+  if (!activeFamily) return;
+  const normalized = normalizeAuthoredVariant(activeFamily, selectedVariant, authoredVariantSignalsForProfile(profile, sourceProjects));
+  if (selectedVariant !== normalized.variantId) {
+    writeApplicationStorage(localStorage, "authoredVariantDecision", normalized.variantId);
+    setSelectedVariant(normalized.variantId);
+  }
+}, [profile, selectedFamily, selectedVariant, sourceProjects]);
 
 useEffect(() => {
   if (!loading) return;
@@ -812,8 +841,19 @@ setProfile(generatedProfile);
       const requestedFamilyId = readApplicationStorage(localStorage, "authoredFamilyDecision") as "visual-portfolio" | "corporate-services" | "product-tech" | null;
       if (requestedFamilyId && !familyChoicesForProfile(profile, authoredProjects).some((choice) => choice.id === requestedFamilyId && choice.eligible)) {
         removeApplicationStorage(localStorage, "authoredFamilyDecision");
+        removeApplicationStorage(localStorage, "authoredVariantDecision");
         setSelectedFamily(null);
+        setSelectedVariant(null);
         throw new Error("selected_family_no_longer_eligible");
+      }
+      const exportChoices = familyChoicesForProfile(profile, authoredProjects);
+      const exportFamily = (requestedFamilyId ?? exportChoices.find((choice) => choice.recommended && choice.eligible)?.id) as "visual-portfolio" | "corporate-services" | "product-tech" | undefined;
+      const normalizedExportVariant = exportFamily
+        ? normalizeAuthoredVariant(exportFamily, readApplicationStorage(localStorage, "authoredVariantDecision"), authoredVariantSignalsForProfile(profile, authoredProjects))
+        : null;
+      if (normalizedExportVariant) {
+        writeApplicationStorage(localStorage, "authoredVariantDecision", normalizedExportVariant.variantId);
+        setSelectedVariant(normalizedExportVariant.variantId);
       }
       const generatedProjectCount = generatedProjectEvidenceCount(profile);
       const authoredPolicyEvidence = {
@@ -879,7 +919,7 @@ setProfile(generatedProfile);
           sections: profile.sections,
         },
         projects: optimizedAuthoredProjects,
-      }, undefined, "optimized_embed", requestedFamilyId ?? undefined);
+      }, undefined, "optimized_embed", requestedFamilyId ?? undefined, normalizedExportVariant?.variantId);
       const authoredMs = performance.now() - authoredStartedAt;
       if (process.env.NODE_ENV !== "production") {
         const uniqueOptimizedSources = new Set([
@@ -1829,6 +1869,9 @@ setProfile(generatedProfile);
     const choices = familyChoicesForProfile(profile, sourceProjects);
     const activeChoice = (selectedFamily ? choices.find((choice) => choice.id === selectedFamily) : undefined)
       ?? choices.find((choice) => choice.recommended);
+    const activeVariant = activeChoice?.eligible
+      ? normalizeAuthoredVariant(activeChoice.id as "visual-portfolio" | "corporate-services" | "product-tech", selectedVariant, authoredVariantSignalsForProfile(profile, sourceProjects))
+      : null;
     const imageIssues = savedCompanyData
       ? validateAuthoredImageOperationalLimits(savedCompanyData, sourceProjects.map((project) => ({ ...project, imageUrl: project.imageUrl ?? "" })))
       : [];
@@ -1836,8 +1879,9 @@ setProfile(generatedProfile);
       ready: Boolean(activeChoice?.eligible) && imageIssues.length === 0,
       blocked: !activeChoice?.eligible || imageIssues.length > 0,
       familyLabel: activeChoice?.label ?? null,
+      variantLabel: activeVariant ? variantsForFamily(activeChoice!.id as "visual-portfolio" | "corporate-services" | "product-tech").find((variant) => variant.id === activeVariant.variantId)?.displayName ?? null : null,
     };
-  })() : { ready: false, blocked: false, familyLabel: null };
+  })() : { ready: false, blocked: false, familyLabel: null, variantLabel: null };
 
   const onboardingSteps = deriveOnboardingProgress({
     company: savedCompanyData,
@@ -1909,8 +1953,27 @@ setProfile(generatedProfile);
 )}
 {profile && (() => {
   const choices = familyChoicesForProfile(profile, sourceProjects);
-  const choose = (choice: typeof choices[number]) => { if (!choice.eligible) return; const saved = writeApplicationStorage(localStorage, "authoredFamilyDecision", choice.id); if (!saved.ok) { setFamilyMessage(storageUserMessage(saved.code)); return; } setSelectedFamily(choice.id); setFamilyMessage(`${choice.label} selected for this profile.`); };
-  return <section aria-label="Template family selection" className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><h2 className="text-2xl font-semibold text-gray-900">Choose a template family</h2><p className="mt-2 text-sm text-gray-600">AI recommendation is based on structured content signals. Only safe, available families can be selected.</p><div className="mt-5 grid gap-4 md:grid-cols-3">{choices.map((choice) => <button key={choice.id} type="button" disabled={!choice.eligible} onClick={() => choose(choice)} className={`rounded-xl border p-4 text-left transition ${choice.eligible ? "hover:border-gray-900" : "cursor-not-allowed opacity-55"} ${selectedFamily === choice.id ? "border-gray-900 ring-2 ring-gray-200" : "border-gray-200"}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-gray-900">{choice.label}</span><span className="flex flex-wrap justify-end gap-1">{choice.recommended && <span className="rounded-full bg-green-100 px-2 py-1 text-[10px] font-bold uppercase text-green-800">AI recommended</span>}{selectedFamily === choice.id && <span className="rounded-full bg-gray-900 px-2 py-1 text-[10px] font-bold uppercase text-white">Selected</span>}</span></div><p className="mt-3 text-sm leading-6 text-gray-600">{choice.description}</p>{choice.recommended && choice.recommendationReason && <p className="mt-3 text-xs leading-5 text-gray-700">{choice.recommendationReason}</p>}{choice.eligible ? <p className="mt-3 text-xs font-medium text-green-700">Available</p> : <p className="mt-3 text-xs font-medium text-red-700">Unavailable: {choice.reason}</p>}</button>)}</div>{familyMessage && <p role="status" className="mt-4 text-sm text-green-700">{familyMessage}</p>}</section>;
+  const activeFamily = (selectedFamily && choices.some((choice) => choice.id === selectedFamily && choice.eligible) ? selectedFamily : choices.find((choice) => choice.recommended && choice.eligible)?.id) as "visual-portfolio" | "corporate-services" | "product-tech" | undefined;
+  const signals = authoredVariantSignalsForProfile(profile, sourceProjects);
+  const variants = activeFamily ? variantsForFamily(activeFamily) : [];
+  const recommendedVariant = activeFamily ? recommendAuthoredVariant(activeFamily, signals) : null;
+  const normalizedVariant = activeFamily ? normalizeAuthoredVariant(activeFamily, selectedVariant, signals) : null;
+  const choose = (choice: typeof choices[number]) => {
+    if (!choice.eligible) return;
+    const familySaved = writeApplicationStorage(localStorage, "authoredFamilyDecision", choice.id);
+    if (!familySaved.ok) { setFamilyMessage(storageUserMessage(familySaved.code)); return; }
+    const nextVariant = normalizeAuthoredVariant(choice.id as "visual-portfolio" | "corporate-services" | "product-tech", null, signals);
+    const variantSaved = writeApplicationStorage(localStorage, "authoredVariantDecision", nextVariant.variantId);
+    if (!variantSaved.ok) { setFamilyMessage(storageUserMessage(variantSaved.code)); return; }
+    setSelectedFamily(choice.id); setSelectedVariant(nextVariant.variantId); setFamilyMessage(`${choice.label} selected for this profile.`);
+  };
+  const chooseVariant = (variantId: AuthoredVariantId) => {
+    if (!activeFamily || !variants.some((variant) => variant.id === variantId)) return;
+    const saved = writeApplicationStorage(localStorage, "authoredVariantDecision", variantId);
+    if (!saved.ok) { setFamilyMessage(storageUserMessage(saved.code)); return; }
+    setSelectedVariant(variantId); setFamilyMessage("Style selection saved for this profile.");
+  };
+  return <section aria-label="Template family selection" className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><h2 className="text-2xl font-semibold text-gray-900">Choose a template family</h2><p className="mt-2 text-sm text-gray-600">Family controls the content structure. Style controls the authored visual presentation.</p><div className="mt-5 grid gap-4 md:grid-cols-3">{choices.map((choice) => <button key={choice.id} type="button" disabled={!choice.eligible} onClick={() => choose(choice)} className={`rounded-xl border p-4 text-left transition ${choice.eligible ? "hover:border-gray-900" : "cursor-not-allowed opacity-55"} ${activeFamily === choice.id ? "border-gray-900 ring-2 ring-gray-200" : "border-gray-200"}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-gray-900">{choice.label}</span><span className="flex flex-wrap justify-end gap-1">{choice.recommended && <span className="rounded-full bg-green-100 px-2 py-1 text-[10px] font-bold uppercase text-green-800">AI recommended</span>}{activeFamily === choice.id && <span className="rounded-full bg-gray-900 px-2 py-1 text-[10px] font-bold uppercase text-white">Selected</span>}</span></div><p className="mt-3 text-sm leading-6 text-gray-600">{choice.description}</p>{choice.recommended && choice.recommendationReason && <p className="mt-3 text-xs leading-5 text-gray-700">{choice.recommendationReason}</p>}{choice.eligible ? <p className="mt-3 text-xs font-medium text-green-700">Available</p> : <p className="mt-3 text-xs font-medium text-red-700">Unavailable: {choice.reason}</p>}</button>)}</div>{activeFamily && <div aria-label="Template style selection" className="mt-7 border-t border-gray-200 pt-6"><div className="flex flex-wrap items-end justify-between gap-2"><div><h3 className="text-lg font-semibold text-gray-900">Choose a style</h3><p className="mt-1 text-sm text-gray-600">Select a bounded authored variant for the active family.</p></div><span className="text-xs font-medium uppercase tracking-wide text-gray-500">{variants.length} styles available</span></div><div className="mt-4 grid gap-3 sm:grid-cols-2">{variants.map((variant) => <button key={variant.id} type="button" onClick={() => chooseVariant(variant.id)} className={`rounded-xl border p-4 text-left transition hover:border-gray-900 ${normalizedVariant?.variantId === variant.id ? "border-gray-900 ring-2 ring-gray-200" : "border-gray-200"}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-gray-900">{variant.displayName}</span><span className="flex flex-wrap justify-end gap-1">{recommendedVariant?.variantId === variant.id && <span className="rounded-full bg-green-100 px-2 py-1 text-[10px] font-bold uppercase text-green-800">AI recommended</span>}{normalizedVariant?.variantId === variant.id && <span className="rounded-full bg-gray-900 px-2 py-1 text-[10px] font-bold uppercase text-white">Selected</span>}</span></div><p className="mt-2 text-sm leading-6 text-gray-600">{variant.shortDescription}</p><p className="mt-2 text-xs leading-5 text-gray-500">{variant.visualIntent}</p>{recommendedVariant?.variantId === variant.id && <p className="mt-2 text-xs leading-5 text-gray-700">{recommendedVariant.reason}</p>}</button>)}</div></div>}{familyMessage && <p role="status" className="mt-4 text-sm text-green-700">{familyMessage}</p>}</section>;
 })()}
 {!profile && profileStructure && (
   <div
@@ -2251,6 +2314,7 @@ setProfile(generatedProfile);
                   Edit Projects
                 </Link>
                 <p className="basis-full text-sm font-medium text-gray-700">Template family: {exportReadiness.familyLabel ?? "Choose an available family"}</p>
+                <p className="basis-full text-sm text-gray-600">Style: {exportReadiness.variantLabel ?? "Choose a style"}</p>
                 <button
                   type="button"
                   onClick={handleGenerate}

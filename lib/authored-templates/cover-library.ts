@@ -20,7 +20,7 @@ export const authoredCoverPalettes: readonly CoverPalette[] = [
 ] as const;
 
 export type AuthoredCoverContent = { contentId: string; documentLabel: string; companyName: string; companyType: string; paletteId: CoverPaletteId; logo?: ImageSlotValue };
-export type CoverSelectionFacts = { familyId: CurrentFamilyId; companyName: string; companyType?: string; industry?: string; styleDescriptor?: unknown; hasLogo: boolean };
+export type CoverSelectionFacts = { familyId: CurrentFamilyId; companyName: string; companyType?: string; industry?: string; styleDescriptor?: unknown; preferredTemplateId?: CoverTemplateId; hasLogo: boolean };
 export type CoverSelectionReason = { code: string; contribution: number };
 export type CoverSelectionResult = { compatible: true; templateId: CoverTemplateId; paletteId: CoverPaletteId; normalizedStyle: CoverStyleDescriptor | null; rankings: readonly { templateId: CoverTemplateId; score: number; compatible: boolean; reasons: readonly CoverSelectionReason[] }[] } | { compatible: false; templateId: null; paletteId: null; normalizedStyle: CoverStyleDescriptor | null; rankings: readonly { templateId: CoverTemplateId; score: number; compatible: boolean; reasons: readonly CoverSelectionReason[] }[] };
 
@@ -67,6 +67,7 @@ export const selectAuthoredCover = (facts: CoverSelectionFacts): CoverSelectionR
     reasons.push({ code: definition.supportedFamilies.includes(facts.familyId) ? "family_supported" : "family_unsupported", contribution: definition.supportedFamilies.includes(facts.familyId) ? 4 : -100 });
     reasons.push({ code: facts.companyName.trim().length <= definition.maxNameCharacters ? "name_envelope_supported" : "name_envelope_exceeded", contribution: facts.companyName.trim().length <= definition.maxNameCharacters ? 2 : -100 });
     if (style) reasons.push({ code: definition.styleTags.includes(style) ? "style_match" : "style_neutral", contribution: definition.styleTags.includes(style) ? 3 : 0 });
+    if (facts.preferredTemplateId) reasons.push({ code: definition.id === facts.preferredTemplateId ? "variant_template_match" : "variant_template_neutral", contribution: definition.id === facts.preferredTemplateId ? 50 : 0 });
     const tone = definition.toneTags.some((tag) => source.includes(tag)); reasons.push({ code: tone ? "company_tone_match" : "company_tone_neutral", contribution: tone ? 3 : 0 });
     reasons.push({ code: facts.hasLogo ? "optional_logo_supported" : "no_logo_supported", contribution: 1 });
     return { templateId: definition.id, score: reasons.reduce((sum, reason) => sum + reason.contribution, 0) + definition.priority / 1000, compatible, reasons };

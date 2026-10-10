@@ -8,6 +8,7 @@ import { selectEditorialInteriorsNarrativeTemplate } from "./packs/editorial-int
 import type { CapabilitiesContent, CapabilitiesContinuationContent, CapabilitiesSupportingContent, CoverContent, NarrativeContent, ProjectFeatureContent } from "./packs/editorial-interiors-v1/content";
 import type { PortfolioProjectContent, PortfolioProjectPageContent } from "./packs/editorial-interiors-v1/portfolio-project-pages";
 import type { AuthoredCoverContent, CoverTemplateId } from "./cover-library";
+import type { AuthoredVariantId } from "./variant-registry";
 
 export type VisualPortfolioPlanningInput = {
   units: readonly NormalizedContentUnit[];
@@ -20,6 +21,7 @@ export type VisualPortfolioPlanningInput = {
   details?: readonly NarrativeContent[];
   projects: readonly PortfolioProjectContent[];
   contactLines?: string;
+  variantId?: Extract<AuthoredVariantId, "visual-editorial" | "visual-gallery">;
 };
 
 export type VisualPortfolioPlanningIssue =
@@ -130,7 +132,7 @@ export const createVisualPortfolioDocumentPlan = (
 
   pages.push({ pageId: "closing", templateId: "editorial-interiors-v1.closing", pageRole: "closing", candidate: { contentId: input.cover.contentId, companyName: input.cover.companyName, descriptor: "companyType" in input.cover ? input.cover.companyType : undefined, logo: input.cover.logo, ...(input.contactLines ? { contactLines: input.contactLines } : {}) }, claims: company ? [{ contentId: company.id, mode: "reference", slotId: "companyName" }] : [] });
 
-  const plan: AuthoredDocumentPlan = { familyId: "visual-portfolio", packId: editorialInteriorsV1Pack.id, pages };
+  const plan: AuthoredDocumentPlan = { familyId: "visual-portfolio", packId: editorialInteriorsV1Pack.id, ...(input.variantId ? { variantId: input.variantId } : {}), pages };
   const structureIssues = validateAuthoredDocumentPlan(plan, [editorialInteriorsV1Pack]);
   if (structureIssues.length > 0) return { compatible: false, plan: null, issues: structureIssues.map((issue) => ({ code: "invalid_document_plan", path: issue.path, message: issue.message })) };
   const coverage = validateDocumentCoverage(input.units, plan);
