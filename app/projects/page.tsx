@@ -4,7 +4,11 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { dataUrlDecodedBytes, PRODUCTION_V1_LIMITS } from "@/lib/production-limits";
 import { clearDerivedProfileState, removeApplicationStorage, storageUserMessage } from "@/lib/local-profile-data";
-import { persistProjects, readPersistedProjects } from "@/lib/persisted-projects";
+import { persistProjects, persistedImageState, readPersistedProjects } from "@/lib/persisted-projects";
+import { readPersistedCompanyData } from "@/lib/company-data";
+import { readPersistedGeneratedProfile } from "@/lib/generated-profile-storage";
+import OnboardingProgress from "@/app/components/onboarding-progress";
+import { deriveOnboardingProgress } from "@/lib/onboarding-progress";
 
 type Project = {
   id: string;
@@ -51,12 +55,16 @@ export default function ProjectsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [companyData, setCompanyData] = useState<ReturnType<typeof readPersistedCompanyData>>(null);
+  const [generatedProfile, setGeneratedProfile] = useState<ReturnType<typeof readPersistedGeneratedProfile>>(null);
 
   useEffect(() => {
     const loadProjects = () => {
       const snapshot = readPersistedProjects(localStorage);
       if (snapshot.issues.length) { removeApplicationStorage(localStorage, "projectsData"); setErrorMessage("Saved project data could not be read. Add the project again and save it."); return; }
       setProjects(snapshot.projects);
+      setCompanyData(readPersistedCompanyData(localStorage));
+      setGeneratedProfile(readPersistedGeneratedProfile(localStorage));
     };
 
     const loadTimeout = window.setTimeout(loadProjects, 0);
@@ -68,8 +76,9 @@ const handleEdit = (project: Project) => {
   setProjectName(project.name);
   setCategory(project.category ?? "");
   setDescription(project.description);
-  setImageUrl(project.imageUrl);
-  setImagePreview(project.imageUrl);
+  const validImage = persistedImageState(project.imageUrl) === "valid";
+  setImageUrl(validImage ? project.imageUrl : "");
+  setImagePreview(validImage ? project.imageUrl : "");
 
   setErrorMessage("");
   setSuccessMessage("");
@@ -127,6 +136,7 @@ const saved = persistProjects(localStorage, updatedProjects);
 if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); setIsSaving(false); return; }
 setProjects(updatedProjects);
 clearDerivedProfileState(localStorage);
+setGeneratedProfile(null);
 
 setEditingProjectId(null);
 setProjectName("");
@@ -181,6 +191,7 @@ setIsSaving(false);
       if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); return; }
       setProjects(updatedProjects);
       clearDerivedProfileState(localStorage);
+      setGeneratedProfile(null);
       setErrorMessage("");
       setSuccessMessage("Project image updated successfully.");
     } catch (error) {
@@ -196,11 +207,13 @@ setIsSaving(false);
     if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); return; }
     setProjects(updatedProjects);
     clearDerivedProfileState(localStorage);
+    setGeneratedProfile(null);
   };
 
   const focusNewProjectForm = () => {
     document.getElementById("project-name")?.focus();
   };
+  const onboardingSteps = deriveOnboardingProgress({ company: companyData, projects, profile: generatedProfile });
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8 sm:px-6 sm:py-12">
@@ -210,8 +223,10 @@ setIsSaving(false);
         </h1>
 
         <p className="mt-2 text-gray-600">
-          Add your projects and project photos.
+          Add a project when your work benefits from a visual portfolio. A valid project image is required for Visual / Portfolio, while service-led profiles can continue without projects.
         </p>
+
+        <div className="mt-6"><OnboardingProgress steps={onboardingSteps} nextHref="/generate" nextLabel="Next: Generate" /></div>
 
         <form onSubmit={handleSubmit} className="mt-8 rounded-2xl bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-8 border-b border-gray-200 pb-5">
@@ -324,13 +339,15 @@ setIsSaving(false);
             <div className="mt-5 grid grid-cols-1 gap-6 md:grid-cols-2">
             {projects.map((project) => (
               <article key={project.id} className="rounded-2xl bg-white p-6 shadow-sm">
-                {project.imageUrl && (
+                {persistedImageState(project.imageUrl) === "valid" && (
                   <img
                     src={project.imageUrl}
                     alt={project.name}
                     className="mb-5 h-48 w-full rounded-lg object-contain"
                   />
                 )}
+
+                {persistedImageState(project.imageUrl) === "valid" ? <p className="mb-3 text-xs font-semibold text-green-700">Project image ready</p> : persistedImageState(project.imageUrl) === "invalid" ? <p role="status" className="mb-3 text-sm font-medium text-amber-800">Replace this image — the saved image can’t be used.</p> : <p role="status" className="mb-3 text-sm font-medium text-amber-800">Add a real project image to unlock Visual / Portfolio.</p>}
 
                 <h2 className="text-lg font-semibold text-gray-900">{project.name}</h2>
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-600">{project.description}</p>
@@ -362,7 +379,7 @@ setIsSaving(false);
                       className="hidden"
                     />
                   </label>
-                  <button type="button" onClick={() => { const updated = projects.map((entry) => entry.id === project.id ? { ...entry, imageUrl: "" } : entry); const saved = persistProjects(localStorage, updated); if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); return; } setProjects(updated); clearDerivedProfileState(localStorage); setSuccessMessage("Project image removed. Visual / Portfolio now requires a new authentic image."); }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:bg-gray-50">Remove image</button>
+                  <button type="button" onClick={() => { const updated = projects.map((entry) => entry.id === project.id ? { ...entry, imageUrl: "" } : entry); const saved = persistProjects(localStorage, updated); if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); return; } setProjects(updated); clearDerivedProfileState(localStorage); setGeneratedProfile(null); setSuccessMessage("Project image removed. Visual / Portfolio now requires a new authentic image."); }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:bg-gray-50">Remove image</button>
                 </div>
               </article>
             ))}

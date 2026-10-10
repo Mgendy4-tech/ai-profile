@@ -91,6 +91,8 @@ import { authoredDevelopmentFailureMessage, createAuthoredRejectionDiagnostic, t
 import { createGeneratedProfileSourceFingerprint, generatedProjectEvidenceCount, isPersistedGeneratedProfileCurrent, persistGeneratedProfile, readPersistedGeneratedProfile, reconcileGeneratedProfileToSource } from "@/lib/generated-profile-storage";
 import { familyChoices } from "@/lib/authored-templates/family-selection";
 import { customerFacingSectionCopy, customerFacingSectionDescription, dedupeCustomerFacingSectionCopy, type CustomerFacingFamily, type CompanyIdentity } from "@/lib/authored-templates/presentation-copy";
+import OnboardingProgress from "@/app/components/onboarding-progress";
+import { deriveOnboardingProgress } from "@/lib/onboarding-progress";
 
 type Project = {
   id?: string;
@@ -1833,8 +1835,17 @@ setProfile(generatedProfile);
     return {
       ready: Boolean(activeChoice?.eligible) && imageIssues.length === 0,
       blocked: !activeChoice?.eligible || imageIssues.length > 0,
+      familyLabel: activeChoice?.label ?? null,
     };
-  })() : { ready: false, blocked: false };
+  })() : { ready: false, blocked: false, familyLabel: null };
+
+  const onboardingSteps = deriveOnboardingProgress({
+    company: savedCompanyData,
+    projects: sourceProjects,
+    profile,
+    familyChoices: profile ? familyChoicesForProfile(profile, sourceProjects) : [],
+    selectedFamily,
+  });
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6 sm:py-14">
@@ -1861,8 +1872,10 @@ setProfile(generatedProfile);
         </h1>
 
         <p className="mt-3 max-w-2xl text-gray-600">
-          Let AI create your professional company profile.
+          Follow the four steps below. We will keep your progress in this browser so you can return when you are ready.
         </p>
+
+        <div className="mt-6"><OnboardingProgress steps={onboardingSteps} nextHref={profile ? "#export-actions" : savedCompanyData ? "/projects" : "/company"} nextLabel={profile ? "Review export" : savedCompanyData ? "Next: Projects" : "Start with Company"} /></div>
 
         <div className="mt-10 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
           <h2 className="text-2xl font-semibold tracking-tight text-gray-900">
@@ -1881,6 +1894,7 @@ setProfile(generatedProfile);
               <p className="mt-1 text-sm text-green-800">
                 Your saved company data is ready to be analyzed.
               </p>
+              <Link href="/projects" className="mt-3 inline-flex rounded-lg border border-green-300 px-3 py-2 text-sm font-medium text-green-900 transition hover:bg-green-100">Next: Projects</Link>
             </div>
           )}
 {!profile && !profileStructure && (
@@ -1896,7 +1910,7 @@ setProfile(generatedProfile);
 {profile && (() => {
   const choices = familyChoicesForProfile(profile, sourceProjects);
   const choose = (choice: typeof choices[number]) => { if (!choice.eligible) return; const saved = writeApplicationStorage(localStorage, "authoredFamilyDecision", choice.id); if (!saved.ok) { setFamilyMessage(storageUserMessage(saved.code)); return; } setSelectedFamily(choice.id); setFamilyMessage(`${choice.label} selected for this profile.`); };
-  return <section aria-label="Template family selection" className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><h2 className="text-2xl font-semibold text-gray-900">Choose a template family</h2><p className="mt-2 text-sm text-gray-600">AI recommendation is based on structured content signals. Only safe, eligible families can be selected.</p><div className="mt-5 grid gap-4 md:grid-cols-3">{choices.map((choice) => <button key={choice.id} type="button" disabled={!choice.eligible} onClick={() => choose(choice)} className={`rounded-xl border p-4 text-left transition ${choice.eligible ? "hover:border-gray-900" : "cursor-not-allowed opacity-55"} ${selectedFamily === choice.id ? "border-gray-900 ring-2 ring-gray-200" : "border-gray-200"}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-gray-900">{choice.label}</span><span className="flex flex-wrap justify-end gap-1">{choice.recommended && <span className="rounded-full bg-green-100 px-2 py-1 text-[10px] font-bold uppercase text-green-800">AI recommended</span>}{selectedFamily === choice.id && <span className="rounded-full bg-gray-900 px-2 py-1 text-[10px] font-bold uppercase text-white">Selected</span>}</span></div><p className="mt-3 text-sm leading-6 text-gray-600">{choice.description}</p>{choice.recommended && choice.recommendationReason && <p className="mt-3 text-xs leading-5 text-gray-700">{choice.recommendationReason}</p>}{choice.eligible ? <p className="mt-3 text-xs font-medium text-green-700">Eligible</p> : <p className="mt-3 text-xs font-medium text-red-700">Unavailable: {choice.reason}</p>}</button>)}</div>{familyMessage && <p role="status" className="mt-4 text-sm text-green-700">{familyMessage}</p>}</section>;
+  return <section aria-label="Template family selection" className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"><h2 className="text-2xl font-semibold text-gray-900">Choose a template family</h2><p className="mt-2 text-sm text-gray-600">AI recommendation is based on structured content signals. Only safe, available families can be selected.</p><div className="mt-5 grid gap-4 md:grid-cols-3">{choices.map((choice) => <button key={choice.id} type="button" disabled={!choice.eligible} onClick={() => choose(choice)} className={`rounded-xl border p-4 text-left transition ${choice.eligible ? "hover:border-gray-900" : "cursor-not-allowed opacity-55"} ${selectedFamily === choice.id ? "border-gray-900 ring-2 ring-gray-200" : "border-gray-200"}`}><div className="flex items-start justify-between gap-2"><span className="text-sm font-semibold text-gray-900">{choice.label}</span><span className="flex flex-wrap justify-end gap-1">{choice.recommended && <span className="rounded-full bg-green-100 px-2 py-1 text-[10px] font-bold uppercase text-green-800">AI recommended</span>}{selectedFamily === choice.id && <span className="rounded-full bg-gray-900 px-2 py-1 text-[10px] font-bold uppercase text-white">Selected</span>}</span></div><p className="mt-3 text-sm leading-6 text-gray-600">{choice.description}</p>{choice.recommended && choice.recommendationReason && <p className="mt-3 text-xs leading-5 text-gray-700">{choice.recommendationReason}</p>}{choice.eligible ? <p className="mt-3 text-xs font-medium text-green-700">Available</p> : <p className="mt-3 text-xs font-medium text-red-700">Unavailable: {choice.reason}</p>}</button>)}</div>{familyMessage && <p role="status" className="mt-4 text-sm text-green-700">{familyMessage}</p>}</section>;
 })()}
 {!profile && profileStructure && (
   <div
@@ -2229,13 +2243,14 @@ setProfile(generatedProfile);
   </p>
 )}              {exportMessage && <p role={exportMessageTone === "error" ? "alert" : "status"} className={`px-5 pt-3 text-sm sm:px-7 ${exportMessageTone === "error" ? "text-red-600" : exportMessageTone === "success" ? "text-green-600" : "text-gray-600"}`}>{exportMessage}</p>}
 
-              <div className="mt-8 flex flex-col gap-3 border-t border-gray-200 px-5 pb-7 pt-6 sm:flex-row sm:flex-wrap sm:px-7">
+              <div id="export-actions" className="mt-8 flex flex-col gap-3 border-t border-gray-200 px-5 pb-7 pt-6 sm:flex-row sm:flex-wrap sm:px-7">
                 <Link href="/company" className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800">
                   Edit Company Data
                 </Link>
                 <Link href="/projects" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-900 hover:bg-gray-50">
                   Edit Projects
                 </Link>
+                <p className="basis-full text-sm font-medium text-gray-700">Template family: {exportReadiness.familyLabel ?? "Choose an available family"}</p>
                 <button
                   type="button"
                   onClick={handleGenerate}

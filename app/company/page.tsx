@@ -1,11 +1,14 @@
 'use client';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { clearInheritedAssetsForIdentityEdit, isolateNewCompanyState, isSameCompanyIdentity } from '@/lib/profile-state-isolation';
 import { emptyCompanyData, experienceValidationMessage, inspectPersistedCompanyData, persistCompanyData, validateCompanyContacts, normalizeBrandColor, type CompanyData } from '@/lib/company-data';
 import { persistProjects, readPersistedProjects } from '@/lib/persisted-projects';
 import { clearDerivedProfileState, readApplicationStorage, removeApplicationStorage, storageUserMessage, writeApplicationStorage } from '@/lib/local-profile-data';
+import OnboardingProgress from '@/app/components/onboarding-progress';
+import { deriveOnboardingProgress } from '@/lib/onboarding-progress';
 
 type Project = {
   id: string;
@@ -45,6 +48,7 @@ export default function CompanyPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const onboardingSteps = deriveOnboardingProgress({ company: companyData, projects });
 
   useEffect(() => {
     const loadCompanyData = () => {
@@ -291,8 +295,10 @@ export default function CompanyPage() {
         </h1>
 
         <p className="mt-2 text-gray-600">
-          Tell us about your company.
+          Start with the essentials. You can add optional brand and contact details whenever you are ready.
         </p>
+
+        <div className="mt-6"><OnboardingProgress steps={onboardingSteps} nextHref="/projects" nextLabel="Next: Projects" /></div>
 
         <form noValidate onSubmit={handleSubmit} className="mt-8 space-y-6 rounded-xl bg-white p-5 shadow sm:p-8">
           <div>
@@ -579,8 +585,8 @@ export default function CompanyPage() {
             {isSaving ? 'Saving...' : 'Save Company'}
           </button>
 
-          {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
-          {successMessage && <p className="text-sm text-green-600">{successMessage}</p>}
+          {errorMessage && <p role="alert" className="text-sm text-red-600">{errorMessage}</p>}
+          {successMessage && <p role="status" className="text-sm text-green-600">{successMessage} <Link href="/projects" className="font-semibold underline">Next: Projects →</Link></p>}
         </form>
       </div>
     </main>
