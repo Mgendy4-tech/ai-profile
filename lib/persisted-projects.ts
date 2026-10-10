@@ -1,4 +1,5 @@
 import { type StorageWriteResult, writeApplicationStorage } from "./local-profile-data";
+import { getActiveProfileStorage } from "./workspace";
 
 export type PersistedProject = { id: string; name: string; category?: string; description: string; imageUrl: string };
 export type PersistedProjectSnapshot = { projects: PersistedProject[]; persistedCount: number; issues: readonly string[] };
@@ -30,7 +31,7 @@ export const reconstructPersistedProjects = (raw: string | null): PersistedProje
   return { projects, persistedCount: value.length, issues };
 };
 
-export const readPersistedProjects = (storage: Pick<Storage, "getItem">): PersistedProjectSnapshot => reconstructPersistedProjects(storage.getItem("projectsData"));
+export const readPersistedProjects = (storage: Pick<Storage, "getItem">): PersistedProjectSnapshot => reconstructPersistedProjects(getActiveProfileStorage(storage as Storage).getItem("projectsData"));
 
 export const persistProjects = (storage: Pick<Storage, "setItem">, projects: readonly PersistedProject[]): StorageWriteResult => writeApplicationStorage(storage, "projectsData", JSON.stringify(projects));
 

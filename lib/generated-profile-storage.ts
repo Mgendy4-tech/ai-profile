@@ -1,5 +1,6 @@
 import type { CompanyData } from "./company-data";
 import { hasValidPersistedProjectImage, persistedImageState, type PersistedProject } from "./persisted-projects";
+import { getActiveProfileStorage } from "./workspace";
 
 export type PersistedGeneratedProfileItem = { id?: string; name: string; description: string; sourceEvidence?: string; imageUrl?: string };
 export type PersistedGeneratedProfileSection = { id: string; semanticRole?: string; title: string; description: string; content: string; items: PersistedGeneratedProfileItem[] };
@@ -34,9 +35,9 @@ export const parsePersistedGeneratedProfile = (value: unknown): PersistedGenerat
   return profile as PersistedGeneratedProfile;
 };
 export const readPersistedGeneratedProfile = (storage: StorageReader): PersistedGeneratedProfile | null => {
-  try { const raw = storage.getItem("generatedProfile"); return raw ? parsePersistedGeneratedProfile(JSON.parse(raw)) : null; } catch { return null; }
+  try { const raw = getActiveProfileStorage(storage as Storage).getItem("generatedProfile"); return raw ? parsePersistedGeneratedProfile(JSON.parse(raw)) : null; } catch { return null; }
 };
-export const persistGeneratedProfile = (storage: StorageWriter, profile: PersistedGeneratedProfile) => storage.setItem("generatedProfile", JSON.stringify(profile));
+export const persistGeneratedProfile = (storage: StorageWriter, profile: PersistedGeneratedProfile) => getActiveProfileStorage(storage as Storage).setItem("generatedProfile", JSON.stringify(profile));
 
 export const createGeneratedProfileSourceFingerprint = (company: Pick<CompanyData, "name" | "about" | "companyType" | "industry" | "customerType" | "servicesProducts" | "activities" | "experience">, projects: readonly Pick<PersistedProject, "id" | "name" | "description" | "imageUrl">[]): string => JSON.stringify({
   company: [company.name, company.about, company.companyType, company.industry, company.customerType, company.servicesProducts, company.activities, company.experience].map((value) => value.trim()),

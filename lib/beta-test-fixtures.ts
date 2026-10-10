@@ -2,6 +2,7 @@ import { persistCompanyData, type CompanyData } from "./company-data";
 import { persistGeneratedProfile, type PersistedGeneratedProfile, type PersistedGeneratedProfileSection } from "./generated-profile-storage";
 import { APPLICATION_STORAGE_KEYS, clearApplicationLocalData, readApplicationStorage, writeApplicationStorage } from "./local-profile-data";
 import { persistProjects } from "./persisted-projects";
+import { clearActiveProfile } from "./workspace";
 
 export type BetaFixtureId = "aurelia" | "northbridge" | "winx" | "aurelia-missing-image" | "aurelia-generated-only" | "legacy-control";
 export type BetaExpectedFamily = "visual-portfolio" | "corporate-services" | "product-tech" | "legacy";
@@ -105,7 +106,10 @@ export const createBetaFixture = (id: BetaFixtureId, validProjectImage: string):
 };
 
 export const loadBetaFixture = (storage: BetaStorage, fixture: BetaFixture) => {
-  clearApplicationLocalData(storage as Storage);
+  if (typeof window !== "undefined" && storage === window.localStorage) {
+    const cleared = clearActiveProfile(storage as Storage);
+    if (!cleared.ok) throw new Error(cleared.code);
+  } else clearApplicationLocalData(storage as Storage);
   const companySaved = persistCompanyData(storage, fixture.company);
   if (!companySaved.ok) throw new Error(companySaved.code);
   const projectsSaved = persistProjects(storage, fixture.projects);

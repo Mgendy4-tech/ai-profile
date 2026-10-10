@@ -1,3 +1,5 @@
+import { clearWorkspace, getActiveProfileStorage } from "./workspace";
+
 export const APPLICATION_STORAGE_KEYS = ["companyData", "projectsData", "profileStructure", "generatedProfile", "authoredFamilyDecision", "authoredVariantDecision", "exportDecision"] as const;
 export type ApplicationStorageKey = (typeof APPLICATION_STORAGE_KEYS)[number];
 export type StorageRemoval = Pick<Storage, "removeItem" | "getItem">;
@@ -6,7 +8,7 @@ export type StorageFailureCode = "storage_quota" | "storage_unavailable";
 export type StorageWriteResult = { ok: true } | { ok: false; code: StorageFailureCode };
 
 export const readApplicationStorage = (storage: Pick<Storage, "getItem">, key: ApplicationStorageKey): string | null => {
-  try { return storage.getItem(key); } catch { return null; }
+  try { return getActiveProfileStorage(storage as Storage).getItem(key); } catch { return null; }
 };
 
 const storageFailureCode = (error: unknown): StorageFailureCode => {
@@ -15,11 +17,11 @@ const storageFailureCode = (error: unknown): StorageFailureCode => {
 };
 
 export const writeApplicationStorage = (storage: Pick<Storage, "setItem">, key: ApplicationStorageKey, value: string): StorageWriteResult => {
-  try { storage.setItem(key, value); return { ok: true }; } catch (error) { return { ok: false, code: storageFailureCode(error) }; }
+  try { getActiveProfileStorage(storage as Storage).setItem(key, value); return { ok: true }; } catch (error) { return { ok: false, code: storageFailureCode(error) }; }
 };
 
 export const removeApplicationStorage = (storage: Pick<Storage, "removeItem">, key: string): void => {
-  try { storage.removeItem(key); } catch { /* A failed cleanup must not break the next user action. */ }
+  try { getActiveProfileStorage(storage as Storage).removeItem(key); } catch { /* A failed cleanup must not break the next user action. */ }
 };
 
 export const clearDerivedProfileState = (storage: Pick<Storage, "removeItem">): void => {
@@ -33,6 +35,8 @@ export const storageUserMessage = (code: StorageFailureCode): string =>
 
 export const clearApplicationLocalData = (storage: StorageRemoval) => {
   const removed = APPLICATION_STORAGE_KEYS.filter((key) => { try { return storage.getItem(key) !== null; } catch { return false; } });
-  APPLICATION_STORAGE_KEYS.forEach((key) => removeApplicationStorage(storage, key));
-  return { removedKeys: removed, complete: APPLICATION_STORAGE_KEYS.every((key) => { try { return storage.getItem(key) === null; } catch { return false; } }) } as const;
+  if (typeof window !== "undefined" && storage === window.localStorage) clearWorkspace(storage);
+  else APPLICATION_STORAGE_KEYS.forEach((key) => removeApplicationStorage(storage, key));
+  const complete = APPLICATION_STORAGE_KEYS.every((key) => { try { return storage.getItem(key) === null; } catch { return false; } });
+  return { removedKeys: removed, complete } as const;
 };

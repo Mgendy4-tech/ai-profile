@@ -1,4 +1,5 @@
 import { type StorageWriteResult, writeApplicationStorage } from "./local-profile-data";
+import { getActiveProfileStorage } from "./workspace";
 
 export type CompanyData = {
   name: string;
@@ -68,7 +69,7 @@ export const normalizeCompanyData = (value: unknown): CompanyData => {
 
 export const inspectPersistedCompanyData = (storage: CompanyDataStorageReader): PersistedCompanyDataRead => {
   try {
-    const raw = storage.getItem("companyData");
+    const raw = getActiveProfileStorage(storage as Storage).getItem("companyData");
     if (!raw) return { data: null, issue: null };
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.keys(parsed).length === 0) return { data: null, issue: "company_data_shape_invalid" };

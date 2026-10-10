@@ -61,6 +61,13 @@ export default function Home() {
             </div>
           </Link>
 
+          <Link href="/workspace" className="block h-full cursor-pointer">
+            <div className="h-full rounded-xl bg-white p-6 shadow transition hover:shadow-lg">
+              <h2 className="text-xl font-semibold">Workspace</h2>
+              <p className="mt-2 text-gray-600">Switch, duplicate, or start another company profile.</p>
+            </div>
+          </Link>
+
           {companyName && (
             <Link href="/generate" className="block h-full cursor-pointer">
             <div className="h-full rounded-xl bg-white p-6 shadow transition hover:shadow-lg">

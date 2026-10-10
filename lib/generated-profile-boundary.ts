@@ -1,4 +1,5 @@
 import { experienceDurationLabel } from "./company-data";
+import { getActiveProfileStorage } from "./workspace";
 
 export type SelectedProfileSection = {
   id: string;
@@ -255,7 +256,7 @@ export type PersistedApprovedProfileStructure = {
 
 export const readPersistedApprovedProfileStructure = (storage: StorageReader): PersistedApprovedProfileStructure | null => {
   try {
-    const raw = storage.getItem("profileStructure");
+    const raw = getActiveProfileStorage(storage as Storage).getItem("profileStructure");
     if (!raw) return null;
     const value = JSON.parse(raw) as { analysis?: unknown; selectedSections?: unknown };
     if (!value.analysis || typeof value.analysis !== "object" || !Array.isArray(value.selectedSections)) return null;
@@ -286,7 +287,7 @@ export const persistApprovedProfileStructure = (
 ): SelectedProfileSection[] => {
   const selectedIds = new Set(selectedSectionIds);
   const selectedSections = structure.recommendedSections.filter((section) => selectedIds.has(section.id));
-  storage.setItem("profileStructure", JSON.stringify({ companyData, analysis: structure, selectedSections }));
+  getActiveProfileStorage(storage as Storage).setItem("profileStructure", JSON.stringify({ companyData, analysis: structure, selectedSections }));
   return selectedSections;
 };
 import { productTechOverviewTemplate } from "./authored-templates/packs/product-tech-v1/overview";
