@@ -17,6 +17,7 @@ import {
   type Workspace,
   type WorkspaceProfile,
 } from "@/lib/workspace";
+import CloudSyncIndicator from "@/app/components/cloud-sync-indicator";
 
 const familyLabels: Record<string, string> = {
   "visual-portfolio": "Visual / Portfolio",
@@ -96,6 +97,7 @@ export default function WorkspacePage() {
             <h1 className="mt-2 text-4xl font-bold tracking-tight text-gray-900">Your company profiles</h1>
             <p className="mt-3 max-w-2xl text-gray-600">Keep each company&apos;s projects, generated profile, brand details, and style choice separate in this browser.</p>
           </div>
+          <CloudSyncIndicator />
           <button type="button" onClick={create} className="rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800">New Profile</button>
         </div>
         <p className="mt-3 text-xs text-gray-500">{workspace?.profiles.length ?? 0} of {MAX_WORKSPACE_PROFILES} profiles used</p>

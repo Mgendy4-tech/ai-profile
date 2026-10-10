@@ -6,16 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
-    ,"readiness": "npx tsx --env-file=.env.local lib/check-production-readiness.ts"
-    ,"smoke:post-deploy": "node lib/browser-three-family-go-live.cjs"
-    ,"test:aurelia-upload-browser": "node lib/browser-aurelia-upload-persistence.cjs"
-    ,"test:aurelia-seven-capabilities": "npx tsx lib/authored-templates/test-aurelia-seven-capabilities.ts"
-    ,"qa:beta": "node lib/run-beta-qa.cjs"
-    ,"qa:beta:full": "node lib/run-beta-qa.cjs --full"
-    ,"qa:review-pack": "node lib/generate-authored-review-pack.cjs"
+    "lint": "eslint",
+    "readiness": "npx tsx --env-file=.env.local lib/check-production-readiness.ts",
+    "smoke:post-deploy": "node lib/browser-three-family-go-live.cjs",
+    "test:aurelia-upload-browser": "node lib/browser-aurelia-upload-persistence.cjs",
+    "test:aurelia-seven-capabilities": "npx tsx lib/authored-templates/test-aurelia-seven-capabilities.ts",
+    "qa:beta": "node lib/run-beta-qa.cjs",
+    "qa:beta:full": "node lib/run-beta-qa.cjs --full",
+    "qa:review-pack": "node lib/generate-authored-review-pack.cjs"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.3",
     "jspdf": "^4.2.1",
     "next": "16.3.2",
     "openai": "^7.5.0",
@@ -30,6 +32,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
+    "playwright-core": "^1.64.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

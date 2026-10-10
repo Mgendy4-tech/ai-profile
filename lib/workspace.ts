@@ -108,9 +108,14 @@ const emptyWorkspace = (): Workspace => {
 const writeWorkspace = (storage: WorkspaceStorage, workspace: Workspace): WorkspaceWriteResult => {
   try {
     storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(workspace));
+    if (typeof window !== "undefined" && storage === window.localStorage) window.dispatchEvent(new Event("workspace-state-changed"));
     return { ok: true, workspace: cloneWorkspace(workspace) };
   } catch (error) { return { ok: false, code: storageFailure(error) }; }
 };
+
+export const createEmptyWorkspace = (): Workspace => emptyWorkspace();
+
+export const writeWorkspaceSnapshot = (storage: WorkspaceStorage, workspace: Workspace): WorkspaceWriteResult => writeWorkspace(storage, cloneWorkspace(workspace));
 
 export const readWorkspace = (storage: WorkspaceStorage): Workspace => {
   let raw: string | null = null;
