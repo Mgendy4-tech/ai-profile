@@ -95,6 +95,7 @@ import { customerFacingSectionCopy, customerFacingSectionDescription, dedupeCust
 import OnboardingProgress from "@/app/components/onboarding-progress";
 import AuthoredVariantPreview from "@/app/components/authored-variant-preview";
 import { deriveOnboardingProgress } from "@/lib/onboarding-progress";
+import { reportClientFailure } from "@/lib/client-observability";
 
 type Project = {
   id?: string;
@@ -611,6 +612,7 @@ setStructureConfirmed(false);
     const structureSaved = writeApplicationStorage(localStorage, "profileStructure", JSON.stringify({ companyData, analysis: approvedAnalysis, selectedSections: approvedAnalysis.recommendedSections }));
     if (!structureSaved.ok) throw new Error(structureSaved.code);
   } catch (error) {
+    reportClientFailure({ category: "profile_generation_failure", code: "structure_analysis_client_failed", surface: "generation" });
     setErrorMessage(userFacingGenerationError(error, "Failed to analyze company structure."));
   } finally {
     generationAttemptGuard.current.finish();
@@ -765,6 +767,7 @@ catch (error) { throw new Error(error instanceof Error && /quota|storage/i.test(
 setProfile(generatedProfile);
 
       } catch (error) {
+        reportClientFailure({ category: "profile_generation_failure", code: "profile_generation_client_failed", surface: "generation" });
         setProfile(null);
         setErrorMessage(userFacingGenerationError(error, "We could not generate a complete company profile."));
       } finally {
@@ -1837,6 +1840,7 @@ setProfile(generatedProfile);
           : "pdf_export_failed";
       if (process.env.NODE_ENV !== "production") console.debug("[profile-export-failure]", { reasonCode });
       emitProductionTelemetry({ name: "export_failed", failureClass: "export_failure", reasonCode, latencyMs: Date.now() - exportStartedAt });
+      reportClientFailure({ category: "pdf_export_failure", code: reasonCode, surface: "export" });
       emitExportFailed(exportEventSink, exportEventId, exportStartedAt, Date.now());
       setExportMessageTone("error");
       setExportMessage(reasonCode === "page_count_limit"

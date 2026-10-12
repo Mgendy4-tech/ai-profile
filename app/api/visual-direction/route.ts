@@ -4,6 +4,7 @@ import type {
   BrandAnalysis,
   VisualDirection,
 } from "@/lib/visual-system/types";
+import { logServerFailure } from "@/lib/server/observability";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -149,7 +150,7 @@ Return exactly this structure:
 
     return NextResponse.json(direction);
   } catch (error) {
-    console.error("Visual direction failed", { name: error instanceof Error ? error.name : "UnknownError" });
+    logServerFailure({ category: "profile_generation_failure", code: "visual_direction_failed", surface: "api", route: "/api/visual-direction", status: 500 });
 
     return NextResponse.json(
       { error: "Failed to create visual direction." },

@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { analyzedStructureErrorMessage, validateAnalyzedProfileStructure } from "@/lib/profile-structure-boundary";
 import { createStructureAnalysisModelPayload, validateGenerationRequestSize } from "@/lib/production-limits";
 import { emitProductionTelemetry } from "@/lib/production-telemetry";
+import { logServerFailure } from "@/lib/server/observability";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -118,7 +119,7 @@ Rules:
     return Response.json(validated.structure);
   } catch (error) {
     emitProductionTelemetry({ name: "external_api_failed", failureClass: "external_api_failure", provider: "openai", operation: "analyze_structure", reasonCode: error instanceof OpenAI.APIError ? `openai_${error.status}` : "runtime_system_failure" });
-    console.error("Analyze structure failed", { name: error instanceof Error ? error.name : "UnknownError" });
+    logServerFailure({ category: "profile_generation_failure", code: "structure_analysis_failed", surface: "api", route: "/api/analyze-structure", status: 500 });
 
     return Response.json(
       { error: "Failed to analyze company structure." },

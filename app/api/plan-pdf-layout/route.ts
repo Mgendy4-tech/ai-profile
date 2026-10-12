@@ -5,6 +5,7 @@ import {
   sanitizeContextualVisuals,
   type PlannerSectionMetadata,
 } from "@/lib/visual-system/page-composition-planner";
+import { logServerFailure } from "@/lib/server/observability";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -185,16 +186,16 @@ STRICT RULES:
       );
 
       if (resolved.usedFallback && resolved.semanticIssues.length > 0) {
-        console.error("Page composition semantic validation failed", { issueCodes: resolved.semanticIssues.map((issue) => issue.code) });
+        logServerFailure({ category: "server_api_error", code: "page_composition_semantic_fallback", surface: "api", route: "/api/plan-pdf-layout", status: 200 });
       }
 
       return Response.json(resolved.layoutPlan);
     } catch (error) {
-      console.error("PDF page composition planner failed", { name: error instanceof Error ? error.name : "UnknownError" });
+      logServerFailure({ category: "server_api_error", code: "pdf_page_planner_failed", surface: "api", route: "/api/plan-pdf-layout", status: 200 });
       return Response.json(fallbackPlan);
     }
   } catch (error) {
-    console.error("PDF layout planner request failed", { name: error instanceof Error ? error.name : "UnknownError" });
+    logServerFailure({ category: "pdf_export_failure", code: "pdf_layout_request_failed", surface: "api", route: "/api/plan-pdf-layout", status: 500 });
     return Response.json(
       { error: "Failed to plan PDF layout." },
       { status: 500 }

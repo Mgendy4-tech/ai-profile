@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "./supabase-browser";
 import { activeWorkspaceProfile, readWorkspace, type Workspace, type WorkspaceProfile } from "./workspace";
+import { reportClientFailure } from "./client-observability";
 
 export const CUSTOMER_ASSETS_BUCKET = "customer-assets";
 export type CloudAssetKind = "logo" | "project";
@@ -22,8 +23,13 @@ const parseDataUrl = (dataUrl: string): { blob: Blob; extension: "png" | "jpg" }
 };
 
 const currentUser = async (client: SupabaseClient): Promise<string | null> => {
-  const { data } = await client.auth.getUser();
-  return data.user?.id ?? null;
+  try {
+    const { data } = await client.auth.getUser();
+    return data.user?.id ?? null;
+  } catch {
+    reportClientFailure({ category: "auth_failure", code: "asset_session_lookup_failed", surface: "storage" });
+    return null;
+  }
 };
 
 export const isOwnedAssetPath = (path: unknown, userId: string, profileId?: string): path is string =>
@@ -36,16 +42,28 @@ export const uploadCloudAsset = async (profileId: string, kind: CloudAssetKind, 
   const userId = await currentUser(client);
   if (!userId) return { ok: false, code: "unauthorized" };
   const path = `${userId}/${profileId}/${kind}-${crypto.randomUUID()}.${parsed.extension}`;
-  const upload = await client.storage.from(CUSTOMER_ASSETS_BUCKET).upload(path, parsed.blob, { contentType: parsed.blob.type, upsert: false });
-  return upload.error ? { ok: false, code: "upload_failed" } : { ok: true, path };
+  try {
+    const upload = await client.storage.from(CUSTOMER_ASSETS_BUCKET).upload(path, parsed.blob, { contentType: parsed.blob.type, upsert: false });
+    if (upload.error) { reportClientFailure({ category: "storage_upload_failure", code: "asset_upload_failed", surface: kind }); return { ok: false, code: "upload_failed" }; }
+    return { ok: true, path };
+  } catch {
+    reportClientFailure({ category: "storage_upload_failure", code: "asset_upload_failed", surface: kind });
+    return { ok: false, code: "upload_failed" };
+  }
 };
 
 export const removeCloudAsset = async (path: string | undefined, profileId: string, client = getSupabaseBrowserClient()): Promise<boolean> => {
   if (!client) return false;
   const userId = await currentUser(client);
   if (!userId || !isOwnedAssetPath(path, userId, profileId)) return false;
-  const result = await client.storage.from(CUSTOMER_ASSETS_BUCKET).remove([path]);
-  return !result.error;
+  try {
+    const result = await client.storage.from(CUSTOMER_ASSETS_BUCKET).remove([path]);
+    if (result.error) reportClientFailure({ category: "storage_upload_failure", code: "asset_remove_failed", surface: "asset_delete" });
+    return !result.error;
+  } catch {
+    reportClientFailure({ category: "storage_upload_failure", code: "asset_remove_failed", surface: "asset_delete" });
+    return false;
+  }
 };
 
 export const removeProfileCloudAssets = async (profile: WorkspaceProfile, client = getSupabaseBrowserClient()): Promise<number> => {
@@ -57,16 +75,23 @@ export const removeProfileCloudAssets = async (profile: WorkspaceProfile, client
   if (typeof company?.logoPath === "string" && isOwnedAssetPath(company.logoPath, userId, profile.id)) paths.push(company.logoPath);
   for (const project of parseArray(profile.state.projectsData)) if (typeof project.imagePath === "string" && isOwnedAssetPath(project.imagePath, userId, profile.id)) paths.push(project.imagePath);
   if (!paths.length) return 0;
-  const result = await client.storage.from(CUSTOMER_ASSETS_BUCKET).remove([...new Set(paths)]);
-  return result.error ? 0 : new Set(paths).size;
+  try {
+    const result = await client.storage.from(CUSTOMER_ASSETS_BUCKET).remove([...new Set(paths)]);
+    if (result.error) reportClientFailure({ category: "storage_upload_failure", code: "profile_asset_cleanup_failed", surface: "profile_delete" });
+    return result.error ? 0 : new Set(paths).size;
+  } catch {
+    reportClientFailure({ category: "storage_upload_failure", code: "profile_asset_cleanup_failed", surface: "profile_delete" });
+    return 0;
+  }
 };
 
 export const hydrateCloudAsset = async (path: string | undefined, profileId: string, client = getSupabaseBrowserClient()): Promise<string> => {
   if (!client) return "";
   const userId = await currentUser(client);
   if (!userId || !isOwnedAssetPath(path, userId, profileId)) return "";
-  const signed = await client.storage.from(CUSTOMER_ASSETS_BUCKET).createSignedUrl(path, 300);
-  if (signed.error || !signed.data?.signedUrl) return "";
+  let signed: { data: { signedUrl?: string } | null; error: unknown };
+  try { signed = await client.storage.from(CUSTOMER_ASSETS_BUCKET).createSignedUrl(path, 300); } catch { reportClientFailure({ category: "storage_hydration_failure", code: "signed_url_failed", surface: "asset_hydration" }); return ""; }
+  if (signed.error || !signed.data?.signedUrl) { reportClientFailure({ category: "storage_hydration_failure", code: "signed_url_failed", surface: "asset_hydration" }); return ""; }
   // A private signed URL is already a browser-safe image source. Downloading
   // it with fetch adds a CORS dependency that is unnecessary for <img> and
   // caused fresh-session hydration to fail while cloud sync still succeeded.

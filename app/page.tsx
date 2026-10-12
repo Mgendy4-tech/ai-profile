@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { readApplicationStorage } from "@/lib/local-profile-data";
+import { readWorkspace, workspaceStatus } from "@/lib/workspace";
 
 const defaultTitle = "AI Company Profile";
 
 export default function Home() {
   const [companyName, setCompanyName] = useState("");
+  const [resumeHref, setResumeHref] = useState("/company");
 
   useEffect(() => {
     const loadCompanyName = () => {
@@ -24,6 +26,9 @@ export default function Home() {
 
         if (typeof parsedCompanyData.name === "string" && parsedCompanyData.name.trim()) {
           setCompanyName(parsedCompanyData.name.trim());
+          const workspace = readWorkspace(localStorage);
+          const active = workspace.profiles.find((profile) => profile.id === workspace.activeProfileId) ?? workspace.profiles[0];
+          setResumeHref(active && workspaceStatus(active) === "Ready to export" ? "/generate" : "/company");
         }
       } catch {
         setCompanyName("");
@@ -47,6 +52,12 @@ export default function Home() {
           Build and update a customer-ready company profile with AI. Guest work stays in this browser; signed-in workspaces sync profiles and images privately across sessions.
         </p>
 
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          <Link href={resumeHref} className="rounded-lg bg-black px-5 py-3 text-sm font-semibold text-white transition hover:bg-gray-800">{companyName ? `Continue with ${companyName}` : "Start your profile"}</Link>
+          <Link href="/auth" className="rounded-lg border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-gray-900 transition hover:border-gray-900">{companyName ? "Sign in to sync this work" : "Sign in to sync across devices"}</Link>
+        </div>
+        <p className="mt-3 max-w-2xl text-sm text-gray-500">Start as a guest in this browser, or sign in when you want private cloud backup and access on another device.</p>
+
         <div className="mt-12 grid gap-6 md:grid-cols-2">
 
           <Link href="/company" className="block h-full cursor-pointer">
@@ -56,7 +67,7 @@ export default function Home() {
               </h2>
 
               <p className="mt-2 text-gray-600">
-                Add your company information.
+                Add the essentials first. Projects are optional for service-led profiles.
               </p>
             </div>
           </Link>

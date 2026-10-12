@@ -3,6 +3,7 @@ import { generatedSectionsErrorMessage, isSelectedServicesSection, structuredSec
 import { isProductTechCompanyType } from "@/lib/authored-templates/section-role-normalization";
 import { createProfileGenerationModelPayload, validateGenerationRequestSize } from "@/lib/production-limits";
 import { emitProductionTelemetry } from "@/lib/production-telemetry";
+import { logServerFailure } from "@/lib/server/observability";
 import { approvedSectionManifest, semanticCoverageContract } from "@/lib/generated-profile-prompt-contract";
 
 const client = new OpenAI({
@@ -212,7 +213,7 @@ Do not return explanations outside the JSON.
     return Response.json(profile);
   } catch (error) {
     emitProductionTelemetry({ name: "external_api_failed", failureClass: "external_api_failure", provider: "openai", operation: "generate_profile", reasonCode: error instanceof OpenAI.APIError ? `openai_${error.status}` : "runtime_system_failure" });
-    console.error("Generate profile failed", { name: error instanceof Error ? error.name : "UnknownError" });
+    logServerFailure({ category: "profile_generation_failure", code: "profile_generation_failed", surface: "api", route: "/api/generate-profile", status: 500 });
 
     return Response.json(
       { error: "Failed to generate company profile." },

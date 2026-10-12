@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { authenticatedSupabase } from "@/lib/supabase-server";
 import { cloudProfileFromLocal, type CloudProfileRecord, type CloudWorkspaceDocument, type CloudWorkspacePayload } from "@/lib/cloud-workspace";
+import { logServerFailure } from "@/lib/server/observability";
 
-const safeError = (code: "not_configured" | "unauthorized" | "cloud_unavailable" | "invalid_payload") => NextResponse.json({ ok: false, code }, { status: code === "unauthorized" ? 401 : code === "not_configured" ? 503 : 400 });
+const safeError = (code: "not_configured" | "unauthorized" | "cloud_unavailable" | "invalid_payload") => { if (code === "unauthorized") logServerFailure({ category: "auth_failure", code: "cloud_request_unauthorized", surface: "api", route: "/api/cloud/workspace", status: 401 }); return NextResponse.json({ ok: false, code }, { status: code === "unauthorized" ? 401 : code === "not_configured" ? 503 : 400 }); };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const isPayload = (value: unknown): value is CloudWorkspacePayload => {
@@ -20,10 +21,10 @@ export async function GET(request: Request) {
   const auth = await authenticatedSupabase(request);
   if ("error" in auth) return safeError(auth.error);
   const workspace = await auth.client.from("cloud_workspaces").select("version, active_profile_id").eq("user_id", auth.userId).maybeSingle();
-  if (workspace.error) { console.error("[cloud-workspace-read]", workspace.error); return safeError("cloud_unavailable"); }
+  if (workspace.error) { logServerFailure({ category: "cloud_sync_failure", code: "cloud_workspace_read_failed", surface: "api", route: "/api/cloud/workspace", status: 503 }); return safeError("cloud_unavailable"); }
   if (!workspace.data) return NextResponse.json({ ok: true, workspace: null });
   const profiles = await auth.client.from("cloud_profiles").select("*").eq("user_id", auth.userId).order("created_at", { ascending: true });
-  if (profiles.error) { console.error("[cloud-profile-read]", profiles.error); return safeError("cloud_unavailable"); }
+  if (profiles.error) { logServerFailure({ category: "cloud_sync_failure", code: "cloud_profile_read_failed", surface: "api", route: "/api/cloud/workspace", status: 503 }); return safeError("cloud_unavailable"); }
   const document: CloudWorkspaceDocument = { version: Number(workspace.data.version ?? 1), activeProfileId: workspace.data.active_profile_id, profiles: (profiles.data ?? []).map(rowToProfile) };
   return NextResponse.json({ ok: true, workspace: document });
 }
@@ -36,18 +37,18 @@ export async function PUT(request: Request) {
   if (!isPayload(payload)) return safeError("invalid_payload");
   const now = new Date().toISOString();
   const workspaceWrite = await auth.client.from("cloud_workspaces").upsert({ user_id: auth.userId, version: payload.version, active_profile_id: payload.activeProfileId, updated_at: now }, { onConflict: "user_id" });
-  if (workspaceWrite.error) { console.error("[cloud-workspace-write]", workspaceWrite.error); return safeError("cloud_unavailable"); }
+  if (workspaceWrite.error) { logServerFailure({ category: "cloud_sync_failure", code: "cloud_workspace_write_failed", surface: "api", route: "/api/cloud/workspace", status: 503 }); return safeError("cloud_unavailable"); }
   const records = payload.profiles.map((profile) => ({ user_id: auth.userId, profile_id: profile.profileId, display_name: profile.displayName, created_at: profile.createdAt, updated_at: profile.updatedAt, company_data: profile.companyData, projects: profile.projects, generated_profile: profile.generatedProfile, profile_structure: profile.profileStructure, selected_family: profile.selectedFamily, selected_variant: profile.selectedVariant, export_decision: profile.exportDecision, freshness: profile.freshness, unsupported_assets: profile.unsupportedAssets }));
   if (records.length) {
     const profileWrite = await auth.client.from("cloud_profiles").upsert(records, { onConflict: "user_id,profile_id" });
-    if (profileWrite.error) { console.error("[cloud-profile-write]", profileWrite.error); return safeError("cloud_unavailable"); }
+    if (profileWrite.error) { logServerFailure({ category: "cloud_sync_failure", code: "cloud_profile_write_failed", surface: "api", route: "/api/cloud/workspace", status: 503 }); return safeError("cloud_unavailable"); }
   }
   const current = await auth.client.from("cloud_profiles").select("profile_id").eq("user_id", auth.userId);
-  if (current.error) { console.error("[cloud-profile-list]", current.error); return safeError("cloud_unavailable"); }
+  if (current.error) { logServerFailure({ category: "cloud_sync_failure", code: "cloud_profile_list_failed", surface: "api", route: "/api/cloud/workspace", status: 503 }); return safeError("cloud_unavailable"); }
   const desired = new Set(payload.profiles.map((profile) => profile.profileId));
   for (const row of current.data ?? []) if (typeof row.profile_id === "string" && !desired.has(row.profile_id)) {
     const deleted = await auth.client.from("cloud_profiles").delete().eq("user_id", auth.userId).eq("profile_id", row.profile_id);
-    if (deleted.error) { console.error("[cloud-profile-delete]", deleted.error); return safeError("cloud_unavailable"); }
+    if (deleted.error) { logServerFailure({ category: "cloud_sync_failure", code: "cloud_profile_delete_failed", surface: "api", route: "/api/cloud/workspace", status: 503 }); return safeError("cloud_unavailable"); }
   }
   return NextResponse.json({ ok: true, warnings: payload.profiles.flatMap((profile) => profile.unsupportedAssets.map((asset) => `${profile.profileId}:${asset}`)) });
 }

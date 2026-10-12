@@ -5,6 +5,7 @@ import type {
   SelectVisualsResponse,
   VisualDirection,
 } from "@/lib/visual-system/types";
+import { logServerFailure } from "@/lib/server/observability";
 
 type ImageBrief = VisualDirection["imageBriefs"][number];
 
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
             fallbackReason: result.fallbackReason,
           };
         } catch (error) {
-          console.error("Visual selection failed", { briefId: brief.id, name: error instanceof Error ? error.name : "UnknownError" });
+          logServerFailure({ category: "server_api_error", code: "visual_selection_failed", surface: "api", route: "/api/select-visuals", status: 502 });
           visuals[briefIndex] = createFallbackVisual(
             brief,
             "Visual selection failed for this brief."
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
     const response: SelectVisualsResponse = { visuals };
     return NextResponse.json(response);
   } catch (error) {
-    console.error("Select visuals request failed", { name: error instanceof Error ? error.name : "UnknownError" });
+    logServerFailure({ category: "server_api_error", code: "select_visuals_request_failed", surface: "api", route: "/api/select-visuals", status: 500 });
     return NextResponse.json(
       { error: "Failed to select contextual visuals." },
       { status: 500 }

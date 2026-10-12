@@ -10,6 +10,9 @@ import { CloudSyncCoordinator, fetchCloudJson, type SyncResult } from "@/lib/clo
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { readWorkspace, writeWorkspaceSnapshot } from "@/lib/workspace";
 import { hydrateWorkspaceAssets, migrateLocalWorkspaceAssets } from "@/lib/cloud-assets";
+import { reportClientFailure } from "@/lib/client-observability";
+import ClientObservability from "@/app/components/client-observability";
+import { passwordRecoveryRedirect } from "@/lib/site-url";
 
 export type CloudSyncStatus = "local-only" | "syncing" | "synced" | "sync-failed";
 type AuthMode = "sign-in" | "sign-up" | "reset-request" | "reset-password";
@@ -30,6 +33,13 @@ const customerAuthError = (error: { message?: string; code?: string } | null, mo
   if (mode === "reset-request") return "We could not send a reset email. Check the address and try again.";
   if (mode === "reset-password") return "We could not update your password. The recovery link may have expired.";
   return "We could not complete that request. Check your details and try again.";
+};
+const authFailureCode = (error: { message?: string; code?: string } | null, mode: AuthMode): string => {
+  const text = `${error?.code ?? ""} ${error?.message ?? ""}`.toLowerCase();
+  if (text.includes("invalid login credentials") || text.includes("invalid_credentials")) return "invalid_credentials";
+  if (text.includes("already registered") || text.includes("user already exists") || text.includes("user_already_exists")) return "account_exists";
+  if (text.includes("expired") || text.includes("invalid token") || text.includes("otp_expired")) return "recovery_token_invalid";
+  return `${mode.replace("-", "_")}_failed`;
 };
 
 export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
@@ -68,16 +78,16 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
         const localFingerprint = workspaceFingerprint(local);
         if (coordinatorRef.current?.getLastSyncedFingerprint() === localFingerprint) return { ok: true, fingerprint: localFingerprint };
         const upload = await fetchCloudJson<{ ok?: boolean; code?: string; warnings?: string[] }>(fetch, "/api/cloud/workspace", { method: "PUT", headers, body: JSON.stringify(workspaceToCloudPayload(local)) }, signal);
-        if (!upload.ok) return { ok: false, code: upload.code, message: upload.code === "aborted" ? "Cloud sync was cancelled. Retry when ready." : customerCloudError(upload.code) };
+      if (!upload.ok) { reportClientFailure({ category: "cloud_sync_failure", code: upload.code, surface: "workspace_sync" }); return { ok: false, code: upload.code, message: upload.code === "aborted" ? "Cloud sync was cancelled. Retry when ready." : customerCloudError(upload.code) }; }
         const uploadBody = upload.body;
-        if (!uploadBody.ok) return { ok: false, code: uploadBody.code ?? "cloud_unavailable", message: customerCloudError(uploadBody.code ?? "cloud_unavailable") };
+      if (!uploadBody.ok) { reportClientFailure({ category: "cloud_sync_failure", code: uploadBody.code ?? "cloud_unavailable", surface: "workspace_sync" }); return { ok: false, code: uploadBody.code ?? "cloud_unavailable", message: customerCloudError(uploadBody.code ?? "cloud_unavailable") }; }
         localStorage.setItem(CLOUD_OWNER_STORAGE_KEY, currentSession.user.id);
         return { ok: true, fingerprint: localFingerprint, message: migrated.failed || uploadBody.warnings?.length ? "Workspace synced. One or more images still need a cloud upload retry." : undefined };
       }
       const response = await fetchCloudJson<{ ok?: boolean; code?: string; workspace?: Parameters<typeof chooseAuthenticatedWorkspace>[0] }>(fetch, "/api/cloud/workspace", { headers }, signal);
-      if (!response.ok) return { ok: false, code: response.code, message: response.code === "aborted" ? "Cloud sync was cancelled. Retry when ready." : customerCloudError(response.code) };
+      if (!response.ok) { reportClientFailure({ category: "cloud_sync_failure", code: response.code, surface: "workspace_sync" }); return { ok: false, code: response.code, message: response.code === "aborted" ? "Cloud sync was cancelled. Retry when ready." : customerCloudError(response.code) }; }
       const body = response.body;
-      if (!body.ok) return { ok: false, code: body.code ?? "cloud_unavailable", message: customerCloudError(body.code ?? "cloud_unavailable") };
+      if (!body.ok) { reportClientFailure({ category: "cloud_sync_failure", code: body.code ?? "cloud_unavailable", surface: "workspace_sync" }); return { ok: false, code: body.code ?? "cloud_unavailable", message: customerCloudError(body.code ?? "cloud_unavailable") }; }
       const localMigration = await migrateLocalWorkspaceAssets(readWorkspace(localStorage), supabase);
       if (localMigration.uploaded > 0) {
         suppressSyncRef.current = true;
@@ -98,9 +108,9 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
       if (decision.shouldMigrate || (!body.workspace && hasMeaningfulLocalWorkspace(decision.workspace))) {
         if (coordinatorRef.current?.getLastSyncedFingerprint() !== nextFingerprint) {
           const upload = await fetchCloudJson<{ ok?: boolean; code?: string; warnings?: string[] }>(fetch, "/api/cloud/workspace", { method: "PUT", headers, body: JSON.stringify(workspaceToCloudPayload(decision.workspace)) }, signal);
-          if (!upload.ok) return { ok: false, code: upload.code, message: upload.code === "aborted" ? "Cloud sync was cancelled. Retry when ready." : customerCloudError(upload.code) };
+          if (!upload.ok) { reportClientFailure({ category: "cloud_sync_failure", code: upload.code, surface: "workspace_sync" }); return { ok: false, code: upload.code, message: upload.code === "aborted" ? "Cloud sync was cancelled. Retry when ready." : customerCloudError(upload.code) }; }
           const uploadBody = upload.body;
-          if (!uploadBody.ok) return { ok: false, code: uploadBody.code ?? "cloud_unavailable", message: customerCloudError(uploadBody.code ?? "cloud_unavailable") };
+          if (!uploadBody.ok) { reportClientFailure({ category: "cloud_sync_failure", code: uploadBody.code ?? "cloud_unavailable", surface: "workspace_sync" }); return { ok: false, code: uploadBody.code ?? "cloud_unavailable", message: customerCloudError(uploadBody.code ?? "cloud_unavailable") }; }
           if (decision.shouldMigrate) localStorage.setItem(migrationMarker(currentSession.user.id), "complete");
           localStorage.setItem(CLOUD_OWNER_STORAGE_KEY, currentSession.user.id);
           return { ok: true, fingerprint: nextFingerprint, message: uploadBody.warnings?.length ? "Workspace synced. One or more images still need a cloud upload retry." : undefined };
@@ -109,7 +119,7 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
       localStorage.setItem(CLOUD_OWNER_STORAGE_KEY, currentSession.user.id);
       return { ok: true, fingerprint: nextFingerprint };
     } catch (error) {
-      console.error("[cloud-sync-client]", error);
+      reportClientFailure({ category: "cloud_sync_failure", code: "unexpected_sync_error", surface: "workspace_sync" });
       return { ok: false, code: "cloud_unavailable", message: "Cloud sync is temporarily unavailable. Your local data is safe; retry when ready." };
     }
   }, [supabase]);
@@ -170,34 +180,35 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
     if (!supabase) { setMessage(authSetupMessage); return; }
     setBusy(true); setMessage("");
     if (mode === "reset-request") {
-      const result = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/auth?mode=reset` });
+      const result = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: passwordRecoveryRedirect(window.location.origin) });
       setBusy(false);
+      if (result.error) reportClientFailure({ category: "auth_failure", code: authFailureCode(result.error, mode), surface: "password_recovery" });
       setMessage(result.error ? customerAuthError(result.error, mode) : "If an account exists for that email, a password-reset link is on its way.");
       return;
     }
     if (mode === "reset-password") {
       const result = await supabase.auth.updateUser({ password });
       setBusy(false);
-      if (result.error) { setMessage(customerAuthError(result.error, mode)); return; }
+      if (result.error) { reportClientFailure({ category: "auth_failure", code: authFailureCode(result.error, mode), surface: "password_recovery" }); setMessage(customerAuthError(result.error, mode)); return; }
       setPassword(""); setMode("sign-in"); setMessage("Your password was updated. You can sign in again.");
       return;
     }
     const result = mode === "sign-in" ? await supabase.auth.signInWithPassword({ email: email.trim(), password }) : await supabase.auth.signUp({ email: email.trim(), password });
     setBusy(false);
-    if (result.error) { setMessage(customerAuthError(result.error, mode)); return; }
+    if (result.error) { reportClientFailure({ category: "auth_failure", code: authFailureCode(result.error, mode), surface: "authentication" }); setMessage(customerAuthError(result.error, mode)); return; }
     setMessage(mode === "sign-up" && !result.data.session ? "Check your email to confirm your account, then sign in." : "Signed in. Your workspace will sync shortly.");
   };
 
   const signOut = async () => { if (!supabase) return; await supabase.auth.signOut(); setMessage("Signed out. Your local workspace remains available on this browser."); };
 
-  if (!expanded) return <div className="fixed right-4 top-4 z-50 max-w-[calc(100vw-2rem)] rounded-xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur"><div className="flex items-center gap-3 text-xs"><span className="font-semibold text-gray-900">{session ? `Signed in as ${session.user.email ?? "account"}` : "Guest mode"}</span>{session ? <><span className={statusClass[syncStatus]}>{statusText[syncStatus]}</span><button type="button" onClick={syncCurrent} className="font-medium text-gray-900 underline">Retry</button><button type="button" onClick={signOut} className="font-medium text-gray-900 underline">Sign out</button></> : <Link href="/auth" className="font-medium text-gray-900 underline">Sign in to sync</Link>}</div></div>;
+  if (!expanded) return <div className="fixed right-4 top-4 z-50 max-w-[calc(100vw-2rem)] rounded-xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur"><div className="flex flex-wrap items-center gap-3 text-xs"><span className="font-semibold text-gray-900">{session ? `Signed in as ${session.user.email ?? "account"}` : "Guest mode"}</span>{session ? <><span className={statusClass[syncStatus]}>{statusText[syncStatus]}</span><Link href="/settings" className="font-medium text-gray-900 underline">Account</Link><button type="button" onClick={syncCurrent} className="font-medium text-gray-900 underline">Retry</button><button type="button" onClick={signOut} className="font-medium text-gray-900 underline">Sign out</button></> : <Link href="/auth" className="font-medium text-gray-900 underline">Sign in to sync</Link>}</div></div>;
 
   const resetRequest = mode === "reset-request";
   const resetPassword = mode === "reset-password";
-  return <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Account and sync</p><h1 className="mt-2 text-2xl font-bold text-gray-900">{session ? "Your workspace is account-ready" : resetRequest ? "Reset your password" : resetPassword ? "Choose a new password" : "Keep working as a guest"}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">{session ? "Changes sync to your account. Signed-in profiles and images are stored in your private cloud workspace." : "Guest mode stays local. Sign in when you want your profiles available on another browser or device."}</p></div><span className={`text-sm font-semibold ${statusClass[syncStatus]}`}>{statusText[syncStatus]}</span></div>{session && !resetPassword ? <div className="mt-5 flex flex-wrap items-center gap-3"><span className="text-sm text-gray-700">{session.user.email}</span><button type="button" onClick={syncCurrent} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Retry sync</button><button type="button" onClick={signOut} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Sign out</button></div> : <form onSubmit={submit} className="mt-5 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">{!resetPassword && <input aria-label="Email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}{!resetRequest && <input aria-label="Password" type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}<button type="submit" disabled={busy || !supabase} className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Working…" : resetRequest ? "Send reset email" : resetPassword ? "Update password" : mode === "sign-in" ? "Sign in" : "Sign up"}</button></form>}{!session && !resetPassword && <div className="mt-3 flex flex-wrap gap-4 text-sm font-medium text-gray-900"><button type="button" onClick={() => setMode(mode === "sign-in" ? "sign-up" : "sign-in")} className="underline">{mode === "sign-in" ? "Need an account? Sign up" : "Already have an account? Sign in"}</button>{mode === "sign-in" && <button type="button" onClick={() => { setMode("reset-request"); setMessage(""); }} className="underline">Forgot password?</button>}</div>}{(message || syncMessage) && <p role="status" className="mt-4 text-sm text-gray-700">{message || syncMessage}</p>}</section>;
+  return <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Account and sync</p><h1 className="mt-2 text-2xl font-bold text-gray-900">{session ? resetRequest ? "Reset your password" : resetPassword ? "Choose a new password" : "Your workspace is account-ready" : "Keep working as a guest"}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">{session ? "Changes sync to your account. Signed-in profiles and images are stored in your private cloud workspace." : "Guest mode stays local. Sign in when you want your profiles available on another browser or device."}</p></div><span className={`text-sm font-semibold ${statusClass[syncStatus]}`}>{statusText[syncStatus]}</span></div>{session && !resetPassword && !resetRequest ? <div className="mt-5 flex flex-wrap items-center gap-3"><span className="text-sm text-gray-700">{session.user.email}</span><button type="button" onClick={syncCurrent} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Retry sync</button><button type="button" onClick={() => { setMode("reset-request"); setEmail(session.user.email ?? ""); setMessage(""); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Reset password</button><button type="button" onClick={signOut} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Sign out</button></div> : <form onSubmit={submit} className="mt-5 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">{!resetPassword && <input aria-label="Email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}{!resetRequest && <input aria-label="Password" type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}<button type="submit" disabled={busy || !supabase} className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Working…" : resetRequest ? "Send reset email" : resetPassword ? "Update password" : mode === "sign-in" ? "Sign in" : "Sign up"}</button></form>}{!session && !resetPassword && <div className="mt-3 flex flex-wrap gap-4 text-sm font-medium text-gray-900"><button type="button" onClick={() => setMode(mode === "sign-in" ? "sign-up" : "sign-in")} className="underline">{mode === "sign-in" ? "Need an account? Sign up" : "Already have an account? Sign in"}</button>{mode === "sign-in" && <button type="button" onClick={() => { setMode("reset-request"); setMessage(""); }} className="underline">Forgot password?</button>}</div>}{(message || syncMessage) && <p role="status" className="mt-4 text-sm text-gray-700">{message || syncMessage}</p>}</section>;
 }
 
 export default function AuthShell() {
   const pathname = usePathname();
-  return pathname === "/auth" ? null : <AuthPanel />;
+  return <><ClientObservability />{pathname === "/auth" ? null : <AuthPanel />}</>;
 }
