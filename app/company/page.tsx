@@ -9,6 +9,8 @@ import { persistProjects, readPersistedProjects } from '@/lib/persisted-projects
 import { clearDerivedProfileState, readApplicationStorage, removeApplicationStorage, storageUserMessage, writeApplicationStorage } from '@/lib/local-profile-data';
 import OnboardingProgress from '@/app/components/onboarding-progress';
 import { deriveOnboardingProgress } from '@/lib/onboarding-progress';
+import { removeCloudAsset, uploadCloudAsset } from '@/lib/cloud-assets';
+import { readWorkspace } from '@/lib/workspace';
 
 type Project = {
   id: string;
@@ -16,6 +18,7 @@ type Project = {
   category?: string;
   description: string;
   imageUrl: string;
+  imagePath?: string;
 };
 
 const textFieldClass = 'mt-2 w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-950 placeholder:text-gray-400 outline-none focus:border-gray-900';
@@ -36,6 +39,7 @@ export default function CompanyPage() {
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [imagePath, setImagePath] = useState('');
   const [imagePreview, setImagePreview] = useState('');
   const [projects, setProjects] = useState<Project[]>([]);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
@@ -85,6 +89,7 @@ export default function CompanyPage() {
       setEditingProjectId(null);
       setImageUrl('');
       setImagePreview('');
+      setImagePath('');
       // Remove inherited persisted projects at the identity boundary. Projects
       // saved after this point are explicitly owned by the new company.
       removeApplicationStorage(localStorage, 'projectsData');
@@ -96,7 +101,7 @@ export default function CompanyPage() {
     setSuccessMessage('');
   };
 
-  const handleLogoSelect = (file: File | undefined) => {
+  const handleLogoSelect = async (file: File | undefined) => {
     if (!file) {
       return;
     }
@@ -108,7 +113,16 @@ export default function CompanyPage() {
     }
 
     const reader = new FileReader();
-    reader.onload = () => { logoExplicitlySelected.current = true; updateField('logoUrl', String(reader.result)); };
+    reader.onload = async () => {
+      const dataUrl = String(reader.result);
+      const profileId = readWorkspace(localStorage).activeProfileId;
+      const uploaded = profileId ? await uploadCloudAsset(profileId, 'logo', dataUrl) : { ok: false as const, code: 'upload_failed' as const };
+      const previousPath = companyData.logoPath;
+      logoExplicitlySelected.current = true;
+      setCompanyData((current) => ({ ...current, logoUrl: dataUrl, ...(uploaded.ok ? { logoPath: uploaded.path } : { logoPath: undefined }) }));
+      if (uploaded.ok && previousPath && previousPath !== uploaded.path) void removeCloudAsset(previousPath, profileId ?? '');
+      setErrorMessage(!uploaded.ok && uploaded.code !== 'not_configured' && uploaded.code !== 'unauthorized' ? 'Logo saved in this browser, but cloud upload failed. Retry after reconnecting.' : '');
+    };
     reader.onerror = () => {
       setErrorMessage('We could not read that logo. Please try another file.');
       setSuccessMessage('');
@@ -131,7 +145,10 @@ export default function CompanyPage() {
       const imageData = await readImageFile(file);
       setImageUrl(imageData);
       setImagePreview(imageData);
-      setErrorMessage('');
+      const profileId = readWorkspace(localStorage).activeProfileId;
+      const uploaded = profileId ? await uploadCloudAsset(profileId, 'project', imageData) : { ok: false as const, code: 'upload_failed' as const };
+      setImagePath(uploaded.ok ? uploaded.path : '');
+      setErrorMessage(!uploaded.ok && uploaded.code !== 'not_configured' && uploaded.code !== 'unauthorized' ? 'Project image is available locally, but cloud upload failed. Retry after reconnecting.' : '');
       setSuccessMessage('');
     } catch {
       setErrorMessage('We could not read that image. Please try another file.');
@@ -146,6 +163,7 @@ export default function CompanyPage() {
     setDescription(project.description);
     setImageUrl(project.imageUrl);
     setImagePreview(project.imageUrl);
+    setImagePath(project.imagePath ?? '');
     setIsAddingProject(true);
     setErrorMessage('');
     setSuccessMessage('');
@@ -171,6 +189,7 @@ export default function CompanyPage() {
                 category: category.trim(),
                 description: trimmedDescription,
                 imageUrl: trimmedImageUrl,
+                imagePath: imagePath || undefined,
               }
             : project,
         )
@@ -182,11 +201,14 @@ export default function CompanyPage() {
             category: category.trim(),
             description: trimmedDescription,
             imageUrl: trimmedImageUrl,
+            imagePath: imagePath || undefined,
           },
         ];
 
     const saved = persistProjects(localStorage, updatedProjects);
     if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(''); return; }
+    const previousProject = editingProjectId ? projects.find((project) => project.id === editingProjectId) : undefined;
+    if (previousProject?.imagePath && previousProject.imagePath !== imagePath) void removeCloudAsset(previousProject.imagePath, readWorkspace(localStorage).activeProfileId ?? '');
     setProjects(updatedProjects);
     projectsExplicitlyEdited.current = true;
     clearDerivedProfileState(localStorage);
@@ -196,6 +218,7 @@ export default function CompanyPage() {
     setDescription('');
     setImageUrl('');
     setImagePreview('');
+    setImagePath('');
     setIsAddingProject(false);
     setErrorMessage('');
     setSuccessMessage(editingProjectId ? 'Project updated successfully.' : 'Project saved successfully.');
@@ -203,9 +226,11 @@ export default function CompanyPage() {
 
   const handleDeleteProject = (projectId: string) => {
     const updatedProjects = projects.filter((project) => project.id !== projectId);
+    const removedProject = projects.find((project) => project.id === projectId);
     const saved = persistProjects(localStorage, updatedProjects);
     if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(''); return; }
     setProjects(updatedProjects);
+    if (removedProject?.imagePath) void removeCloudAsset(removedProject.imagePath, readWorkspace(localStorage).activeProfileId ?? '');
     projectsExplicitlyEdited.current = true;
     clearDerivedProfileState(localStorage);
     setIsAddingProject(updatedProjects.length === 0);
@@ -342,7 +367,7 @@ export default function CompanyPage() {
                 >
                   Replace Logo
                 </button>
-                <button type="button" onClick={() => updateField('logoUrl', '')} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900">Remove Logo</button>
+                <button type="button" onClick={() => { const oldPath = companyData.logoPath; updateField('logoUrl', ''); setCompanyData((current) => ({ ...current, logoPath: undefined })); if (oldPath) void removeCloudAsset(oldPath, readWorkspace(localStorage).activeProfileId ?? ''); }} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900">Remove Logo</button>
               </div>
             )}
           </div>
@@ -514,6 +539,7 @@ export default function CompanyPage() {
                       setDescription('');
                       setImageUrl('');
                       setImagePreview('');
+                      setImagePath('');
                     }}
                     className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 font-medium text-gray-900"
                   >
@@ -570,6 +596,7 @@ export default function CompanyPage() {
                   setDescription('');
                   setImageUrl('');
                   setImagePreview('');
+                  setImagePath('');
                   setErrorMessage('');
                   setSuccessMessage('');
                   setIsAddingProject(true);

@@ -43,8 +43,8 @@ export default function Home() {
           {companyName ? `${companyName} AI Profile` : defaultTitle}
         </h1>
 
-        <p className="mt-3 text-lg text-gray-600">
-          Build and update your company profile with AI.
+        <p className="mt-3 max-w-2xl text-lg text-gray-600">
+          Build and update a customer-ready company profile with AI. Guest work stays in this browser; signed-in workspaces sync profiles and images privately across sessions.
         </p>
 
         <div className="mt-12 grid gap-6 md:grid-cols-2">

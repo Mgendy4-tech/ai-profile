@@ -12,6 +12,6 @@ assert(betaPage.includes("isBetaTestModeEnabled(process.env.NEXT_PUBLIC_BETA_TES
 for (const route of ["app/page.tsx", "app/company/page.tsx", "app/projects/page.tsx", "app/generate/page.tsx"]) {
   assert(!readFileSync(resolve(route), "utf8").includes("Load Aurelia"), `${route} must not expose beta fixture controls.`);
 }
-const environment = validateProductionEnvironment({ NODE_ENV: "production", OPENAI_API_KEY: "configured", PEXELS_API_KEY: "configured" });
+const environment = validateProductionEnvironment({ NODE_ENV: "production", OPENAI_API_KEY: "configured", PEXELS_API_KEY: "configured", NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co", NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon" });
 assert(environment.ready && environment.accidentalClientExposure.length === 0, "Production safety environment must not expose server secrets to the client.");
 console.log("Production safety and Preview-only beta gate tests passed.");

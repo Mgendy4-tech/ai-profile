@@ -11,7 +11,7 @@ export const clearInheritedAssetsForIdentityEdit = <T extends Record<string, unk
   nextCompany: T,
 ) => isSameCompanyIdentity(loadedCompanyName, nextCompany.name)
   ? nextCompany
-  : { ...nextCompany, logoUrl: "" };
+  : { ...nextCompany, logoUrl: "", logoPath: undefined };
 
 export const resolveExportCompanyState = <T extends StoredCompanyIdentity>(
   generatedCompany: T,
@@ -37,6 +37,7 @@ export const isolateNewCompanyState = (
       ...next,
       ...Object.fromEntries(["companyType", "industry", "customerType", "servicesProducts"].map((field) => [field, explicitlyEditedFields.has(field) ? next[field] ?? "" : ""])),
       logoUrl: logoExplicitlySelected ? next.logoUrl ?? "" : "",
+      logoPath: logoExplicitlySelected ? next.logoPath : undefined,
     },
     // Projects explicitly created after the identity edit belong to the new
     // company. Only inherited projects are discarded on an identity switch.

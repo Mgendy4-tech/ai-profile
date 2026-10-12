@@ -2,12 +2,12 @@ import type { CompanyData } from "./company-data";
 import { hasValidPersistedProjectImage, persistedImageState, type PersistedProject } from "./persisted-projects";
 import { getActiveProfileStorage } from "./workspace";
 
-export type PersistedGeneratedProfileItem = { id?: string; name: string; description: string; sourceEvidence?: string; imageUrl?: string };
+export type PersistedGeneratedProfileItem = { id?: string; name: string; description: string; sourceEvidence?: string; imageUrl?: string; imagePath?: string };
 export type PersistedGeneratedProfileSection = { id: string; semanticRole?: string; title: string; description: string; content: string; items: PersistedGeneratedProfileItem[] };
 export type PersistedGeneratedProfile = {
-  companyName: string; logoUrl?: string; companyType: string; sections: PersistedGeneratedProfileSection[];
+  companyName: string; logoUrl?: string; logoPath?: string; companyType: string; sections: PersistedGeneratedProfileSection[];
   about: string; expertise: string[]; experience: string;
-  projects: { id?: string; name: string; description: string; imageUrl?: string }[]; reasons: string[];
+  projects: { id?: string; name: string; description: string; imageUrl?: string; imagePath?: string }[]; reasons: string[];
   sourceFingerprint?: string;
 };
 type StorageReader = { getItem(key: string): string | null };
@@ -16,7 +16,7 @@ const isStringArray = (value: unknown): value is string[] => Array.isArray(value
 const isItem = (value: unknown): value is PersistedGeneratedProfileItem => {
   if (!value || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  return typeof item.name === "string" && typeof item.description === "string" && (item.id === undefined || typeof item.id === "string") && (item.sourceEvidence === undefined || typeof item.sourceEvidence === "string") && (item.imageUrl === undefined || typeof item.imageUrl === "string");
+  return typeof item.name === "string" && typeof item.description === "string" && (item.id === undefined || typeof item.id === "string") && (item.sourceEvidence === undefined || typeof item.sourceEvidence === "string") && (item.imageUrl === undefined || typeof item.imageUrl === "string") && (item.imagePath === undefined || typeof item.imagePath === "string");
 };
 const isSection = (value: unknown): value is PersistedGeneratedProfileSection => {
   if (!value || typeof value !== "object") return false;
@@ -26,12 +26,12 @@ const isSection = (value: unknown): value is PersistedGeneratedProfileSection =>
 const isProject = (value: unknown): value is PersistedGeneratedProfile["projects"][number] => {
   if (!value || typeof value !== "object") return false;
   const project = value as Record<string, unknown>;
-  return typeof project.name === "string" && typeof project.description === "string" && (project.id === undefined || typeof project.id === "string") && (project.imageUrl === undefined || typeof project.imageUrl === "string");
+  return typeof project.name === "string" && typeof project.description === "string" && (project.id === undefined || typeof project.id === "string") && (project.imageUrl === undefined || typeof project.imageUrl === "string") && (project.imagePath === undefined || typeof project.imagePath === "string");
 };
 export const parsePersistedGeneratedProfile = (value: unknown): PersistedGeneratedProfile | null => {
   if (!value || typeof value !== "object") return null;
   const profile = value as Record<string, unknown>;
-  if (typeof profile.companyName !== "string" || typeof profile.companyType !== "string" || typeof profile.about !== "string" || typeof profile.experience !== "string" || (profile.logoUrl !== undefined && typeof profile.logoUrl !== "string") || (profile.sourceFingerprint !== undefined && typeof profile.sourceFingerprint !== "string") || !Array.isArray(profile.sections) || !profile.sections.every(isSection) || !Array.isArray(profile.projects) || !profile.projects.every(isProject) || !isStringArray(profile.expertise) || !isStringArray(profile.reasons)) return null;
+  if (typeof profile.companyName !== "string" || typeof profile.companyType !== "string" || typeof profile.about !== "string" || typeof profile.experience !== "string" || (profile.logoUrl !== undefined && typeof profile.logoUrl !== "string") || (profile.logoPath !== undefined && typeof profile.logoPath !== "string") || (profile.sourceFingerprint !== undefined && typeof profile.sourceFingerprint !== "string") || !Array.isArray(profile.sections) || !profile.sections.every(isSection) || !Array.isArray(profile.projects) || !profile.projects.every(isProject) || !isStringArray(profile.expertise) || !isStringArray(profile.reasons)) return null;
   return profile as PersistedGeneratedProfile;
 };
 export const readPersistedGeneratedProfile = (storage: StorageReader): PersistedGeneratedProfile | null => {
@@ -56,18 +56,19 @@ export const reconcileGeneratedProfileToSource = (profile: PersistedGeneratedPro
   const findProject = (candidate: { id?: string; name: string }) => projects.find((project) => (candidate.id && project.id === candidate.id) || project.name === candidate.name);
   const reconciledProjects = profile.projects.map((project) => {
     const source = findProject(project);
-    return source ? { ...project, id: source.id, imageUrl: hasValidPersistedProjectImage(source.imageUrl) ? source.imageUrl : undefined } : { ...project, imageUrl: undefined };
+    return source ? { ...project, id: source.id, imagePath: source.imagePath, imageUrl: hasValidPersistedProjectImage(source.imageUrl) ? source.imageUrl : undefined } : { ...project, imageUrl: undefined, imagePath: undefined };
   });
   const projectSection = (section: PersistedGeneratedProfileSection) => section.id === "projects" || section.semanticRole === "projects";
   return {
     ...profile,
     logoUrl: company.logoUrl,
+    logoPath: company.logoPath,
     projects: reconciledProjects,
     sections: profile.sections.map((section) => projectSection(section) ? {
       ...section,
       items: section.items.map((item) => {
         const source = findProject(item);
-        return source ? { ...item, id: source.id, imageUrl: hasValidPersistedProjectImage(source.imageUrl) ? source.imageUrl : undefined } : { ...item, imageUrl: undefined };
+        return source ? { ...item, id: source.id, imagePath: source.imagePath, imageUrl: hasValidPersistedProjectImage(source.imageUrl) ? source.imageUrl : undefined } : { ...item, imageUrl: undefined, imagePath: undefined };
       }),
     } : section),
   };

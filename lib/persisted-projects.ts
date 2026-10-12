@@ -1,7 +1,7 @@
 import { type StorageWriteResult, writeApplicationStorage } from "./local-profile-data";
 import { getActiveProfileStorage } from "./workspace";
 
-export type PersistedProject = { id: string; name: string; category?: string; description: string; imageUrl: string };
+export type PersistedProject = { id: string; name: string; category?: string; description: string; imageUrl: string; imagePath?: string };
 export type PersistedProjectSnapshot = { projects: PersistedProject[]; persistedCount: number; issues: readonly string[] };
 export type PersistedImageState = "missing" | "valid" | "invalid";
 
@@ -26,7 +26,7 @@ export const reconstructPersistedProjects = (raw: string | null): PersistedProje
     if (typeof project.description !== "string" || !project.description.trim()) issues.push(`projects.${index}.description`);
     if (typeof project.imageUrl !== "string" || !project.imageUrl.trim()) issues.push(`projects.${index}.imageUrl`);
     if (issues.some((issue) => issue.startsWith(`projects.${index}.`))) return [];
-    return [{ id: project.id as string, name: project.name as string, description: project.description as string, imageUrl: project.imageUrl as string, ...(typeof project.category === "string" ? { category: project.category } : {}) }];
+    return [{ id: project.id as string, name: project.name as string, description: project.description as string, imageUrl: project.imageUrl as string, ...(typeof project.category === "string" ? { category: project.category } : {}), ...(typeof project.imagePath === "string" && project.imagePath.trim() ? { imagePath: project.imagePath } : {}) }];
   });
   return { projects, persistedCount: value.length, issues };
 };

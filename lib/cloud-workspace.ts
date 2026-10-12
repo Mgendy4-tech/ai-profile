@@ -57,9 +57,9 @@ const mergeImagePayloads = (cloud: unknown, local: unknown): unknown => {
 const unsupportedAssetPaths = (profile: WorkspaceProfile): string[] => {
   const issues: string[] = [];
   const company = asRecord(parseJson(profile.state.companyData));
-  if (typeof company?.logoUrl === "string" && company.logoUrl.startsWith("data:image/")) issues.push("company.logoUrl");
+  if (typeof company?.logoUrl === "string" && company.logoUrl.startsWith("data:image/") && typeof company.logoPath !== "string") issues.push("company.logoUrl");
   for (const [index, project] of asArray(parseJson(profile.state.projectsData)).entries()) {
-    if (typeof project.imageUrl === "string" && project.imageUrl.startsWith("data:image/")) issues.push(`projects.${index}.imageUrl`);
+    if (typeof project.imageUrl === "string" && project.imageUrl.startsWith("data:image/") && typeof project.imagePath !== "string") issues.push(`projects.${index}.imageUrl`);
   }
   return issues;
 };
@@ -110,13 +110,19 @@ const preserveUnsupportedLocalAssets = (cloud: WorkspaceProfile, local: Workspac
   if (!local) return cloud;
   const cloudCompany = asRecord(parseJson(cloud.state.companyData));
   const localCompany = asRecord(parseJson(local.state.companyData));
-  if (cloudCompany && localCompany && !cloudCompany.logoUrl && typeof localCompany.logoUrl === "string" && localCompany.logoUrl.startsWith("data:image/")) cloudCompany.logoUrl = localCompany.logoUrl;
+  if (cloudCompany && localCompany) {
+    if (!cloudCompany.logoPath && typeof localCompany.logoPath === "string") cloudCompany.logoPath = localCompany.logoPath;
+    if (!cloudCompany.logoUrl && typeof localCompany.logoUrl === "string" && localCompany.logoUrl.startsWith("data:image/")) cloudCompany.logoUrl = localCompany.logoUrl;
+  }
   const cloudProjects = asArray(parseJson(cloud.state.projectsData));
   const localProjects = asArray(parseJson(local.state.projectsData));
   const localById = new Map(localProjects.map((project) => [safeString(project.id), project]));
   for (const project of cloudProjects) {
     const localProject = localById.get(safeString(project.id));
-    if (localProject && !project.imageUrl && typeof localProject.imageUrl === "string" && localProject.imageUrl.startsWith("data:image/")) project.imageUrl = localProject.imageUrl;
+    if (localProject) {
+      if (!project.imagePath && typeof localProject.imagePath === "string") project.imagePath = localProject.imagePath;
+      if (!project.imageUrl && typeof localProject.imageUrl === "string" && localProject.imageUrl.startsWith("data:image/")) project.imageUrl = localProject.imageUrl;
+    }
   }
   if (cloudCompany) cloud.state.companyData = JSON.stringify(cloudCompany);
   if (cloudProjects.length) cloud.state.projectsData = JSON.stringify(cloudProjects);

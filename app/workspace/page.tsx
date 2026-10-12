@@ -18,6 +18,7 @@ import {
   type WorkspaceProfile,
 } from "@/lib/workspace";
 import CloudSyncIndicator from "@/app/components/cloud-sync-indicator";
+import { removeProfileCloudAssets } from "@/lib/cloud-assets";
 
 const familyLabels: Record<string, string> = {
   "visual-portfolio": "Visual / Portfolio",
@@ -84,6 +85,7 @@ export default function WorkspacePage() {
     if (!window.confirm(`Delete ${profile.displayName}? This removes only this saved profile.`)) return;
     const result = deleteProfile(localStorage, profile.id);
     if (!result.ok) { setMessage("The profile could not be deleted."); return; }
+    void removeProfileCloudAssets(profile);
     notify(); setMessage("Profile deleted safely.");
   };
 

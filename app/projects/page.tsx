@@ -9,6 +9,8 @@ import { readPersistedCompanyData } from "@/lib/company-data";
 import { readPersistedGeneratedProfile } from "@/lib/generated-profile-storage";
 import OnboardingProgress from "@/app/components/onboarding-progress";
 import { deriveOnboardingProgress } from "@/lib/onboarding-progress";
+import { removeCloudAsset, uploadCloudAsset } from "@/lib/cloud-assets";
+import { readWorkspace } from "@/lib/workspace";
 
 type Project = {
   id: string;
@@ -16,6 +18,7 @@ type Project = {
   category?: string;
   description: string;
   imageUrl: string;
+  imagePath?: string;
 };
 
 const readImageFile = (file: File) =>
@@ -49,6 +52,7 @@ export default function ProjectsPage() {
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [imagePath, setImagePath] = useState("");
   const [imagePreview, setImagePreview] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
@@ -79,6 +83,7 @@ const handleEdit = (project: Project) => {
   const validImage = persistedImageState(project.imageUrl) === "valid";
   setImageUrl(validImage ? project.imageUrl : "");
   setImagePreview(validImage ? project.imageUrl : "");
+  setImagePath(project.imagePath ?? "");
 
   setErrorMessage("");
   setSuccessMessage("");
@@ -118,6 +123,7 @@ if (!editingProjectId && projects.length >= PRODUCTION_V1_LIMITS.projects) {
             category: category.trim(),
             description: description.trim(),
             imageUrl: imageUrl.trim(),
+            imagePath: imagePath || undefined,
           }
         : project,
     )
@@ -129,11 +135,14 @@ if (!editingProjectId && projects.length >= PRODUCTION_V1_LIMITS.projects) {
         category: category.trim(),
         description: description.trim(),
         imageUrl: imageUrl.trim(),
+        imagePath: imagePath || undefined,
       },
     ];
 
 const saved = persistProjects(localStorage, updatedProjects);
 if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); setIsSaving(false); return; }
+const replaced = editingProjectId ? projects.find((project) => project.id === editingProjectId) : undefined;
+if (replaced?.imagePath && replaced.imagePath !== imagePath) void removeCloudAsset(replaced.imagePath, readWorkspace(localStorage).activeProfileId ?? "");
 setProjects(updatedProjects);
 clearDerivedProfileState(localStorage);
 setGeneratedProfile(null);
@@ -144,6 +153,7 @@ setCategory("");
 setDescription("");
 setImageUrl("");
 setImagePreview("");
+setImagePath("");
 setErrorMessage("");
 setSuccessMessage(
   editingProjectId
@@ -165,6 +175,9 @@ setIsSaving(false);
       const imageData = await readImageFile(file);
       setImageUrl(imageData);
       setImagePreview(imageData);
+      const uploaded = await uploadCloudAsset(readWorkspace(localStorage).activeProfileId ?? "", "project", imageData);
+      setImagePath(uploaded.ok ? uploaded.path : "");
+      if (!uploaded.ok && uploaded.code !== "not_configured" && uploaded.code !== "unauthorized") throw new Error("Project image is available locally, but cloud upload failed. Retry after reconnecting.");
       setErrorMessage("");
       setSuccessMessage("");
     } catch (error) {
@@ -190,6 +203,14 @@ setIsSaving(false);
       const saved = persistProjects(localStorage, updatedProjects);
       if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); return; }
       setProjects(updatedProjects);
+      const previous = projects.find((project) => project.id === projectId);
+      const uploaded = await uploadCloudAsset(readWorkspace(localStorage).activeProfileId ?? "", "project", imageData);
+      if (uploaded.ok) {
+        const withPath = updatedProjects.map((project) => project.id === projectId ? { ...project, imagePath: uploaded.path } : project);
+        const pathSaved = persistProjects(localStorage, withPath);
+        if (pathSaved.ok) setProjects(withPath);
+      }
+      if (previous?.imagePath && uploaded.ok) void removeCloudAsset(previous.imagePath, readWorkspace(localStorage).activeProfileId ?? "");
       clearDerivedProfileState(localStorage);
       setGeneratedProfile(null);
       setErrorMessage("");
@@ -202,10 +223,12 @@ setIsSaving(false);
 
   const handleDelete = (projectId: string) => {
     const updatedProjects = projects.filter((project) => project.id !== projectId);
+    const removed = projects.find((project) => project.id === projectId);
 
     const saved = persistProjects(localStorage, updatedProjects);
     if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); return; }
     setProjects(updatedProjects);
+    if (removed?.imagePath) void removeCloudAsset(removed.imagePath, readWorkspace(localStorage).activeProfileId ?? "");
     clearDerivedProfileState(localStorage);
     setGeneratedProfile(null);
   };
@@ -311,7 +334,7 @@ setIsSaving(false);
             />
 
             {imagePreview && (
-              <div className="mt-4"><p className="mb-2 text-xs font-medium text-green-700">Image selected and ready to save</p><img src={imagePreview} alt="Featured project preview" className="h-48 w-full rounded-lg object-cover" /><button type="button" onClick={() => { setImageUrl(""); setImagePreview(""); }} className="mt-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Remove image</button></div>
+              <div className="mt-4"><p className="mb-2 text-xs font-medium text-green-700">Image selected and ready to save</p><img src={imagePreview} alt="Featured project preview" className="h-48 w-full rounded-lg object-cover" /><button type="button" onClick={() => { setImageUrl(""); setImagePreview(""); setImagePath(""); }} className="mt-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Remove image</button></div>
             )}
           </div>
 
@@ -379,7 +402,7 @@ setIsSaving(false);
                       className="hidden"
                     />
                   </label>
-                  <button type="button" onClick={() => { const updated = projects.map((entry) => entry.id === project.id ? { ...entry, imageUrl: "" } : entry); const saved = persistProjects(localStorage, updated); if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); return; } setProjects(updated); clearDerivedProfileState(localStorage); setGeneratedProfile(null); setSuccessMessage("Project image removed. Visual / Portfolio now requires a new authentic image."); }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:bg-gray-50">Remove image</button>
+                  <button type="button" onClick={() => { const updated = projects.map((entry) => entry.id === project.id ? { ...entry, imageUrl: "", imagePath: undefined } : entry); const saved = persistProjects(localStorage, updated); if (!saved.ok) { setErrorMessage(storageUserMessage(saved.code)); setSuccessMessage(""); return; } setProjects(updated); if (project.imagePath) void removeCloudAsset(project.imagePath, readWorkspace(localStorage).activeProfileId ?? ""); clearDerivedProfileState(localStorage); setGeneratedProfile(null); setSuccessMessage("Project image removed. Visual / Portfolio now requires a new authentic image."); }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 transition hover:bg-gray-50">Remove image</button>
                 </div>
               </article>
             ))}

@@ -4,6 +4,7 @@ import { getActiveProfileStorage } from "./workspace";
 export type CompanyData = {
   name: string;
   logoUrl: string;
+  logoPath?: string;
   about: string;
   companyType: string;
   industry: string;
@@ -55,6 +56,7 @@ export const normalizeCompanyData = (value: unknown): CompanyData => {
   return {
     name: stringValue(source.name),
     logoUrl: stringValue(source.logoUrl),
+    ...(stringValue(source.logoPath) ? { logoPath: stringValue(source.logoPath) } : {}),
     about: stringValue(source.about),
     companyType: stringValue(source.companyType),
     industry: stringValue(source.industry),

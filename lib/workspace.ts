@@ -31,6 +31,8 @@ export type WorkspaceWriteResult = { ok: true; workspace: Workspace } | { ok: fa
 export type WorkspaceMutationResult = (WorkspaceWriteResult & { profile?: WorkspaceProfile }) | { ok: false; code: "profile_limit" };
 
 const legacyKeys = new Set<string>(WORKSPACE_PROFILE_STATE_KEYS);
+const legacyMirrorKey = (key: string): string => `workspaceLegacyMirror:${key}`;
+const legacyBrowserCompatibilityEnabled = (): boolean => typeof window !== "undefined" && process.env.NEXT_PUBLIC_BETA_TEST_MODE === "true";
 
 const storageFailure = (error: unknown): "storage_quota" | "storage_unavailable" => {
   const name = error && typeof error === "object" && "name" in error ? String((error as { name?: unknown }).name) : "";
@@ -108,6 +110,14 @@ const emptyWorkspace = (): Workspace => {
 const writeWorkspace = (storage: WorkspaceStorage, workspace: Workspace): WorkspaceWriteResult => {
   try {
     storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(workspace));
+    if (legacyBrowserCompatibilityEnabled()) {
+      const active = workspace.profiles.find((profile) => profile.id === workspace.activeProfileId) ?? workspace.profiles[0];
+      for (const key of WORKSPACE_PROFILE_STATE_KEYS) {
+        const value = active?.state[key];
+        if (value === undefined) storage.removeItem(key); else storage.setItem(key, value);
+        storage.setItem(legacyMirrorKey(key), value ?? "");
+      }
+    }
     if (typeof window !== "undefined" && storage === window.localStorage) window.dispatchEvent(new Event("workspace-state-changed"));
     return { ok: true, workspace: cloneWorkspace(workspace) };
   } catch (error) { return { ok: false, code: storageFailure(error) }; }
@@ -151,7 +161,20 @@ export const getActiveProfileStorage = (storage: WorkspaceStorage): WorkspaceSto
   if (typeof window === "undefined" || storage !== window.localStorage) return storage;
   const scoped: WorkspaceStorage = {
     getItem(key) {
-      if (legacyKeys.has(key)) return readWorkspace(storage).profiles.find((profile) => profile.id === readWorkspace(storage).activeProfileId)?.state[key as WorkspaceProfileStateKey] ?? null;
+      if (legacyKeys.has(key)) {
+        const workspace = readWorkspace(storage);
+        const active = workspace.profiles.find((profile) => profile.id === workspace.activeProfileId) ?? workspace.profiles[0];
+        if (!legacyBrowserCompatibilityEnabled()) return active?.state[key as WorkspaceProfileStateKey] ?? null;
+        const raw = storage.getItem(key);
+        const mirror = storage.getItem(legacyMirrorKey(key));
+        if (raw !== null && raw !== mirror && active) {
+          active.state[key as WorkspaceProfileStateKey] = raw;
+          active.updatedAt = Date.now();
+          writeWorkspace(storage, workspace);
+          return raw;
+        }
+        return active?.state[key as WorkspaceProfileStateKey] ?? null;
+      }
       return storage.getItem(key);
     },
     setItem(key, value) {
@@ -209,6 +232,25 @@ export const duplicateProfile = (storage: WorkspaceStorage, profileId: string): 
   if (!original) return { ok: false, code: "storage_unavailable" };
   const copy = createWorkspaceProfile(`${original.displayName} Copy`);
   copy.state = cloneState(original.state);
+  // A duplicate must not share private cloud object references with its source.
+  // The local image bytes remain available and the next authenticated sync
+  // will upload them under the new profile path.
+  try {
+    for (const key of ["companyData", "projectsData", "generatedProfile"] as const) {
+      const raw = copy.state[key];
+      if (!raw) continue;
+      const value = JSON.parse(raw) as unknown;
+      const clearPaths = (entry: unknown): unknown => {
+        if (Array.isArray(entry)) return entry.map(clearPaths);
+        if (!entry || typeof entry !== "object") return entry;
+        const next = { ...(entry as Record<string, unknown>) };
+        delete next.logoPath;
+        delete next.imagePath;
+        return next;
+      };
+      copy.state[key] = JSON.stringify(clearPaths(value));
+    }
+  } catch { /* malformed state stays isolated and can be repaired by the page */ }
   const saved = writeWorkspace(storage, { ...current, profiles: [...current.profiles, copy], activeProfileId: copy.id });
   return saved.ok ? { ...saved, profile: copy } : saved;
 };
@@ -229,6 +271,7 @@ export const deleteProfile = (storage: WorkspaceStorage, profileId: string): Wor
 export const clearWorkspace = (storage: Pick<Storage, "removeItem">): void => {
   try { storage.removeItem(WORKSPACE_STORAGE_KEY); } catch { /* customer-safe cleanup */ }
   for (const key of WORKSPACE_PROFILE_STATE_KEYS) try { storage.removeItem(key); } catch { /* customer-safe cleanup */ }
+  for (const key of WORKSPACE_PROFILE_STATE_KEYS) try { storage.removeItem(legacyMirrorKey(key)); } catch { /* customer-safe cleanup */ }
 };
 
 export const clearActiveProfile = (storage: WorkspaceStorage): WorkspaceMutationResult => mutateWorkspace(storage, (workspace) => ({
