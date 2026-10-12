@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { authSetupMessage } from "@/lib/auth-env";
-import { chooseAuthenticatedWorkspace, CLOUD_OWNER_STORAGE_KEY, migrationMarker, workspaceToCloudPayload } from "@/lib/cloud-workspace";
-import { fetchCloudJson } from "@/lib/cloud-sync-lifecycle";
+import { chooseAuthenticatedWorkspace, CLOUD_OWNER_STORAGE_KEY, hasMeaningfulLocalWorkspace, migrationMarker, workspaceFingerprint, workspaceToCloudPayload } from "@/lib/cloud-workspace";
+import { CloudSyncCoordinator, fetchCloudJson, type SyncResult } from "@/lib/cloud-sync-lifecycle";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { readWorkspace, writeWorkspaceSnapshot } from "@/lib/workspace";
 
@@ -36,81 +37,73 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
   const sessionRef = useRef<Session | null>(null);
   const mountedRef = useRef(false);
   const authEventSeenRef = useRef(false);
-  const syncVersionRef = useRef(0);
-  const pendingSyncRef = useRef(false);
-  const activeSyncRef = useRef<{ version: number; token: string; controller: AbortController; promise: Promise<void> } | null>(null);
 
   const setStatus = useCallback((status: CloudSyncStatus, detail = "") => { setSyncStatus(status); setSyncMessage(detail); emitSyncStatus(status, detail); }, []);
 
-  const sync = useCallback((currentSession: Session, queueIfActive = false): Promise<void> => {
-    if (!supabase) { setStatus("sync-failed", authSetupMessage); return Promise.resolve(); }
-    const existing = activeSyncRef.current;
-    if (existing?.token === currentSession.access_token) {
-      if (queueIfActive) pendingSyncRef.current = true;
-      return existing.promise;
-    }
-    existing?.controller.abort();
-    const version = ++syncVersionRef.current;
-    const controller = new AbortController();
-    const isCurrent = () => mountedRef.current && syncVersionRef.current === version && sessionRef.current?.access_token === currentSession.access_token;
-    const run = async () => {
-      if (isCurrent()) setStatus("syncing");
+  const coordinatorRef = useRef<CloudSyncCoordinator<Session> | null>(null);
+  if (!coordinatorRef.current) coordinatorRef.current = new CloudSyncCoordinator((currentSession) => currentSession.user.id, (status, detail) => { if (mountedRef.current) setStatus(status, detail); });
+
+  const runSync = useCallback(async (currentSession: Session, signal: AbortSignal, preferLocal: boolean): Promise<SyncResult> => {
+    if (!supabase) return { ok: false, code: "not_configured", message: authSetupMessage };
       const headers = { Authorization: `Bearer ${currentSession.access_token}`, "Content-Type": "application/json" };
-      try {
-        const response = await fetchCloudJson<{ ok?: boolean; code?: string; workspace?: Parameters<typeof chooseAuthenticatedWorkspace>[0] }>(fetch, "/api/cloud/workspace", { headers }, controller.signal);
-        if (!response.ok) { if (isCurrent() && response.code !== "aborted") setStatus("sync-failed", customerCloudError(response.code)); return; }
-        const body = response.body;
-        if (!body.ok) { if (isCurrent()) setStatus("sync-failed", customerCloudError(body.code ?? "cloud_unavailable")); return; }
+    try {
+      if (preferLocal) {
         const local = readWorkspace(localStorage);
-        const ownerId = localStorage.getItem(CLOUD_OWNER_STORAGE_KEY);
-        const decision = chooseAuthenticatedWorkspace(body.workspace ?? null, local, ownerId, currentSession.user.id);
-        if (decision.workspace !== local && !decision.shouldMigrate) {
-          suppressSyncRef.current = true;
-          const saved = writeWorkspaceSnapshot(localStorage, decision.workspace);
-          if (!saved.ok) { suppressSyncRef.current = false; if (isCurrent()) setStatus("sync-failed", "Your cloud workspace could not be applied locally. Your existing local data is safe; retry when ready."); return; }
-        }
-        if (decision.shouldMigrate || !body.workspace) {
-          const upload = await fetchCloudJson<{ ok?: boolean; code?: string; warnings?: string[] }>(fetch, "/api/cloud/workspace", { method: "PUT", headers, body: JSON.stringify(workspaceToCloudPayload(decision.workspace)) }, controller.signal);
-          if (!upload.ok) { if (isCurrent() && upload.code !== "aborted") setStatus("sync-failed", customerCloudError(upload.code)); return; }
-          const uploadBody = upload.body;
-          if (!uploadBody.ok) { if (isCurrent()) setStatus("sync-failed", customerCloudError(uploadBody.code ?? "cloud_unavailable")); return; }
-          if (decision.shouldMigrate) localStorage.setItem(migrationMarker(currentSession.user.id), "complete");
-          const warning = uploadBody.warnings?.length ? "Synced text and metadata; image files remain in this browser for now." : "";
-          localStorage.setItem(CLOUD_OWNER_STORAGE_KEY, currentSession.user.id);
-          if (isCurrent()) setStatus("synced", warning);
-          return;
-        }
+        const localFingerprint = workspaceFingerprint(local);
+        if (coordinatorRef.current?.getLastSyncedFingerprint() === localFingerprint) return { ok: true, fingerprint: localFingerprint };
+        const upload = await fetchCloudJson<{ ok?: boolean; code?: string; warnings?: string[] }>(fetch, "/api/cloud/workspace", { method: "PUT", headers, body: JSON.stringify(workspaceToCloudPayload(local)) }, signal);
+        if (!upload.ok) return { ok: false, code: upload.code, message: upload.code === "aborted" ? "Cloud sync was cancelled. Retry when ready." : customerCloudError(upload.code) };
+        const uploadBody = upload.body;
+        if (!uploadBody.ok) return { ok: false, code: uploadBody.code ?? "cloud_unavailable", message: customerCloudError(uploadBody.code ?? "cloud_unavailable") };
         localStorage.setItem(CLOUD_OWNER_STORAGE_KEY, currentSession.user.id);
-        if (isCurrent()) setStatus("synced");
-      } catch (error) {
-        if (isCurrent()) {
-          console.error("[cloud-sync-client]", error);
-          setStatus("sync-failed", "Cloud sync is temporarily unavailable. Your local data is safe; retry when you are online.");
-        }
-      } finally {
-        const isActive = activeSyncRef.current?.version === version;
-        if (isActive) activeSyncRef.current = null;
-        const nextSession = sessionRef.current;
-        if (isActive && isCurrent() && pendingSyncRef.current && nextSession) {
-          pendingSyncRef.current = false;
-          void sync(nextSession);
+        return { ok: true, fingerprint: localFingerprint, message: uploadBody.warnings?.length ? "Synced text and metadata; image files remain in this browser for now." : undefined };
+      }
+      const response = await fetchCloudJson<{ ok?: boolean; code?: string; workspace?: Parameters<typeof chooseAuthenticatedWorkspace>[0] }>(fetch, "/api/cloud/workspace", { headers }, signal);
+      if (!response.ok) return { ok: false, code: response.code, message: response.code === "aborted" ? "Cloud sync was cancelled. Retry when ready." : customerCloudError(response.code) };
+      const body = response.body;
+      if (!body.ok) return { ok: false, code: body.code ?? "cloud_unavailable", message: customerCloudError(body.code ?? "cloud_unavailable") };
+      const local = readWorkspace(localStorage);
+      const ownerId = localStorage.getItem(CLOUD_OWNER_STORAGE_KEY);
+      const decision = chooseAuthenticatedWorkspace(body.workspace ?? null, local, ownerId, currentSession.user.id);
+      const nextFingerprint = workspaceFingerprint(decision.workspace);
+      if (!decision.shouldMigrate && nextFingerprint !== workspaceFingerprint(local)) {
+        suppressSyncRef.current = true;
+        const saved = writeWorkspaceSnapshot(localStorage, decision.workspace);
+        if (!saved.ok) { suppressSyncRef.current = false; return { ok: false, code: "local_storage", message: "Your cloud workspace could not be applied locally. Your existing local data is safe; retry when ready." }; }
+      }
+      if (decision.shouldMigrate || (!body.workspace && hasMeaningfulLocalWorkspace(decision.workspace))) {
+        if (coordinatorRef.current?.getLastSyncedFingerprint() !== nextFingerprint) {
+          const upload = await fetchCloudJson<{ ok?: boolean; code?: string; warnings?: string[] }>(fetch, "/api/cloud/workspace", { method: "PUT", headers, body: JSON.stringify(workspaceToCloudPayload(decision.workspace)) }, signal);
+          if (!upload.ok) return { ok: false, code: upload.code, message: upload.code === "aborted" ? "Cloud sync was cancelled. Retry when ready." : customerCloudError(upload.code) };
+          const uploadBody = upload.body;
+          if (!uploadBody.ok) return { ok: false, code: uploadBody.code ?? "cloud_unavailable", message: customerCloudError(uploadBody.code ?? "cloud_unavailable") };
+          if (decision.shouldMigrate) localStorage.setItem(migrationMarker(currentSession.user.id), "complete");
+          localStorage.setItem(CLOUD_OWNER_STORAGE_KEY, currentSession.user.id);
+          return { ok: true, fingerprint: nextFingerprint, message: uploadBody.warnings?.length ? "Synced text and metadata; image files remain in this browser for now." : undefined };
         }
       }
-    };
-    const promise = run();
-    activeSyncRef.current = { version, token: currentSession.access_token, controller, promise };
-    return promise;
-  }, [setStatus, supabase]);
+      localStorage.setItem(CLOUD_OWNER_STORAGE_KEY, currentSession.user.id);
+      return { ok: true, fingerprint: nextFingerprint };
+    } catch (error) {
+      console.error("[cloud-sync-client]", error);
+      return { ok: false, code: "cloud_unavailable", message: "Cloud sync is temporarily unavailable. Your local data is safe; retry when ready." };
+    }
+  }, [supabase]);
 
-  const syncCurrent = useCallback(() => { if (sessionRef.current) void sync(sessionRef.current); }, [sync]);
+  const sync = useCallback((currentSession: Session, queueIfActive = false): Promise<void> => {
+    if (!supabase) { setStatus("sync-failed", authSetupMessage); return Promise.resolve(); }
+    const fingerprint = workspaceFingerprint(readWorkspace(localStorage));
+    return coordinatorRef.current!.request(currentSession, fingerprint, runSync, queueIfActive);
+  }, [runSync, setStatus, supabase]);
+
+  const syncCurrent = useCallback(() => { if (sessionRef.current) void sync(sessionRef.current, true); }, [sync]);
 
   useEffect(() => {
+    coordinatorRef.current?.resume();
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      syncVersionRef.current += 1;
-      activeSyncRef.current?.controller.abort();
-      activeSyncRef.current = null;
+      coordinatorRef.current?.dispose();
       if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current);
     };
   }, []);
@@ -124,10 +117,7 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
       setSession(nextSession);
       if (nextSession) void sync(nextSession);
       else {
-        syncVersionRef.current += 1;
-        activeSyncRef.current?.controller.abort();
-        activeSyncRef.current = null;
-        pendingSyncRef.current = false;
+        coordinatorRef.current?.cancel();
         if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current);
         setStatus("local-only");
       }
@@ -163,4 +153,7 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
   return <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Account and sync</p><h1 className="mt-2 text-2xl font-bold text-gray-900">{session ? "Your workspace is account-ready" : "Keep working as a guest"}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">{session ? "Changes sync to your account. Your local cache remains available if the network is interrupted." : "Guest mode stays local. Sign in when you want your profiles available on another browser or device."}</p></div><span className={`text-sm font-semibold ${statusClass[syncStatus]}`}>{statusText[syncStatus]}</span></div>{session ? <div className="mt-5 flex flex-wrap items-center gap-3"><span className="text-sm text-gray-700">{session.user.email}</span><button type="button" onClick={syncCurrent} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Retry sync</button><button type="button" onClick={signOut} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Sign out</button></div> : <form onSubmit={submit} className="mt-5 grid gap-3 sm:grid-cols-[1fr_1fr_auto]"><input aria-label="Email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/><input aria-label="Password" type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/><button type="submit" disabled={busy || !supabase} className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Working…" : mode === "sign-in" ? "Sign in" : "Sign up"}</button></form>}{!session && <button type="button" onClick={() => setMode(mode === "sign-in" ? "sign-up" : "sign-in")} className="mt-3 text-sm font-medium text-gray-900 underline">{mode === "sign-in" ? "Need an account? Sign up" : "Already have an account? Sign in"}</button>}{(message || syncMessage) && <p role="status" className="mt-4 text-sm text-gray-700">{message || syncMessage}</p>}</section>;
 }
 
-export default function AuthShell() { return <AuthPanel />; }
+export default function AuthShell() {
+  const pathname = usePathname();
+  return pathname === "/auth" ? null : <AuthPanel />;
+}

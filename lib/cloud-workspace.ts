@@ -91,6 +91,8 @@ export const workspaceToCloudPayload = (workspace: Workspace): CloudWorkspacePay
   profiles: workspace.profiles.map(cloudProfileFromLocal),
 });
 
+export const workspaceFingerprint = (workspace: Workspace): string => JSON.stringify(workspaceToCloudPayload(workspace));
+
 const safeString = (value: unknown): string | undefined => typeof value === "string" ? value : undefined;
 const stateFromCloudProfile = (profile: CloudProfileRecord): WorkspaceProfileState => {
   const state: WorkspaceProfileState = {};
