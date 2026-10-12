@@ -21,13 +21,6 @@ const parseDataUrl = (dataUrl: string): { blob: Blob; extension: "png" | "jpg" }
   } catch { return null; }
 };
 
-const dataUrlFromBlob = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => resolve(String(reader.result));
-  reader.onerror = () => reject(new Error("asset_read_failed"));
-  reader.readAsDataURL(blob);
-});
-
 const currentUser = async (client: SupabaseClient): Promise<string | null> => {
   const { data } = await client.auth.getUser();
   return data.user?.id ?? null;
@@ -74,12 +67,13 @@ export const hydrateCloudAsset = async (path: string | undefined, profileId: str
   if (!userId || !isOwnedAssetPath(path, userId, profileId)) return "";
   const signed = await client.storage.from(CUSTOMER_ASSETS_BUCKET).createSignedUrl(path, 300);
   if (signed.error || !signed.data?.signedUrl) return "";
-  try {
-    const response = await fetch(signed.data.signedUrl, { cache: "no-store" });
-    if (!response.ok) return "";
-    return await dataUrlFromBlob(await response.blob());
-  } catch { return ""; }
+  // A private signed URL is already a browser-safe image source. Downloading
+  // it with fetch adds a CORS dependency that is unnecessary for <img> and
+  // caused fresh-session hydration to fail while cloud sync still succeeded.
+  return signed.data.signedUrl;
 };
+
+const needsAssetHydration = (value: unknown): boolean => typeof value !== "string" || !value || /^https?:\/\/.*\/storage\/v1\/object\/sign\/customer-assets\//i.test(value);
 
 const parseObject = (raw: string | undefined): Record<string, unknown> | null => {
   if (!raw) return null;
@@ -95,22 +89,22 @@ export const hydrateWorkspaceAssets = async (workspace: Workspace, client = getS
   const next: Workspace = { ...workspace, profiles: workspace.profiles.map((profile) => ({ ...profile, state: { ...profile.state } })) };
   for (const profile of next.profiles) {
     const company = parseObject(profile.state.companyData);
-    if (company?.logoPath && !company.logoUrl) {
+    if (company?.logoPath && needsAssetHydration(company.logoUrl)) {
       const logo = await hydrateCloudAsset(String(company.logoPath), profile.id, client);
       if (logo) company.logoUrl = logo;
     }
     if (company) profile.state.companyData = JSON.stringify(company);
     const projects = parseArray(profile.state.projectsData);
-    for (const project of projects) if (project.imagePath && !project.imageUrl) {
+    for (const project of projects) if (project.imagePath && needsAssetHydration(project.imageUrl)) {
       const image = await hydrateCloudAsset(String(project.imagePath), profile.id, client);
       if (image) project.imageUrl = image;
     }
     if (projects.length) profile.state.projectsData = JSON.stringify(projects);
     const generated = parseObject(profile.state.generatedProfile);
     if (generated) {
-      const generatedCompany = generated.logoPath && !generated.logoUrl ? await hydrateCloudAsset(String(generated.logoPath), profile.id, client) : "";
+      const generatedCompany = generated.logoPath && needsAssetHydration(generated.logoUrl) ? await hydrateCloudAsset(String(generated.logoPath), profile.id, client) : "";
       if (generatedCompany) generated.logoUrl = generatedCompany;
-      if (Array.isArray(generated.projects)) for (const project of generated.projects) if (project && typeof project === "object" && (project as Record<string, unknown>).imagePath && !(project as Record<string, unknown>).imageUrl) {
+      if (Array.isArray(generated.projects)) for (const project of generated.projects) if (project && typeof project === "object" && (project as Record<string, unknown>).imagePath && needsAssetHydration((project as Record<string, unknown>).imageUrl)) {
         const item = project as Record<string, unknown>;
         const image = await hydrateCloudAsset(String(item.imagePath), profile.id, client);
         if (image) item.imageUrl = image;

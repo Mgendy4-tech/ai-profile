@@ -42,7 +42,10 @@ const stripImagePayloads = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(stripImagePayloads);
   if (!value || typeof value !== "object") return value;
   const output: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value)) output[key] = typeof item === "string" && /^data:image\//i.test(item) && (key === "imageUrl" || key === "logoUrl") ? "" : stripImagePayloads(item);
+  for (const [key, item] of Object.entries(value)) {
+    const isPrivateSignedAsset = typeof item === "string" && /^https?:\/\/.*\/storage\/v1\/object\/sign\/customer-assets\//i.test(item);
+    output[key] = typeof item === "string" && (key === "imageUrl" || key === "logoUrl") && (/^data:image\//i.test(item) || isPrivateSignedAsset) ? "" : stripImagePayloads(item);
+  }
   return output;
 };
 
