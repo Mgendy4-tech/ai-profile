@@ -819,7 +819,7 @@ setProfile(generatedProfile);
     setExportElapsedSeconds(0);
     setIsExporting(true);
     setExportMessageTone("status");
-    setExportMessage("Creating your company profile…");
+    setExportMessage("Creating your LNKDIT profile PDF…");
 
     try {
       const fallbackLayoutPlan = createFallbackPdfLayoutPlan(profile);
@@ -1906,7 +1906,7 @@ setProfile(generatedProfile);
               className="mx-auto block h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-gray-900"
             />
             <h2 className="mt-5 text-xl font-semibold text-gray-900">
-              {isExporting ? "Preparing Your PDF" : loadingOperation === "generation" ? "Generating Company Profile" : "Analyzing Company Information"}
+              {isExporting ? "Preparing Your PDF" : loadingOperation === "generation" ? "Generating Your Profile" : "Analyzing Company Information"}
             </h2>
             {isExporting && <p className="mt-3 text-sm font-medium leading-6 text-gray-700">Preparing your PDF. This may take a couple of minutes. Please keep this page open.</p>}
             <p role="status" aria-live="polite" aria-atomic="true" className="mt-3 min-h-6 text-sm leading-6 text-gray-600">
@@ -1917,7 +1917,7 @@ setProfile(generatedProfile);
       )}
       <div className="mx-auto max-w-5xl">
         <h1 className="text-4xl font-bold tracking-tight text-gray-900">
-          Generate Company Profile
+          Generate Your Profile
         </h1>
 
         <p className="mt-3 max-w-2xl text-gray-600">
@@ -1928,7 +1928,7 @@ setProfile(generatedProfile);
 
         <div className="mt-10 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
           <h2 className="text-2xl font-semibold tracking-tight text-gray-900">
-            AI Profile Generator
+            LNKDIT Profile Studio
           </h2>
 
           <p className="mt-3 max-w-2xl leading-7 text-gray-600">
@@ -2215,7 +2215,7 @@ setProfile(generatedProfile);
                     )}
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
-                        Company Profile
+                        Your company profile
                       </p>
                       <h3 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">
                         {profile.companyName}
