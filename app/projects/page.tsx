@@ -8,6 +8,7 @@ import { persistProjects, persistedImageState, readPersistedProjects } from "@/l
 import { readPersistedCompanyData } from "@/lib/company-data";
 import { readPersistedGeneratedProfile } from "@/lib/generated-profile-storage";
 import OnboardingProgress from "@/app/components/onboarding-progress";
+import LnkditHeader from "@/app/components/lnkdit-header";
 import { deriveOnboardingProgress } from "@/lib/onboarding-progress";
 import { removeCloudAsset, uploadCloudAsset } from "@/lib/cloud-assets";
 import { readWorkspace } from "@/lib/workspace";
@@ -241,6 +242,7 @@ setIsSaving(false);
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto max-w-4xl">
+        <LnkditHeader />
         <h1 className="text-4xl font-bold text-gray-900">
           Projects
         </h1>

@@ -18,6 +18,7 @@ import {
   type WorkspaceProfile,
 } from "@/lib/workspace";
 import CloudSyncIndicator from "@/app/components/cloud-sync-indicator";
+import LnkditHeader from "@/app/components/lnkdit-header";
 import { removeProfileCloudAssets } from "@/lib/cloud-assets";
 
 const familyLabels: Record<string, string> = {
@@ -93,6 +94,7 @@ export default function WorkspacePage() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6 sm:py-14">
       <div className="mx-auto max-w-5xl">
+        <LnkditHeader />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Workspace</p>

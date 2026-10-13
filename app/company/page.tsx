@@ -8,6 +8,7 @@ import { emptyCompanyData, experienceValidationMessage, inspectPersistedCompanyD
 import { persistProjects, readPersistedProjects } from '@/lib/persisted-projects';
 import { clearDerivedProfileState, readApplicationStorage, removeApplicationStorage, storageUserMessage, writeApplicationStorage } from '@/lib/local-profile-data';
 import OnboardingProgress from '@/app/components/onboarding-progress';
+import LnkditHeader from '@/app/components/lnkdit-header';
 import { deriveOnboardingProgress } from '@/lib/onboarding-progress';
 import { removeCloudAsset, uploadCloudAsset } from '@/lib/cloud-assets';
 import { readWorkspace } from '@/lib/workspace';
@@ -315,6 +316,7 @@ export default function CompanyPage() {
   return (
     <main className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="mx-auto max-w-3xl">
+        <LnkditHeader />
         <h1 className="text-3xl font-bold text-gray-900">
           Company Information
         </h1>

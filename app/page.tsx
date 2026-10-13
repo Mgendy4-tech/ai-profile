@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { readApplicationStorage } from "@/lib/local-profile-data";
 import { readWorkspace, workspaceStatus } from "@/lib/workspace";
-import LnkditWordmark from "@/app/components/lnkdit-wordmark";
+import LnkditHeader from "@/app/components/lnkdit-header";
 
 export default function Home() {
   const [companyName, setCompanyName] = useState("");
@@ -43,7 +43,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-8 sm:px-8 sm:py-12">
       <div className="mx-auto max-w-6xl">
-        <div className="flex items-center justify-between gap-4"><LnkditWordmark/><span className="hidden rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 sm:inline-flex">Company profile workspace</span></div>
+        <LnkditHeader><span className="hidden rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 sm:inline-flex">Company profile workspace</span></LnkditHeader>
         <div className="mt-16 max-w-3xl sm:mt-24">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-700">Professional profiles, made easier</p>
           <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-950 sm:text-6xl">
@@ -56,7 +56,7 @@ export default function Home() {
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link href={resumeHref} className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">{companyName ? `Continue with ${companyName}` : "Create your profile"}</Link>
-            <Link href="/auth" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:border-slate-500">{companyName ? "Sign in to sync this work" : "Sign in to sync across devices"}</Link>
+            <Link href="/workspace" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:border-slate-500">View workspace</Link>
           </div>
           <p className="mt-3 max-w-2xl text-sm text-slate-500">Guest mode stays in this browser. An account adds private cloud backup, cross-device access, and recovery.</p>
         </div>

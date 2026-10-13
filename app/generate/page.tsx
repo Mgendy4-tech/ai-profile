@@ -93,6 +93,7 @@ import { familyChoices } from "@/lib/authored-templates/family-selection";
 import { normalizeAuthoredVariant, recommendAuthoredVariant, variantsForFamily, type AuthoredVariantId, type AuthoredVariantSignals } from "@/lib/authored-templates/variant-registry";
 import { customerFacingSectionCopy, customerFacingSectionDescription, dedupeCustomerFacingSectionCopy, type CustomerFacingFamily, type CompanyIdentity } from "@/lib/authored-templates/presentation-copy";
 import OnboardingProgress from "@/app/components/onboarding-progress";
+import LnkditHeader from "@/app/components/lnkdit-header";
 import AuthoredVariantPreview from "@/app/components/authored-variant-preview";
 import { deriveOnboardingProgress } from "@/lib/onboarding-progress";
 import { reportClientFailure } from "@/lib/client-observability";
@@ -1916,6 +1917,7 @@ setProfile(generatedProfile);
         </div>
       )}
       <div className="mx-auto max-w-5xl">
+        <LnkditHeader />
         <h1 className="text-4xl font-bold tracking-tight text-gray-900">
           Generate Your Profile
         </h1>
