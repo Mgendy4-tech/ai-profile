@@ -2,7 +2,7 @@ import Link from "next/link";
 
 type LnkditWordmarkProps = {
   className?: string;
-  size?: "compact" | "hero";
+  size?: "compact" | "header" | "hero";
   showMark?: boolean;
 };
 
@@ -26,7 +26,9 @@ export function LnkditMark({ className = "" }: { className?: string }) {
 export default function LnkditWordmark({ className = "", size = "compact", showMark = false }: LnkditWordmarkProps) {
   const wordmarkClass = size === "hero"
     ? "text-4xl tracking-[-0.055em] sm:text-5xl"
-    : "text-base tracking-[-0.045em]";
+    : size === "header"
+      ? "text-[1.15rem] tracking-[-0.045em]"
+      : "text-base tracking-[-0.045em]";
 
   return (
     <Link href="/" aria-label="LNKDIT home" className={`inline-flex items-center gap-2 ${className}`}>

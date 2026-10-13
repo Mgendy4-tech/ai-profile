@@ -18,7 +18,8 @@ assert(home.includes("Create, refine, and export a polished company profile in o
 assert(home.includes('href="/workspace"') && home.includes(">View workspace</Link>"));
 assert(wordmark.includes('text-slate-950">LNKD</span><span className="text-cyan-500">IT'));
 assert(wordmark.includes("LnkditMark"));
-assert(header.includes("LnkditWordmark"));
+assert(header.includes('<LnkditWordmark size="header" />'));
+assert(wordmark.includes('"text-[1.15rem] tracking-[-0.045em]"'));
 assert(workflowRoutes.every((route) => route.includes("LnkditHeader")));
 assert(icon.includes("<svg") && icon.includes("#0F172A") && icon.includes("#22D3EE") && icon.includes("#FFFFFF"));
 assert(icon.includes("<circle") && icon.includes('fill="#22D3EE"'));
