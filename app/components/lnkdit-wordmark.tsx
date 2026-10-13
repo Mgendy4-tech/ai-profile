@@ -16,9 +16,9 @@ export function LnkditMark({ className = "" }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
     >
       <rect width="48" height="48" rx="14" fill="#0F172A" />
-      <path d="M13 11V37H29" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M35 11V37" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
-      <path d="M27 25H35" stroke="#22D3EE" strokeWidth="4" strokeLinecap="round" />
+      <path d="M12 11V37H27" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M35 23V37" stroke="#22D3EE" strokeWidth="5" strokeLinecap="round" />
+      <circle cx="35" cy="15" r="3" fill="#22D3EE" />
     </svg>
   );
 }
