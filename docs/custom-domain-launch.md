@@ -1,28 +1,30 @@
-# Custom production domain launch
+# Custom domain and auth recovery launch
 
-This release does not add a domain. The app uses the browser's current origin for password recovery links, so auth links do not depend on a Vercel hostname. Keep `NEXT_PUBLIC_SITE_URL` optional until a canonical-domain policy is chosen; do not hardcode a deployment URL in application code.
+This release prepares the app for a custom production domain but does not add or promote one. Recovery links use the current browser origin, which keeps Preview independent. `NEXT_PUBLIC_SITE_URL` is an optional canonical fallback for non-browser contexts and should be set only to the active public origin for the environment.
 
-## Vercel
+## Exact setup order
 
-1. Add the chosen domain in the Vercel project under **Settings → Domains**.
-2. Use the DNS records Vercel provides. Usually the apex uses an A record and a subdomain uses a CNAME; use the exact values shown for the project.
-3. Wait for Vercel certificate issuance and verify both HTTPS and the final redirect policy.
-4. Keep the existing Vercel URL available during rollout for rollback.
+1. **Add the domain in Vercel.** Open the project **Settings → Domains** and add the intended production hostname.
+2. **Configure DNS.** Create the exact A, CNAME, or verification records Vercel shows for that domain. Do not substitute values from another project.
+3. **Verify the domain.** Wait for Vercel verification and HTTPS certificate issuance. Confirm the final hostname loads over HTTPS.
+4. **Set production `NEXT_PUBLIC_SITE_URL`.** Set it in the Vercel Production environment to the final `https://` origin, without a path, query, or fragment. Preview may omit it because recovery prefers the current Preview origin.
+5. **Update the Supabase Site URL.** In **Authentication → URL Configuration**, set **Site URL** to the final production origin.
+6. **Add Preview and Production redirect URLs.** Add the final production recovery route (`https://CUSTOM_DOMAIN/auth?mode=reset`), the current Preview recovery route (`https://PREVIEW_HOST/auth?mode=reset`), and keep the known-good Vercel production recovery route during rollback validation.
+7. **Validate the recovery email.** Request a reset from the custom domain and confirm the email link returns to the custom domain's `/auth?mode=reset` route.
+8. **Smoke auth, settings, privacy, and terms.** Verify sign-in, sign-out, password reset, the Account/Settings page, and both legal links on desktop and mobile widths.
+9. **Rollback if needed.** Restore the previous Supabase Site URL and redirect allow-list, remove or disable the bad canonical env value, and direct customers to the known-good Vercel production URL while the custom domain is corrected.
 
-## Supabase
+## Configuration contract
 
-1. In **Authentication → URL Configuration**, set **Site URL** to the final HTTPS domain.
-2. Add the final domain's `/auth` URL to **Redirect URLs**.
-3. Keep the current Preview URL in the allow-list while validating Preview.
-4. Remove temporary URLs only after recovery and sign-in have been manually verified.
+- `NEXT_PUBLIC_SITE_URL` is optional and must be an origin such as `https://profile.example.com`.
+- Only `http` and `https` origins without credentials, paths, query strings, or fragments are accepted.
+- In a browser, the current origin wins over the configured value so Preview auth and cloud sync remain isolated from Production.
+- If no safe origin is available, the recovery helper falls back to the relative route `/auth?mode=reset`; Supabase should still be configured with the absolute URLs above.
 
-## Recovery validation
+## Supabase recovery checks
 
-1. Request a password reset from the final domain.
-2. Confirm the email link opens `/auth?mode=reset` on the final domain, not a Vercel hostname.
-3. Set a new password, sign in, and confirm cloud sync.
-4. Repeat once in a private browser session.
+Confirm the Supabase email template uses the standard recovery action and that the redirect allow-list contains every environment being tested. The app handles expired, reused, and invalid recovery tokens with customer-safe messages; raw provider errors must remain server-side/observability-only.
 
-## Rollback
+## Rollback detail
 
-If the domain or auth callback is incorrect, leave the Vercel domain attached but direct customers to the known-good Vercel URL, restore Supabase Site URL/Redirect URLs to the last known-good values, and re-test recovery before trying the domain again. Do not promote a Production deployment during a domain rollback.
+Do not deploy Production as part of this preparation. For a failed cutover, leave the Vercel project and known-good deployment available, restore Supabase Site URL and redirects to the last known-good values, revert `NEXT_PUBLIC_SITE_URL` to the prior origin or unset it, and repeat the recovery smoke test before attempting the domain again.

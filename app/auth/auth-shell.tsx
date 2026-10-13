@@ -13,9 +13,10 @@ import { hydrateWorkspaceAssets, migrateLocalWorkspaceAssets } from "@/lib/cloud
 import { reportClientFailure } from "@/lib/client-observability";
 import ClientObservability from "@/app/components/client-observability";
 import { passwordRecoveryRedirect } from "@/lib/site-url";
+import { authFailureCode, customerAuthError, type AuthMessageMode } from "@/lib/auth-messages";
 
 export type CloudSyncStatus = "local-only" | "syncing" | "synced" | "sync-failed";
-type AuthMode = "sign-in" | "sign-up" | "reset-request" | "reset-password";
+type AuthMode = AuthMessageMode;
 
 const statusText: Record<CloudSyncStatus, string> = { "local-only": "Local only", syncing: "Syncing…", synced: "Synced", "sync-failed": "Sync failed — Retry" };
 const statusClass: Record<CloudSyncStatus, string> = { "local-only": "text-gray-600", syncing: "text-amber-700", synced: "text-green-700", "sync-failed": "text-red-700" };
@@ -25,22 +26,6 @@ const emitSyncStatus = (status: CloudSyncStatus, message = "") => {
 };
 
 const customerCloudError = (code: string): string => code === "not_configured" ? authSetupMessage : code === "unauthorized" ? "Your sign-in session expired. Please sign in again." : "Cloud sync is temporarily unavailable. Your local data is safe; retry when you are online.";
-const customerAuthError = (error: { message?: string; code?: string } | null, mode: AuthMode): string => {
-  const text = `${error?.code ?? ""} ${error?.message ?? ""}`.toLowerCase();
-  if (text.includes("already registered") || text.includes("user already exists") || text.includes("user_already_exists")) return "An account with this email already exists. Sign in instead.";
-  if (text.includes("invalid login credentials") || text.includes("invalid_credentials")) return "The email or password is incorrect. Try again or reset your password.";
-  if (text.includes("expired") || text.includes("otp_expired") || text.includes("invalid token")) return "This recovery link has expired or is no longer valid. Request a new password-reset email.";
-  if (mode === "reset-request") return "We could not send a reset email. Check the address and try again.";
-  if (mode === "reset-password") return "We could not update your password. The recovery link may have expired.";
-  return "We could not complete that request. Check your details and try again.";
-};
-const authFailureCode = (error: { message?: string; code?: string } | null, mode: AuthMode): string => {
-  const text = `${error?.code ?? ""} ${error?.message ?? ""}`.toLowerCase();
-  if (text.includes("invalid login credentials") || text.includes("invalid_credentials")) return "invalid_credentials";
-  if (text.includes("already registered") || text.includes("user already exists") || text.includes("user_already_exists")) return "account_exists";
-  if (text.includes("expired") || text.includes("invalid token") || text.includes("otp_expired")) return "recovery_token_invalid";
-  return `${mode.replace("-", "_")}_failed`;
-};
 
 export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
