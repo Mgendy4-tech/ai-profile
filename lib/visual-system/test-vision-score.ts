@@ -1,5 +1,6 @@
 import { searchPexelsImages } from "./image-source";
 import { scoreImageWithVision } from "./vision-score";
+import { normalizeVisionImage } from "./vision-image-normalizer";
 
 const run = async () => {
   const images = await searchPexelsImages(
@@ -13,8 +14,13 @@ const run = async () => {
     throw new Error("No Pexels image returned.");
   }
 
-  const result = await scoreImageWithVision({
+  const normalized = await normalizeVisionImage({
     imageUrl: image.url,
+    providerUrls: [image.visionUrl, image.visionFallbackUrl].filter((url): url is string => Boolean(url)),
+  });
+
+  const result = await scoreImageWithVision({
+    imageUrl: normalized.imageUrl,
     brief: {
       subject:
         "Luxury interior material detail featuring premium marble or natural stone in a refined architectural setting.",

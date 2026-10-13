@@ -4,6 +4,7 @@ import {
   type PexelsOrientation,
 } from "./image-source";
 import { scoreImageWithVision } from "./vision-score";
+import { normalizeVisionImage } from "./vision-image-normalizer";
 import {
   rankImageCandidates,
   type ImageCandidate,
@@ -46,7 +47,7 @@ type SelectVisualImageOptions = {
 };
 
 const DEFAULT_CANDIDATE_COUNT = 3;
-const MAX_VISION_CONCURRENCY = 2;
+const MAX_VISION_CONCURRENCY = 3;
 
 const SEARCH_STOP_WORDS = new Set([
   "a",
@@ -108,8 +109,12 @@ const scoreCandidates = async (
       const image = sourcedImages[candidateIndex];
 
       try {
-        const vision = await scoreImageWithVision({
+        const scoringInput = await normalizeVisionImage({
           imageUrl: image.url,
+          providerUrls: [image.visionUrl, image.visionFallbackUrl].filter((url): url is string => Boolean(url)),
+        });
+        const vision = await scoreImageWithVision({
+          imageUrl: scoringInput.imageUrl,
           brief: {
             subject: brief.subject,
             purpose: brief.purpose,

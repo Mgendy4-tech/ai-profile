@@ -1,6 +1,8 @@
 export type PexelsImageCandidate = {
   candidateId: string;
   url: string;
+  visionUrl?: string;
+  visionFallbackUrl?: string;
   source: "pexels";
   photographer: string;
   width: number;
@@ -16,6 +18,7 @@ type PexelsPhoto = {
     original: string;
     large2x?: string;
     large?: string;
+    medium?: string;
   };
 };
 
@@ -68,6 +71,8 @@ export const searchPexelsImages = async (
   return data.photos.map((photo) => ({
     candidateId: `pexels-${photo.id}`,
     url: photo.src.original,
+    visionUrl: photo.src.large ?? photo.src.large2x ?? photo.src.medium,
+    visionFallbackUrl: photo.src.medium,
     source: "pexels",
     photographer: photo.photographer,
     width: photo.width,

@@ -1,5 +1,6 @@
 import { searchPexelsImages } from "./image-source";
 import { scoreImageWithVision } from "./vision-score";
+import { normalizeVisionImage } from "./vision-image-normalizer";
 import {
   rankImageCandidates,
   getBestAcceptedImage,
@@ -32,8 +33,12 @@ const run = async () => {
   for (const image of sourcedImages) {
     console.log(`Scoring ${image.candidateId}...`);
 
-    const vision = await scoreImageWithVision({
+    const normalized = await normalizeVisionImage({
       imageUrl: image.url,
+      providerUrls: [image.visionUrl, image.visionFallbackUrl].filter((url): url is string => Boolean(url)),
+    });
+    const vision = await scoreImageWithVision({
+      imageUrl: normalized.imageUrl,
       brief,
     });
 

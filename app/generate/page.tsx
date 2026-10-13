@@ -1032,7 +1032,7 @@ setProfile(generatedProfile);
             const selection = await postJsonWithTimeout<SelectVisualsResponse>(
               "/api/select-visuals",
               { visualDirection },
-              60000
+              120000
             );
             selectedContextualVisuals = selection.visuals;
           } catch {

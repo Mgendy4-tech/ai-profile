@@ -1,4 +1,9 @@
 import OpenAI from "openai";
+import sharp from "sharp";
+import {
+  VISION_MAX_BYTES,
+  VISION_MAX_DIMENSION,
+} from "./vision-image-normalizer";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -25,10 +30,33 @@ type ScoreImageInput = {
 const clamp01 = (value: number) =>
   Math.max(0, Math.min(1, value));
 
+const inspectVisionInput = async (imageUrl: string) => {
+  const match = imageUrl.match(/^data:image\/[^;]+;base64,(.+)$/i);
+  if (!match) {
+    throw new Error("Vision scoring requires a normalized image input.");
+  }
+
+  const bytes = Buffer.from(match[1], "base64");
+  if (bytes.byteLength > VISION_MAX_BYTES) {
+    throw new Error(`Vision scoring input exceeds ${VISION_MAX_BYTES} bytes.`);
+  }
+
+  const metadata = await sharp(bytes, { failOn: "error" }).metadata();
+  if (
+    !metadata.width ||
+    !metadata.height ||
+    metadata.width > VISION_MAX_DIMENSION ||
+    metadata.height > VISION_MAX_DIMENSION
+  ) {
+    throw new Error("Vision scoring input exceeds the normalized dimensions.");
+  }
+};
+
 export const scoreImageWithVision = async ({
   imageUrl,
   brief,
 }: ScoreImageInput): Promise<VisionScoreResult> => {
+  await inspectVisionInput(imageUrl);
   const prompt = `
 You are evaluating a candidate image for a professional company-profile PDF.
 
@@ -80,7 +108,7 @@ Return exactly:
         ],
       },
     ],
-  });
+  }, { timeout: 45_000 });
 
   const raw = response.output_text.trim();
 
