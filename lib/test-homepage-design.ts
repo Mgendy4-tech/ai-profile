@@ -25,11 +25,16 @@ assert(home.includes("View workspace"));
 assert(home.includes("AURELIA STUDIO"));
 assert(home.includes("Demo company profile preview"));
 assert(home.includes("Demo PDF export panel"));
+assert(home.includes("/homepage/aurelia-interior.webp"));
+assert(home.includes("Before") && home.includes("Refine") && home.includes("After"));
+assert(home.includes("home-pdf-stack") && home.includes("home-pdf-page-back-two"));
 assert(home.includes("prefers-reduced-motion" ) || styles.includes("prefers-reduced-motion"));
 assert(home.includes("HomepageShowcase"));
 assert(page.includes("HomepageShowcase"));
 assert(styles.includes("home-reveal-visible"));
 assert(styles.includes("home-floating-card"));
+assert(styles.includes("home-workflow-step-active"));
+assert(styles.includes("home-pdf-page-front"));
 assert(!home.includes("10,000") && !home.includes("testimonials"));
 
 console.log("LNKDIT homepage design structure tests passed.");
