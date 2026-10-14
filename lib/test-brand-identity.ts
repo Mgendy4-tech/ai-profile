@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const read = (path: string) => readFileSync(path, "utf8");
 const layout = read("app/layout.tsx");
 const home = read("app/page.tsx");
+const homepageShowcase = read("app/components/homepage-showcase.tsx");
 const wordmark = read("app/components/lnkdit-wordmark.tsx");
 const header = read("app/components/lnkdit-header.tsx");
 const icon = read("app/icon.svg");
@@ -13,9 +14,9 @@ const workflowRoutes = ["app/company/page.tsx", "app/projects/page.tsx", "app/ge
 assert(layout.includes("LNKDIT — Professional Company Profiles, Made Easier"));
 assert(layout.includes("applicationName: \"LNKDIT\""));
 assert(layout.includes("/icon.svg"));
-assert(home.includes("Professional company profiles, made easier."));
-assert(home.includes("Create, refine, and export a polished company profile in one place."));
-assert(home.includes('href="/workspace"') && home.includes(">View workspace</Link>"));
+assert(homepageShowcase.includes("Professional company profiles, made easier."));
+assert(homepageShowcase.includes("Create, refine, and export a polished company profile in one place."));
+assert(homepageShowcase.includes('href="/workspace"') && homepageShowcase.includes("View workspace"));
 assert(wordmark.includes('text-slate-950">LNKD</span><span className="text-cyan-500">IT'));
 assert(wordmark.includes("LnkditMark"));
 assert(header.includes('<LnkditWordmark size="header" />'));
@@ -28,5 +29,6 @@ assert(!icon.includes("M35 32h12") && !wordmark.includes("M27 25H35"));
 assert(auth.includes("Sign in to LNKDIT"));
 assert(!layout.includes("AI Company Profile"));
 assert(!home.includes("AI Company Profile"));
+assert(!homepageShowcase.includes("AI Company Profile"));
 
 console.log("LNKDIT brand identity and route-surface tests passed.");

@@ -1,0 +1,125 @@
+"use client";
+
+import Link from "next/link";
+import type { CSSProperties, ReactNode } from "react";
+import { useEffect } from "react";
+import { LnkditMark } from "./lnkdit-wordmark";
+
+const demoSections = ["About the Studio", "Design Expertise", "Featured Project"];
+
+function Reveal({ children, className = "", delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
+  return <div data-home-reveal style={{ "--home-delay": `${delay}ms` } as CSSProperties} className={className}>{children}</div>;
+}
+
+function MiniLogo() {
+  return <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-950 text-[10px] font-black tracking-[-0.08em] text-white"><span>L</span><span className="text-cyan-400">i</span></span>;
+}
+
+function ProfilePreview() {
+  return (
+    <div className="home-preview-card home-profile-preview" aria-label="Demo company profile preview">
+      <div className="flex items-center justify-between border-b border-slate-200/80 px-5 py-4">
+        <div className="flex items-center gap-2.5"><MiniLogo /><span className="text-[11px] font-bold tracking-[0.12em] text-slate-900">AURELIA STUDIO</span></div>
+        <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-700">Profile</span>
+      </div>
+      <div className="space-y-5 p-5">
+        <div><p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-cyan-700">Interior design studio</p><h3 className="mt-2 max-w-[220px] text-2xl font-semibold leading-tight tracking-[-0.04em] text-slate-950">Spaces with a point of view.</h3><p className="mt-2 max-w-[235px] text-[11px] leading-5 text-slate-500">A focused profile for work that deserves a clear, considered presentation.</p></div>
+        <div className="grid grid-cols-2 gap-2.5"><div className="home-demo-image home-demo-image-one" /><div className="home-demo-image home-demo-image-two" /></div>
+        <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] text-slate-500"><span>Residential &amp; commercial</span><span className="font-semibold text-slate-900">View profile ↗</span></div>
+      </div>
+    </div>
+  );
+}
+
+function WorkspacePreview() {
+  return (
+    <div className="home-preview-card home-workspace-preview" aria-label="Demo workspace dashboard card">
+      <div className="flex items-center justify-between border-b border-slate-200/80 px-4 py-3"><div className="flex items-center gap-2"><LnkditMark className="h-6 w-6" /><span className="text-xs font-semibold text-slate-900">Workspace</span></div><span className="flex items-center gap-1.5 text-[9px] font-semibold text-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Synced</span></div>
+      <div className="space-y-3 p-4"><div className="flex items-center justify-between"><div><p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Your profiles</p><p className="mt-1 text-sm font-semibold text-slate-900">Aurelia Studio</p></div><span className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-[9px] font-semibold text-white">Open</span></div><div className="grid grid-cols-3 gap-2"><div className="h-14 rounded-lg bg-slate-100 p-2"><span className="block h-1.5 w-10 rounded-full bg-slate-300" /><span className="mt-2 block h-1 w-7 rounded-full bg-slate-200" /><span className="mt-1 block h-1 w-8 rounded-full bg-slate-200" /></div><div className="h-14 rounded-lg bg-cyan-50 p-2"><span className="block h-1.5 w-8 rounded-full bg-cyan-300" /><span className="mt-2 block h-1 w-10 rounded-full bg-cyan-200" /><span className="mt-1 block h-1 w-6 rounded-full bg-cyan-200" /></div><div className="h-14 rounded-lg border border-dashed border-slate-300 p-2"><span className="flex h-full items-center justify-center text-base text-slate-400">+</span></div></div><div className="flex items-center gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500"><span className="rounded bg-emerald-50 px-1.5 py-1 font-semibold text-emerald-700">Saved</span>Company, projects, and profile draft</div></div>
+    </div>
+  );
+}
+
+function RefinementPreview() {
+  return (
+    <div className="home-preview-card home-refinement-preview" aria-label="Demo profile refinement panel">
+      <div className="flex items-center justify-between"><div><p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-700">Profile refinement</p><p className="mt-1 text-sm font-semibold text-slate-950">Shape the story</p></div><span className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-1 text-[9px] font-semibold text-cyan-700">Draft</span></div>
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-center justify-between"><span className="text-[10px] font-semibold text-slate-900">About the Studio</span><button type="button" className="text-[10px] font-semibold text-cyan-700">Edit</button></div><p className="mt-2 text-[10px] leading-4 text-slate-500">Introduce the studio, its focus, and the kind of work it is known for.</p><div className="mt-3 flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-cyan-400" /><span className="h-1.5 w-16 rounded-full bg-cyan-100" /><span className="h-1.5 w-9 rounded-full bg-slate-100" /></div></div>
+      <div className="mt-3 rounded-xl border border-slate-200/80 bg-slate-50 p-3"><div className="flex items-center justify-between text-[10px]"><span className="font-semibold text-slate-700">Sections</span><span className="text-slate-400">4 ready</span></div><div className="mt-2 grid gap-1.5">{demoSections.map((section, index) => <div key={section} className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-2 text-[10px] text-slate-600"><span className="text-cyan-500">0{index + 1}</span>{section}<span className="ml-auto text-slate-300">↗</span></div>)}</div></div>
+    </div>
+  );
+}
+
+function ExportPreview() {
+  return (
+    <div className="home-preview-card home-export-preview" aria-label="Demo PDF export panel">
+      <div className="flex items-center justify-between"><div><p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-700">Review export</p><p className="mt-1 text-sm font-semibold text-slate-950">Ready to share</p></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-semibold text-emerald-700">Ready</span></div>
+      <div className="mt-4 flex gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"><div className="home-pdf-sheet"><span className="block h-1.5 w-8 rounded-full bg-slate-900" /><span className="mt-2 block h-1 w-12 rounded-full bg-slate-200" /><span className="mt-4 block h-12 rounded-md bg-gradient-to-br from-cyan-100 via-slate-100 to-slate-200" /><span className="mt-2 block h-1 w-10 rounded-full bg-slate-200" /></div><div className="flex min-w-0 flex-1 flex-col justify-between"><div><p className="text-[10px] font-semibold text-slate-900">Aurelia Studio.pdf</p><p className="mt-1 text-[9px] leading-4 text-slate-500">Editorial Narrative · 8 pages</p></div><button type="button" className="self-start rounded-lg bg-slate-950 px-3 py-1.5 text-[9px] font-semibold text-white">Download PDF</button></div></div>
+    </div>
+  );
+}
+
+function ProductComposition() {
+  return (
+    <div className="home-product-stage" aria-label="LNKDIT product showcase">
+      <div className="home-stage-glow" />
+      <div className="home-stage-grid" />
+      <div className="home-stage-caption"><span className="h-2 w-2 rounded-full bg-cyan-400" />A workspace for the whole profile journey</div>
+      <div className="home-floating-card home-floating-workspace"><WorkspacePreview /></div>
+      <div className="home-floating-card home-floating-profile"><ProfilePreview /></div>
+      <div className="home-floating-card home-floating-refinement"><RefinementPreview /></div>
+      <div className="home-floating-card home-floating-export"><ExportPreview /></div>
+    </div>
+  );
+}
+
+function StepCard({ number, title, copy, accent }: { number: string; title: string; copy: string; accent: string }) {
+  return <article className="home-step-card"><span className={`home-step-number ${accent}`}>{number}</span><h3 className="mt-8 text-xl font-semibold tracking-[-0.03em] text-slate-950">{title}</h3><p className="mt-3 text-sm leading-6 text-slate-600">{copy}</p></article>;
+}
+
+export default function HomepageShowcase({ companyName, resumeHref }: { companyName: string; resumeHref: string }) {
+  useEffect(() => {
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>("[data-home-reveal]"));
+    if (!("IntersectionObserver" in window)) {
+      nodes.forEach((node) => node.classList.add("home-reveal-visible"));
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("home-reveal-visible");
+        observer.unobserve(entry.target);
+      }
+    }), { threshold: 0.12 });
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div className="home-page-shell overflow-hidden">
+      <section className="home-hero relative px-5 pb-20 pt-7 sm:px-8 sm:pb-28 sm:pt-10 lg:pb-36">
+        <div className="home-hero-wash" />
+        <div className="relative mx-auto max-w-7xl">
+          <header className="flex min-h-11 items-center justify-between gap-4"><Link href="/" aria-label="LNKDIT home" className="inline-flex items-center gap-2"><LnkditMark className="h-9 w-9" /><span className="text-[1.3rem] font-black tracking-[-0.055em]"><span className="text-slate-950">LNKD</span><span className="text-cyan-500">IT</span></span></Link><div className="hidden items-center gap-6 text-sm font-semibold text-slate-600 md:flex"><a href="#how-it-works" className="transition hover:text-slate-950">How it works</a><a href="#workspace" className="transition hover:text-slate-950">Workspace</a><Link href="/auth" className="text-slate-950 transition hover:text-cyan-700">Sign in</Link></div><Link href="/auth" className="rounded-full border border-slate-300 bg-white/75 px-3.5 py-2 text-xs font-semibold text-slate-900 shadow-sm backdrop-blur transition hover:border-slate-900 sm:px-4 sm:text-sm">Open account</Link></header>
+          <div className="grid items-center gap-12 pt-16 lg:grid-cols-[0.83fr_1.17fr] lg:gap-5 lg:pt-24">
+            <Reveal className="relative z-10 max-w-xl" delay={40}><p className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700 shadow-sm backdrop-blur"><span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />Profile studio for modern teams</p><h1 className="mt-6 max-w-xl text-5xl font-semibold leading-[0.98] tracking-[-0.065em] text-slate-950 sm:text-6xl lg:text-[4.9rem]">Professional company profiles, made easier.</h1><p className="mt-6 max-w-lg text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">Create, refine, and export a polished company profile in one place. Start as a guest, then sign in when you want private cloud backup and access on another device.</p><div className="mt-8 flex flex-wrap items-center gap-3"><Link href={resumeHref} className="rounded-xl bg-slate-950 px-5 py-3.5 text-sm font-semibold text-white shadow-[0_12px_25px_rgba(15,23,42,0.18)] transition duration-300 hover:-translate-y-0.5 hover:bg-slate-800">{companyName ? `Continue with ${companyName}` : "Create your profile"}<span className="ml-2 text-cyan-300">↗</span></Link><Link href="/workspace" className="rounded-xl border border-slate-300 bg-white/80 px-5 py-3.5 text-sm font-semibold text-slate-900 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:border-slate-500">View workspace</Link></div><p className="mt-4 text-xs font-medium text-slate-500">Guest mode stays local · private cloud sync when you&apos;re ready</p></Reveal>
+            <Reveal className="min-w-0" delay={160}><ProductComposition /></Reveal>
+          </div>
+        </div>
+      </section>
+
+      <main>
+        <section id="how-it-works" className="border-y border-slate-200/80 bg-white px-5 py-20 sm:px-8 sm:py-28"><div className="mx-auto max-w-7xl"><Reveal><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">A clear path from raw notes to ready to share</p><div className="mt-4 flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><h2 className="max-w-2xl text-3xl font-semibold tracking-[-0.055em] text-slate-950 sm:text-5xl">Less formatting. More room for the work.</h2><p className="max-w-sm text-sm leading-6 text-slate-500">LNKDIT keeps the profile journey focused, so each step feels considered and easy to return to.</p></div></Reveal><div className="mt-12 grid gap-4 md:grid-cols-3"><Reveal delay={80}><StepCard number="01" title="Create" copy="Add the company essentials, services, and projects that make your work distinct." accent="bg-cyan-100 text-cyan-700" /></Reveal><Reveal delay={140}><StepCard number="02" title="Refine" copy="Review the structure, edit the story, and choose a presentation that fits the business." accent="bg-slate-100 text-slate-700" /></Reveal><Reveal delay={200}><StepCard number="03" title="Export" copy="Choose a polished style and download a profile you can share with confidence." accent="bg-slate-950 text-white" /></Reveal></div></div></section>
+
+        <section id="workspace" className="home-dark-section px-5 py-20 sm:px-8 sm:py-28"><div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20"><Reveal><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Workspace, together</p><h2 className="mt-4 max-w-lg text-3xl font-semibold tracking-[-0.055em] text-white sm:text-5xl">Your company, projects, and profile draft in one calm place.</h2><p className="mt-5 max-w-md text-sm leading-7 text-slate-300">Keep the source material close to the profile it informs. Save locally as a guest or sign in for a private workspace that follows you across devices.</p><Link href="/workspace" className="mt-8 inline-flex rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:-translate-y-0.5 hover:bg-cyan-50">View workspace <span className="ml-2 text-cyan-600">↗</span></Link></Reveal><Reveal delay={130}><div className="home-workspace-showcase"><div className="home-workspace-sidebar"><LnkditMark className="h-8 w-8" /><span className="mt-8 block h-1.5 w-14 rounded-full bg-white/25" /><span className="mt-3 block h-1.5 w-10 rounded-full bg-white/10" /><span className="mt-8 block h-8 w-full rounded-lg bg-cyan-400/15" /><span className="mt-2 block h-8 w-full rounded-lg bg-white/5" /></div><div className="min-w-0 flex-1 p-5 sm:p-7"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-300">Workspace</p><h3 className="mt-2 text-xl font-semibold tracking-[-0.04em] text-white">Good morning, Aurelia.</h3></div><span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[9px] font-semibold text-emerald-300">Synced</span></div><div className="mt-7 grid gap-3 sm:grid-cols-3"><div className="home-dark-tile sm:col-span-2"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-white">Aurelia Studio</span><span className="text-[9px] text-cyan-300">Active</span></div><div className="mt-5 flex gap-2"><span className="h-8 flex-1 rounded-lg bg-white/10" /><span className="h-8 w-1/4 rounded-lg bg-cyan-400/20" /></div></div><div className="home-dark-tile"><span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Projects</span><span className="mt-3 block text-2xl font-semibold text-white">03</span><span className="mt-1 block text-[9px] text-slate-400">ready to shape</span></div></div><div className="mt-3 grid gap-3 sm:grid-cols-2"><div className="home-dark-tile"><span className="text-[9px] uppercase tracking-[0.14em] text-slate-400">Profile draft</span><div className="mt-3 flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-cyan-300" /><span className="text-xs text-slate-200">Editorial Narrative</span></div></div><div className="home-dark-tile"><span className="text-[9px] uppercase tracking-[0.14em] text-slate-400">Last action</span><span className="mt-3 block text-xs text-slate-200">Saved 2 minutes ago</span></div></div></div></div></Reveal></div></section>
+
+        <section className="bg-slate-50 px-5 py-20 sm:px-8 sm:py-28"><div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-20"><Reveal className="order-2 lg:order-1" delay={80}><div className="home-refinement-showcase"><div className="home-refinement-main"><div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700">Structure editor</span><span className="text-[10px] text-slate-400">Draft</span></div><div className="mt-7 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><h3 className="text-base font-semibold text-slate-950">Design Expertise</h3><button type="button" className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-semibold text-slate-700">Edit</button></div><p className="mt-3 text-xs leading-5 text-slate-500">Shape a clear section around the capabilities your clients care about.</p><div className="mt-5 space-y-2"><div className="rounded-xl bg-slate-50 px-3 py-2.5 text-xs text-slate-700">Material Selection <span className="float-right text-slate-300">⋮⋮</span></div><div className="rounded-xl bg-cyan-50 px-3 py-2.5 text-xs text-cyan-800">Furniture Selection <span className="float-right text-cyan-300">⋮⋮</span></div><div className="rounded-xl bg-slate-50 px-3 py-2.5 text-xs text-slate-700">Lighting Design <span className="float-right text-slate-300">⋮⋮</span></div></div></div></div><div className="home-refinement-note"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-100 text-sm text-cyan-700">✦</span><div><p className="text-xs font-semibold text-slate-950">Keep the final say</p><p className="mt-1 text-[10px] leading-4 text-slate-500">Review and edit the structure before anything is exported.</p></div></div></div></Reveal><Reveal className="order-1 lg:order-2"><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">Refinement without the black box</p><h2 className="mt-4 max-w-xl text-3xl font-semibold tracking-[-0.055em] text-slate-950 sm:text-5xl">A useful first draft, with your judgment in the loop.</h2><p className="mt-5 max-w-md text-sm leading-7 text-slate-600">LNKDIT helps organize your source material into a profile structure you can review, shape, and make your own before you choose a style.</p><Link href="/generate" className="mt-8 inline-flex rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-950 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-900">See the generation flow <span className="ml-2 text-cyan-600">↗</span></Link></Reveal></div></section>
+
+        <section className="bg-white px-5 py-20 sm:px-8 sm:py-28"><div className="mx-auto max-w-7xl"><Reveal><div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">The finished profile</p><h2 className="mt-4 max-w-2xl text-3xl font-semibold tracking-[-0.055em] text-slate-950 sm:text-5xl">A polished result, ready for the next conversation.</h2></div><p className="max-w-sm text-sm leading-6 text-slate-500">A fictional Aurelia Studio example, showing the kind of editorial profile your own source material can become.</p></div></Reveal><Reveal delay={120}><div className="home-result-stage mt-12"><div className="home-result-sheet"><div className="flex items-center justify-between border-b border-slate-200 pb-4"><div className="flex items-center gap-2"><MiniLogo /><span className="text-[10px] font-bold tracking-[0.12em] text-slate-900">AURELIA STUDIO</span></div><span className="text-[9px] uppercase tracking-[0.14em] text-slate-400">Selected profile</span></div><div className="grid gap-8 py-8 md:grid-cols-[0.7fr_1.3fr] md:items-end"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700">Editorial Narrative</p><h3 className="mt-4 text-4xl font-semibold leading-none tracking-[-0.06em] text-slate-950 sm:text-6xl">Spaces with a point of view.</h3><p className="mt-5 max-w-sm text-xs leading-5 text-slate-500">A considered approach to residential and commercial interiors, shaped by material, light, and how people move through a space.</p></div><div className="home-result-image"><span className="rounded-full bg-white/80 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-700 shadow-sm">Featured project</span></div></div><div className="grid gap-3 border-t border-slate-200 pt-4 text-[10px] text-slate-500 sm:grid-cols-3"><span>Material-led design</span><span>Furniture selection</span><span>Project coordination</span></div></div></div></Reveal></div></section>
+
+        <section className="home-device-section px-5 py-20 sm:px-8 sm:py-28"><div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[0.78fr_1.22fr] lg:gap-20"><Reveal><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">Wherever the work takes you</p><h2 className="mt-4 max-w-lg text-3xl font-semibold tracking-[-0.055em] text-slate-950 sm:text-5xl">Start on a laptop. Pick it up on your phone.</h2><p className="mt-5 max-w-md text-sm leading-7 text-slate-600">A private workspace makes it easier to return to the details, refine the draft, and keep moving without starting over.</p><Link href="/auth" className="mt-8 inline-flex rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800">Create your profile <span className="ml-2 text-cyan-300">↗</span></Link></Reveal><Reveal delay={120}><div className="home-devices"><div className="home-laptop"><div className="home-device-bar"><LnkditMark className="h-5 w-5" /><span className="ml-auto h-2 w-16 rounded-full bg-slate-200" /></div><div className="grid gap-3 p-4 sm:grid-cols-[0.9fr_1.1fr]"><div><span className="block h-2 w-16 rounded-full bg-cyan-200" /><span className="mt-3 block h-5 w-32 rounded-full bg-slate-900/90" /><span className="mt-2 block h-2 w-28 rounded-full bg-slate-200" /><span className="mt-5 block h-20 rounded-xl bg-gradient-to-br from-cyan-100 via-slate-100 to-white" /></div><div className="rounded-xl bg-slate-50 p-3"><span className="block h-2 w-12 rounded-full bg-slate-300" /><span className="mt-4 block h-2 w-full rounded-full bg-slate-200" /><span className="mt-2 block h-2 w-4/5 rounded-full bg-slate-200" /><span className="mt-5 block h-16 rounded-xl bg-white shadow-sm" /></div></div></div><div className="home-phone"><div className="mx-auto h-1 w-10 rounded-full bg-slate-300" /><div className="mt-4 flex items-center justify-between"><LnkditMark className="h-5 w-5" /><span className="h-2 w-8 rounded-full bg-cyan-200" /></div><span className="mt-7 block h-2 w-10 rounded-full bg-cyan-200" /><span className="mt-3 block h-4 w-28 rounded-full bg-slate-900" /><span className="mt-2 block h-2 w-24 rounded-full bg-slate-200" /><span className="mt-5 block h-24 rounded-xl bg-gradient-to-br from-slate-100 via-cyan-50 to-white" /><span className="mt-3 block h-2 w-full rounded-full bg-slate-200" /><span className="mt-2 block h-2 w-3/4 rounded-full bg-slate-200" /></div></div></Reveal></div></section>
+
+        <section className="home-final-cta px-5 py-20 sm:px-8 sm:py-28"><Reveal className="mx-auto max-w-4xl text-center"><LnkditMark className="mx-auto h-12 w-12" /><p className="mt-6 text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">Ready when you are</p><h2 className="mx-auto mt-4 max-w-3xl text-4xl font-semibold tracking-[-0.06em] text-slate-950 sm:text-6xl">Make the next version of your company story easier to share.</h2><p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-slate-600">Start with the essentials, keep the work in view, and export when it feels right.</p><Link href={resumeHref} className="mt-8 inline-flex rounded-xl bg-slate-950 px-6 py-3.5 text-sm font-semibold text-white shadow-[0_12px_25px_rgba(15,23,42,0.18)] transition hover:-translate-y-0.5 hover:bg-slate-800">{companyName ? `Continue with ${companyName}` : "Create your profile"}<span className="ml-2 text-cyan-300">↗</span></Link></Reveal></section>
+      </main>
+    </div>
+  );
+}
