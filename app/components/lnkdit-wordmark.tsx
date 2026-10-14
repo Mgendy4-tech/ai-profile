@@ -7,20 +7,7 @@ type LnkditWordmarkProps = {
 };
 
 export function LnkditMark({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      viewBox="0 0 48 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <rect width="48" height="48" rx="14" fill="#0F172A" />
-      <path d="M12 11V37H27" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M35 23V37" stroke="#22D3EE" strokeWidth="5" strokeLinecap="round" />
-      <circle cx="35" cy="15" r="3" fill="#22D3EE" />
-    </svg>
-  );
+  return <img aria-hidden="true" className={className} src="/icon.svg" alt="" />;
 }
 
 export default function LnkditWordmark({ className = "", size = "compact", showMark = false }: LnkditWordmarkProps) {
