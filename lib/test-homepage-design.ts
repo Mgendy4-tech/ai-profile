@@ -32,6 +32,8 @@ assert(home.includes("prefers-reduced-motion" ) || styles.includes("prefers-redu
 assert(home.includes("HomepageShowcase"));
 assert(page.includes("HomepageShowcase"));
 assert(styles.includes("home-reveal-visible"));
+assert(/\[data-home-reveal\]\s*\{\s*opacity:\s*1/.test(styles));
+assert(!/\[data-home-reveal\]\s*\{\s*opacity:\s*0/.test(styles));
 assert(styles.includes("home-floating-card"));
 assert(home.includes("home-product-surface") && home.includes("home-refinement-progress"));
 assert(styles.includes(".home-floating-workspace { left: 1%; top: 12%; z-index: 1; width: 48%; transform: rotate(-.2deg)"));
@@ -40,6 +42,7 @@ assert(styles.includes(".home-floating-refinement { left: 27%; top: 56%; z-index
 assert(styles.includes(".home-floating-export { right: 3%; top: 56%; z-index: 5; width: 27%; transform: rotate(.35deg)"));
 assert(styles.includes("home-floating-profile > .home-preview-card") && styles.includes("home-floating-workspace > .home-preview-card"));
 assert(styles.includes(".home-product-surface") && styles.includes(".home-workspace-preview { min-height: 220px"));
+assert(styles.includes("@media (min-width: 768px) and (max-width: 1199px)") && styles.includes(".home-product-stage { min-height: 700px; }"));
 assert(styles.includes("@media (max-width: 480px)") && styles.includes("min-height: 760px") && styles.includes("top: 14%; width: 90%") && styles.includes(".home-floating-refinement { display: none; }") && styles.includes("top: 70%; width: 52%"));
 assert(styles.includes("home-workflow-step-active"));
 assert(styles.includes("home-pdf-page-front"));

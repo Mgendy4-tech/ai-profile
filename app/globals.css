@@ -26,8 +26,8 @@ body {
 }
 
 [data-home-reveal] {
-  opacity: 0;
-  transform: translateY(18px);
+  opacity: 1;
+  transform: none;
   transition: opacity 700ms ease, transform 700ms cubic-bezier(.2,.75,.25,1);
   transition-delay: var(--home-delay, 0ms);
 }
@@ -97,6 +97,7 @@ body {
 .home-final-cta { background: #f8fafc; }
 @keyframes home-float { 0%, 100% { margin-top: 0; } 50% { margin-top: -8px; } }
 @media (max-width: 767px) { .home-product-stage { min-height: 760px; transform: none; margin-bottom: 0; } .home-floating-workspace { left: 4%; top: 8%; width: 62%; } .home-floating-profile { right: auto; left: 8%; top: 13%; width: 88%; } .home-floating-refinement { left: 35%; bottom: auto; top: 55%; width: 31%; } .home-floating-export { right: 4%; bottom: auto; top: 58%; width: 32%; } .home-stage-caption { left: 2%; } .home-phone { width: 32%; } .home-pdf-stack { min-height: 300px; padding-right: 1rem; } .home-pdf-page-front { width: 84%; } .home-pdf-page-back { right: 1%; width: 76%; } }
+@media (min-width: 768px) and (max-width: 1199px) { .home-product-stage { min-height: 700px; } .home-floating-workspace { left: 3%; top: 10%; width: 43%; } .home-floating-profile { right: 3%; top: 5%; width: 64%; } .home-floating-refinement { left: 28%; top: 58%; width: 27%; } .home-floating-export { right: 3%; top: 58%; width: 29%; } }
 @media (max-width: 480px) { .home-hero .home-product-stage { min-height: 760px; margin-top: 1rem; } .home-product-surface { inset: 4% 1% 3%; border-radius: 1.5rem; } .home-floating-workspace { left: 4%; top: 7%; width: 58%; transform: rotate(-.15deg); } .home-floating-profile { right: auto; left: 5%; top: 14%; width: 90%; transform: rotate(.05deg); } .home-floating-refinement { display: none; } .home-floating-export { right: 4%; bottom: auto; top: 70%; width: 52%; transform: rotate(.15deg); } .home-stage-caption { left: 3%; top: 2%; font-size: .55rem; } }
 @media (min-width: 640px) { .home-page-shell main > section { padding-block: 6rem; } }
 @media (prefers-reduced-motion: reduce) { [data-home-reveal] { opacity: 1; transform: none; transition: none; } .home-floating-card, .home-step-card { animation: none; transition: none; } }
