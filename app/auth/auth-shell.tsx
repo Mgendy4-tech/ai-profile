@@ -9,7 +9,7 @@ import { chooseAuthenticatedWorkspace, CLOUD_OWNER_STORAGE_KEY, hasMeaningfulLoc
 import { CloudSyncCoordinator, fetchCloudJson, type SyncResult } from "@/lib/cloud-sync-lifecycle";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { readWorkspace, writeWorkspaceSnapshot } from "@/lib/workspace";
-import { hydrateWorkspaceAssets, migrateLocalWorkspaceAssets } from "@/lib/cloud-assets";
+import { clearTrustedHydratedCloudAssets, hydrateWorkspaceAssets, migrateLocalWorkspaceAssets } from "@/lib/cloud-assets";
 import { reportClientFailure } from "@/lib/client-observability";
 import ClientObservability from "@/app/components/client-observability";
 import { passwordRecoveryRedirect } from "@/lib/site-url";
@@ -141,6 +141,7 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
       if (event === "PASSWORD_RECOVERY") setMode("reset-password");
       if (nextSession) void sync(nextSession);
       else {
+        clearTrustedHydratedCloudAssets();
         coordinatorRef.current?.cancel();
         if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current);
         setStatus("local-only");

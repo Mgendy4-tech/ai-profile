@@ -5,7 +5,7 @@ import type { FamilyChoice } from "./authored-templates/family-selection";
 
 export type OnboardingStatus = "ready" | "needs-attention" | "not-generated";
 export type OnboardingStep = { id: "company" | "projects" | "generate" | "export"; label: string; status: OnboardingStatus; detail: string };
-export type OnboardingProject = { id?: string; name: string; description: string; imageUrl?: string };
+export type OnboardingProject = { id?: string; name: string; description: string; imageUrl?: string; imagePath?: string };
 
 export type OnboardingProgressInput = {
   company: CompanyData | null;
@@ -19,7 +19,7 @@ export const isCompanyReady = (company: CompanyData | null): boolean => Boolean(
 
 export const isProjectPathReady = (company: CompanyData | null, projects: readonly OnboardingProject[]): boolean => {
   if (!projects.length) return isCompanyReady(company);
-  return projects.every((project) => persistedImageState(project.imageUrl) === "valid");
+  return projects.every((project) => persistedImageState(project.imageUrl, project.imagePath) === "valid");
 };
 
 export const deriveOnboardingProgress = ({ company, projects, profile, familyChoices = [], selectedFamily = null }: OnboardingProgressInput): OnboardingStep[] => {
@@ -30,11 +30,12 @@ export const deriveOnboardingProgress = ({ company, projects, profile, familyCho
     name: project.name,
     description: project.description,
     imageUrl: project.imageUrl ?? "",
+    imagePath: project.imagePath,
   }));
   const profileFresh = Boolean(profile && company && isPersistedGeneratedProfileCurrent(profile, company, normalizedProjects));
   const selectedChoice = (selectedFamily ? familyChoices.find((choice) => choice.id === selectedFamily) : undefined) ?? familyChoices.find((choice) => choice.recommended);
   const exportReady = Boolean(profileFresh && selectedChoice?.eligible && projectReady);
-  const invalidProject = projects.some((project) => persistedImageState(project.imageUrl) !== "valid");
+  const invalidProject = projects.some((project) => persistedImageState(project.imageUrl, project.imagePath) !== "valid");
 
   return [
     { id: "company", label: "Company", status: companyReady ? "ready" : "needs-attention", detail: companyReady ? "Company information saved." : "Add your company name and a short description." },

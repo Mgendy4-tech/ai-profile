@@ -1,4 +1,7 @@
 import { PRODUCTION_V1_LIMITS } from "./production-limits";
+import { hydrateCloudAsset } from "./cloud-assets";
+import { getSupabaseBrowserClient } from "./supabase-browser";
+import { isTrustedHydratedCloudAsset, type TrustedCloudAssetKind } from "./cloud-asset-trust";
 
 export const AUTHORED_PROJECT_IMAGE_MAX_EDGE_PX = 1800;
 // The largest V1 authored logo box is under 40 mm; 400 px remains above 250 effective DPI.
@@ -30,6 +33,40 @@ const loadImage = (source: string) => new Promise<HTMLImageElement>((resolve, re
   image.src = source;
 });
 
+const dataUrlFromBytes = (bytes: ArrayBuffer, contentType: string): string => {
+  const binary = Array.from(new Uint8Array(bytes), (value) => String.fromCharCode(value)).join("");
+  return `data:${contentType};base64,${btoa(binary)}`;
+};
+
+const fetchTrustedImage = async (url: string): Promise<string> => {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(url, { signal: controller.signal, credentials: "omit" });
+    if (!response.ok) throw new Error("cloud_asset_fetch_failed");
+    const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.toLowerCase() ?? "";
+    if (contentType !== "image/png" && contentType !== "image/jpeg") throw new Error("image_format_limit");
+    const bytes = await response.arrayBuffer();
+    if (bytes.byteLength > PRODUCTION_V1_LIMITS.imageBytes) throw new Error("image_byte_limit");
+    return dataUrlFromBytes(bytes, contentType);
+  } finally {
+    window.clearTimeout(timeout);
+  }
+};
+
+export const materializeTrustedAuthoredImage = async (source: string, path: string | undefined, profileId: string | undefined, kind: TrustedCloudAssetKind, client = getSupabaseBrowserClient()): Promise<string> => {
+  if (/^data:image\/(png|jpe?g);base64,/i.test(source)) return source;
+  if (!profileId || !isTrustedHydratedCloudAsset(source, path, kind, profileId)) throw new Error("image_format_limit");
+  try {
+    return await fetchTrustedImage(source);
+  } catch (error) {
+    if (error instanceof Error && ["image_byte_limit", "image_format_limit"].includes(error.message)) throw error;
+    const refreshed = client && path ? await hydrateCloudAsset(path, profileId, client, kind) : "";
+    if (!refreshed) throw new Error("cloud_asset_refresh_failed");
+    return fetchTrustedImage(refreshed);
+  }
+};
+
 const canvasHasTransparency = (context: CanvasRenderingContext2D, width: number, height: number) => {
   const pixels = context.getImageData(0, 0, width, height).data;
   for (let index = 3; index < pixels.length; index += 4) if (pixels[index] < 255) return true;
@@ -48,12 +85,13 @@ const transparentArtworkBounds = (context: CanvasRenderingContext2D, width: numb
 
 const cache = new Map<string, Promise<AuthoredImageOptimization>>();
 
-const optimizeAuthoredImage = (source: string, maximumEdge: number): Promise<AuthoredImageOptimization> => {
-  const cacheKey = `${maximumEdge}:${source}`;
+const optimizeAuthoredImage = (source: string, maximumEdge: number, path?: string, profileId?: string, kind: TrustedCloudAssetKind = "project"): Promise<AuthoredImageOptimization> => {
+  const cacheKey = `${maximumEdge}:${profileId ?? ""}:${path ?? ""}:${source}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
   const pending = (async () => {
-    const image = await loadImage(source);
+    const materializedSource = await materializeTrustedAuthoredImage(source, path, profileId, kind);
+    const image = await loadImage(materializedSource);
     const originalWidth = image.naturalWidth;
     const originalHeight = image.naturalHeight;
     if (!originalWidth || !originalHeight) throw new Error("Authored project image has invalid dimensions.");
@@ -67,7 +105,7 @@ const optimizeAuthoredImage = (source: string, maximumEdge: number): Promise<Aut
     const context = canvas.getContext("2d", { alpha: true });
     if (!context) throw new Error("Could not prepare authored project image.");
     context.drawImage(image, 0, 0, width, height);
-    const inputIsPng = /^data:image\/png;base64,/i.test(source);
+    const inputIsPng = /^data:image\/png;base64,/i.test(materializedSource);
     const transparencyPreserved = inputIsPng && canvasHasTransparency(context, width, height);
     const scaledBounds = transparencyPreserved ? transparentArtworkBounds(context, width, height) : null;
     const safelyTrimmed = scaledBounds && (scaledBounds.x > 0 || scaledBounds.y > 0 || scaledBounds.width < width || scaledBounds.height < height);
@@ -79,14 +117,14 @@ const optimizeAuthoredImage = (source: string, maximumEdge: number): Promise<Aut
       outputContext.drawImage(canvas, scaledBounds.x, scaledBounds.y, scaledBounds.width, scaledBounds.height, 0, 0, scaledBounds.width, scaledBounds.height);
     }
     const format = transparencyPreserved ? "PNG" as const : "JPEG" as const;
-    const originalBytes = decodedBytes(source);
+    const originalBytes = decodedBytes(materializedSource);
     const candidate = outputCanvas.toDataURL(transparencyPreserved ? "image/png" : "image/jpeg", AUTHORED_PROJECT_JPEG_QUALITY);
     const optimizedBytes = decodedBytes(candidate);
     const useCandidate = scale < 1 || Boolean(safelyTrimmed) || optimizedBytes < originalBytes;
     const outputWidth = useCandidate ? outputCanvas.width : originalWidth;
     const outputHeight = useCandidate ? outputCanvas.height : originalHeight;
     return {
-      source: useCandidate ? candidate : source,
+      source: useCandidate ? candidate : materializedSource,
       originalBytes,
       optimizedBytes: useCandidate ? optimizedBytes : originalBytes,
       originalWidth,
@@ -105,13 +143,13 @@ const optimizeAuthoredImage = (source: string, maximumEdge: number): Promise<Aut
   return pending;
 };
 
-export const optimizeAuthoredProjectImage = (source: string) => optimizeAuthoredImage(source, AUTHORED_PROJECT_IMAGE_MAX_EDGE_PX);
-export const optimizeAuthoredLogoImage = (source: string) => optimizeAuthoredImage(source, AUTHORED_LOGO_IMAGE_MAX_EDGE_PX);
+export const optimizeAuthoredProjectImage = (source: string, path?: string, profileId?: string) => optimizeAuthoredImage(source, AUTHORED_PROJECT_IMAGE_MAX_EDGE_PX, path, profileId, "project");
+export const optimizeAuthoredLogoImage = (source: string, path?: string, profileId?: string) => optimizeAuthoredImage(source, AUTHORED_LOGO_IMAGE_MAX_EDGE_PX, path, profileId, "logo");
 
-export const optimizeAuthoredProjectImages = async <T extends { imageUrl: string }>(projects: readonly T[]) => {
+export const optimizeAuthoredProjectImages = async <T extends { imageUrl: string; imagePath?: string }>(projects: readonly T[], profileId?: string) => {
   const optimizedBySource = new Map<string, AuthoredImageOptimization>();
   const optimized = await Promise.all(projects.map(async (project) => {
-    const result = await optimizeAuthoredProjectImage(project.imageUrl);
+    const result = await optimizeAuthoredProjectImage(project.imageUrl, project.imagePath, profileId);
     optimizedBySource.set(project.imageUrl, result);
     return { ...project, imageUrl: result.source };
   }));

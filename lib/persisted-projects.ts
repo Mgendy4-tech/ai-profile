@@ -1,16 +1,17 @@
 import { type StorageWriteResult, writeApplicationStorage } from "./local-profile-data";
 import { getActiveProfileStorage } from "./workspace";
+import { isOperationalAuthoredImage } from "./production-limits";
 
 export type PersistedProject = { id: string; name: string; category?: string; description: string; imageUrl: string; imagePath?: string };
 export type PersistedProjectSnapshot = { projects: PersistedProject[]; persistedCount: number; issues: readonly string[] };
 export type PersistedImageState = "missing" | "valid" | "invalid";
 
-export const persistedImageState = (source: unknown): PersistedImageState => {
+export const persistedImageState = (source: unknown, imagePath?: unknown): PersistedImageState => {
   if (typeof source !== "string" || !source.trim()) return "missing";
-  return /^data:image\/(?:png|jpeg);base64,/i.test(source) ? "valid" : "invalid";
+  return isOperationalAuthoredImage(source, imagePath, "project") ? "valid" : "invalid";
 };
 
-export const hasValidPersistedProjectImage = (source: unknown): source is string => persistedImageState(source) === "valid";
+export const hasValidPersistedProjectImage = (source: unknown, imagePath?: unknown): source is string => persistedImageState(source, imagePath) === "valid";
 
 export const reconstructPersistedProjects = (raw: string | null): PersistedProjectSnapshot => {
   if (!raw) return { projects: [], persistedCount: 0, issues: [] };

@@ -81,7 +81,7 @@ const handleEdit = (project: Project) => {
   setProjectName(project.name);
   setCategory(project.category ?? "");
   setDescription(project.description);
-  const validImage = persistedImageState(project.imageUrl) === "valid";
+  const validImage = persistedImageState(project.imageUrl, project.imagePath) === "valid";
   setImageUrl(validImage ? project.imageUrl : "");
   setImagePreview(validImage ? project.imageUrl : "");
   setImagePath(project.imagePath ?? "");
@@ -364,7 +364,7 @@ setIsSaving(false);
             <div className="mt-5 grid grid-cols-1 gap-6 md:grid-cols-2">
             {projects.map((project) => (
               <article key={project.id} className="rounded-2xl bg-white p-6 shadow-sm">
-                {persistedImageState(project.imageUrl) === "valid" && (
+                {persistedImageState(project.imageUrl, project.imagePath) === "valid" && (
                   <img
                     src={project.imageUrl}
                     alt={project.name}
@@ -372,7 +372,7 @@ setIsSaving(false);
                   />
                 )}
 
-                {persistedImageState(project.imageUrl) === "valid" ? <p className="mb-3 text-xs font-semibold text-green-700">Project image ready</p> : persistedImageState(project.imageUrl) === "invalid" ? <p role="status" className="mb-3 text-sm font-medium text-amber-800">Replace this image — the saved image can’t be used.</p> : <p role="status" className="mb-3 text-sm font-medium text-amber-800">Add a real project image to unlock Visual / Portfolio.</p>}
+                {persistedImageState(project.imageUrl, project.imagePath) === "valid" ? <p className="mb-3 text-xs font-semibold text-green-700">Project image ready</p> : persistedImageState(project.imageUrl, project.imagePath) === "invalid" ? <p role="status" className="mb-3 text-sm font-medium text-amber-800">Replace this image — the saved image can’t be used.</p> : <p role="status" className="mb-3 text-sm font-medium text-amber-800">Add a real project image to unlock Visual / Portfolio.</p>}
 
                 <h2 className="text-lg font-semibold text-gray-900">{project.name}</h2>
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-600">{project.description}</p>

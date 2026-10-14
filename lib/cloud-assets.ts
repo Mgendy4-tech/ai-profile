@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "./supabase-browser";
 import { activeWorkspaceProfile, readWorkspace, type Workspace, type WorkspaceProfile } from "./workspace";
 import { reportClientFailure } from "./client-observability";
+import { clearTrustedHydratedCloudAssets, inferTrustedCloudAssetKind, isOwnedCloudAssetPath, registerTrustedHydratedCloudAsset } from "./cloud-asset-trust";
 
 export const CUSTOMER_ASSETS_BUCKET = "customer-assets";
 export type CloudAssetKind = "logo" | "project";
@@ -9,8 +10,6 @@ export type CloudAssetResult = { ok: true; path: string } | { ok: false; code: "
 
 const isDataImage = (value: unknown): value is string => typeof value === "string" && /^data:image\/(png|jpeg);base64,/i.test(value);
 const extensionFor = (dataUrl: string): "png" | "jpg" => /^data:image\/png/i.test(dataUrl) ? "png" : "jpg";
-const ownedPrefix = (userId: string, profileId: string) => `${userId}/${profileId}/`;
-
 const parseDataUrl = (dataUrl: string): { blob: Blob; extension: "png" | "jpg" } | null => {
   if (!isDataImage(dataUrl)) return null;
   const [header, encoded] = dataUrl.split(",", 2);
@@ -32,8 +31,9 @@ const currentUser = async (client: SupabaseClient): Promise<string | null> => {
   }
 };
 
-export const isOwnedAssetPath = (path: unknown, userId: string, profileId?: string): path is string =>
-  typeof path === "string" && path.startsWith(profileId ? ownedPrefix(userId, profileId) : `${userId}/`) && !path.includes("..") && !path.startsWith("/");
+export { clearTrustedHydratedCloudAssets } from "./cloud-asset-trust";
+
+export const isOwnedAssetPath = isOwnedCloudAssetPath;
 
 export const uploadCloudAsset = async (profileId: string, kind: CloudAssetKind, dataUrl: string, client = getSupabaseBrowserClient()): Promise<CloudAssetResult> => {
   if (!client) return { ok: false, code: "not_configured" };
@@ -85,13 +85,17 @@ export const removeProfileCloudAssets = async (profile: WorkspaceProfile, client
   }
 };
 
-export const hydrateCloudAsset = async (path: string | undefined, profileId: string, client = getSupabaseBrowserClient()): Promise<string> => {
+export const hydrateCloudAsset = async (path: string | undefined, profileId: string, client = getSupabaseBrowserClient(), kind: CloudAssetKind = (path ? inferTrustedCloudAssetKind(path) ?? "project" : "project")): Promise<string> => {
   if (!client) return "";
   const userId = await currentUser(client);
   if (!userId || !isOwnedAssetPath(path, userId, profileId)) return "";
   let signed: { data: { signedUrl?: string } | null; error: unknown };
   try { signed = await client.storage.from(CUSTOMER_ASSETS_BUCKET).createSignedUrl(path, 300); } catch { reportClientFailure({ category: "storage_hydration_failure", code: "signed_url_failed", surface: "asset_hydration" }); return ""; }
   if (signed.error || !signed.data?.signedUrl) { reportClientFailure({ category: "storage_hydration_failure", code: "signed_url_failed", surface: "asset_hydration" }); return ""; }
+  if (!registerTrustedHydratedCloudAsset(signed.data.signedUrl, path, userId, profileId, kind)) {
+    reportClientFailure({ category: "storage_hydration_failure", code: "signed_url_untrusted", surface: "asset_hydration" });
+    return "";
+  }
   // A private signed URL is already a browser-safe image source. Downloading
   // it with fetch adds a CORS dependency that is unnecessary for <img> and
   // caused fresh-session hydration to fail while cloud sync still succeeded.
@@ -115,23 +119,23 @@ export const hydrateWorkspaceAssets = async (workspace: Workspace, client = getS
   for (const profile of next.profiles) {
     const company = parseObject(profile.state.companyData);
     if (company?.logoPath && needsAssetHydration(company.logoUrl)) {
-      const logo = await hydrateCloudAsset(String(company.logoPath), profile.id, client);
+      const logo = await hydrateCloudAsset(String(company.logoPath), profile.id, client, "logo");
       if (logo) company.logoUrl = logo;
     }
     if (company) profile.state.companyData = JSON.stringify(company);
     const projects = parseArray(profile.state.projectsData);
     for (const project of projects) if (project.imagePath && needsAssetHydration(project.imageUrl)) {
-      const image = await hydrateCloudAsset(String(project.imagePath), profile.id, client);
+      const image = await hydrateCloudAsset(String(project.imagePath), profile.id, client, "project");
       if (image) project.imageUrl = image;
     }
     if (projects.length) profile.state.projectsData = JSON.stringify(projects);
     const generated = parseObject(profile.state.generatedProfile);
     if (generated) {
-      const generatedCompany = generated.logoPath && needsAssetHydration(generated.logoUrl) ? await hydrateCloudAsset(String(generated.logoPath), profile.id, client) : "";
+    const generatedCompany = generated.logoPath && needsAssetHydration(generated.logoUrl) ? await hydrateCloudAsset(String(generated.logoPath), profile.id, client, "logo") : "";
       if (generatedCompany) generated.logoUrl = generatedCompany;
       if (Array.isArray(generated.projects)) for (const project of generated.projects) if (project && typeof project === "object" && (project as Record<string, unknown>).imagePath && needsAssetHydration((project as Record<string, unknown>).imageUrl)) {
         const item = project as Record<string, unknown>;
-        const image = await hydrateCloudAsset(String(item.imagePath), profile.id, client);
+        const image = await hydrateCloudAsset(String(item.imagePath), profile.id, client, "project");
         if (image) item.imageUrl = image;
       }
       profile.state.generatedProfile = JSON.stringify(generated);

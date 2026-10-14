@@ -1,4 +1,4 @@
-export type StoredCompanyIdentity = { name?: string; logoUrl?: string; about?: string; companyType?: string; industry?: string; customerType?: string; servicesProducts?: string; activities?: string; experience?: string };
+export type StoredCompanyIdentity = { name?: string; logoUrl?: string; logoPath?: string; about?: string; companyType?: string; industry?: string; customerType?: string; servicesProducts?: string; activities?: string; experience?: string };
 export type NewCompanyIsolationResult = { companyData: Record<string, unknown>; projects: unknown[]; clearKeys: readonly string[]; companyChanged: boolean };
 
 const identity = (value: string | undefined) => (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();

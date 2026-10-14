@@ -1,3 +1,5 @@
+import { isTrustedHydratedCloudAsset, type TrustedCloudAssetKind } from "./cloud-asset-trust";
+
 export const PRODUCTION_V1_LIMITS = Object.freeze({
   projects: 12,
   services: 12,
@@ -23,34 +25,44 @@ export const dataUrlDecodedBytes = (source: string) => {
   return Math.max(0, Math.floor(payload.length * 3 / 4) - (payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0));
 };
 
-export const validateProjectOperationalLimits = (projects: readonly { imageUrl: string }[]): readonly OperationalLimitIssue[] => {
+export type AuthoredImageSource = { imageUrl?: string; imagePath?: string };
+
+export const isOperationalAuthoredImage = (source: unknown, path: unknown, kind: TrustedCloudAssetKind, profileId?: string): source is string =>
+  typeof source === "string" && ( /^data:image\/(png|jpe?g);base64,/i.test(source) || isTrustedHydratedCloudAsset(source, path, kind, profileId) );
+
+export const validateProjectOperationalLimits = (projects: readonly AuthoredImageSource[]): readonly OperationalLimitIssue[] => {
   const issues: OperationalLimitIssue[] = [];
   if (projects.length > PRODUCTION_V1_LIMITS.projects) issues.push({ code: "project_count_limit", path: "projects", message: `V1 supports at most ${PRODUCTION_V1_LIMITS.projects} projects.` });
   let total = 0;
   projects.forEach((project, index) => {
     if (!project.imageUrl) return;
-    if (!/^data:image\/(png|jpe?g);base64,/i.test(project.imageUrl)) issues.push({ code: "image_format_limit", path: `projects.${index}.imageUrl`, message: "Project images must be PNG or JPEG files." });
-    const bytes = dataUrlDecodedBytes(project.imageUrl); total += bytes;
-    if (bytes > PRODUCTION_V1_LIMITS.imageBytes) issues.push({ code: "image_byte_limit", path: `projects.${index}.imageUrl`, message: "Each project image must be 3 MB or smaller." });
+    if (!isOperationalAuthoredImage(project.imageUrl, project.imagePath, "project")) {
+      issues.push({ code: "image_format_limit", path: `projects.${index}.imageUrl`, message: "Project images must be PNG or JPEG files." });
+      return;
+    }
+    if (/^data:image\//i.test(project.imageUrl)) {
+      const bytes = dataUrlDecodedBytes(project.imageUrl); total += bytes;
+      if (bytes > PRODUCTION_V1_LIMITS.imageBytes) issues.push({ code: "image_byte_limit", path: `projects.${index}.imageUrl`, message: "Each project image must be 3 MB or smaller." });
+    }
   });
   if (total > PRODUCTION_V1_LIMITS.totalImageBytes) issues.push({ code: "total_image_byte_limit", path: "projects", message: "Combined source project images must be 8 MB or smaller." });
   return issues;
 };
 
 export const validateAuthoredImageOperationalLimits = (
-  company: { logoUrl?: string },
-  projects: readonly { imageUrl: string }[],
+  company: { logoUrl?: string; logoPath?: string },
+  projects: readonly AuthoredImageSource[],
 ): readonly OperationalLimitIssue[] => {
   const issues = [...validateProjectOperationalLimits(projects)];
   if (!company.logoUrl) return issues;
-  if (!/^data:image\/(png|jpe?g);base64,/i.test(company.logoUrl)) {
+  if (!isOperationalAuthoredImage(company.logoUrl, company.logoPath, "logo")) {
     issues.push({ code: "image_format_limit", path: "company.logoUrl", message: "Company logos must be PNG or JPEG files." });
   }
-  const logoBytes = dataUrlDecodedBytes(company.logoUrl);
+  const logoBytes = /^data:image\//i.test(company.logoUrl) ? dataUrlDecodedBytes(company.logoUrl) : 0;
   if (logoBytes > PRODUCTION_V1_LIMITS.imageBytes) {
     issues.push({ code: "image_byte_limit", path: "company.logoUrl", message: "The company logo must be 3 MB or smaller." });
   }
-  const projectBytes = projects.reduce((total, project) => total + (project.imageUrl ? dataUrlDecodedBytes(project.imageUrl) : 0), 0);
+  const projectBytes = projects.reduce((total, project) => total + (project.imageUrl && /^data:image\//i.test(project.imageUrl) ? dataUrlDecodedBytes(project.imageUrl) : 0), 0);
   if (logoBytes + projectBytes > PRODUCTION_V1_LIMITS.totalImageBytes && !issues.some((entry) => entry.code === "total_image_byte_limit")) {
     issues.push({ code: "total_image_byte_limit", path: "company.logoUrl", message: "Combined source logo and project images must be 8 MB or smaller." });
   }

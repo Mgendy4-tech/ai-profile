@@ -41,7 +41,7 @@ import {
 } from "@/lib/visual-system/pdf-project-composition";
 import type { PDFCompositionFamily } from "@/lib/visual-system/pdf-art-direction";
 import { resolvePDFCreditPlacement } from "@/lib/visual-system/pdf-image-credits";
-import { dataUrlDecodedBytes, validateAuthoredEmbeddedImageLimits, validateAuthoredImageOperationalLimits, validateRenderedDocumentLimits } from "@/lib/production-limits";
+import { dataUrlDecodedBytes, isOperationalAuthoredImage, validateAuthoredEmbeddedImageLimits, validateAuthoredImageOperationalLimits, validateRenderedDocumentLimits } from "@/lib/production-limits";
 import { classifyAuthoredFallbackReason, routeEditorialInteriorsV1Export } from "@/lib/authored-templates/export-orchestrator";
 import { emitProductionTelemetry } from "@/lib/production-telemetry";
 import {
@@ -97,12 +97,14 @@ import LnkditHeader from "@/app/components/lnkdit-header";
 import AuthoredVariantPreview from "@/app/components/authored-variant-preview";
 import { deriveOnboardingProgress } from "@/lib/onboarding-progress";
 import { reportClientFailure } from "@/lib/client-observability";
+import { activeWorkspaceProfile, readWorkspace } from "@/lib/workspace";
 
 type Project = {
   id?: string;
   name: string;
   description: string;
   imageUrl?: string;
+  imagePath?: string;
 };
 
 type GeneratedProfile = {
@@ -146,7 +148,7 @@ const familyChoicesForProfile = (currentProfile: GeneratedProfile, sourceProject
   const projects = sourceProjects;
   return familyChoices({
     projectCount: projects.length,
-    authenticProjectImageCount: projects.filter((project) => typeof project.imageUrl === "string" && project.imageUrl.startsWith("data:image/")).length,
+    authenticProjectImageCount: projects.filter((project) => isOperationalAuthoredImage(project.imageUrl, project.imagePath, "project")).length,
     serviceCount: currentProfile.sections.find((section) => section.id === "services")?.items.length ?? 0,
     productFeatureCount: currentProfile.sections.find((section) => section.id === "features")?.items.length ?? 0,
     useCaseCount: currentProfile.sections.find((section) => section.id === "useCases")?.items.length ?? 0,
@@ -155,7 +157,7 @@ const familyChoicesForProfile = (currentProfile: GeneratedProfile, sourceProject
 
 const authoredVariantSignalsForProfile = (currentProfile: GeneratedProfile, sourceProjects: readonly Project[] = currentProfile.projects ?? []): AuthoredVariantSignals => ({
   projectCount: sourceProjects.length,
-  authenticProjectImageCount: sourceProjects.filter((project) => typeof project.imageUrl === "string" && project.imageUrl.startsWith("data:image/")).length,
+  authenticProjectImageCount: sourceProjects.filter((project) => isOperationalAuthoredImage(project.imageUrl, project.imagePath, "project")).length,
   serviceCount: currentProfile.sections.find((section) => section.id === "services")?.items.length ?? 0,
   corporateDetailCount: currentProfile.sections.filter((section) => ["expertise", "approach", "howItWorks", "solutions"].includes(section.id)).length,
   productFeatureCount: currentProfile.sections.find((section) => section.id === "features")?.items.length ?? 0,
@@ -478,9 +480,19 @@ const [loading, setLoading] = useState(false);
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<AuthoredVariantId | null>(null);
   const [familyMessage, setFamilyMessage] = useState("");
+  const [cloudHydrationVersion, setCloudHydrationVersion] = useState(0);
 
 useEffect(() => {
-  const restore = window.setTimeout(() => {
+  const onCloudSyncStatus = (event: Event) => {
+    const status = (event as CustomEvent<{ status?: string }>).detail?.status;
+    if (status === "synced") setCloudHydrationVersion((version) => version + 1);
+  };
+  window.addEventListener("cloud-sync-status", onCloudSyncStatus);
+  return () => window.removeEventListener("cloud-sync-status", onCloudSyncStatus);
+}, []);
+
+useEffect(() => {
+  const restore = () => {
     const generated = readPersistedGeneratedProfile(localStorage);
     const persistedCompany = readPersistedCompanyData(localStorage);
     const persistedProjects = readPersistedProjects(localStorage);
@@ -500,9 +512,11 @@ useEffect(() => {
     if (!persisted || validateApprovedStructure(persisted.structure) !== null) return;
     setProfileStructure(persisted.structure as ProfileStructure);
     setSelectedSectionIds(persisted.selectedSectionIds);
-  }, 0);
-  return () => window.clearTimeout(restore);
-}, []);
+  };
+  const initialRestore = window.setTimeout(restore, 0);
+  const hydrationRetry = window.setTimeout(restore, 2000);
+  return () => { window.clearTimeout(initialRestore); window.clearTimeout(hydrationRetry); };
+}, [cloudHydrationVersion]);
 
 useEffect(() => {
   if (!profile) return;
@@ -831,6 +845,7 @@ setProfile(generatedProfile);
       const generatedCompanyData: Partial<CompanyData> = {
         name: profile.companyName,
         logoUrl: profile.logoUrl,
+        logoPath: (profile as GeneratedProfile & { logoPath?: string }).logoPath,
       };
       let companyData: Partial<CompanyData> = generatedCompanyData;
       const persistedCompanyData = readPersistedCompanyData(localStorage);
@@ -842,6 +857,7 @@ setProfile(generatedProfile);
       const persistedProjects = readPersistedProjects(localStorage);
       if (persistedProjects.issues.length) throw new Error("persisted_project_state_invalid");
       const authoredProjects = persistedProjects.projects;
+      const activeProfileId = activeWorkspaceProfile(readWorkspace(localStorage)).id;
       if (!persistedCompanyData || !isPersistedGeneratedProfileCurrent(profile, persistedCompanyData, authoredProjects)) throw new Error("stale_generated_profile");
       const requestedFamilyId = readApplicationStorage(localStorage, "authoredFamilyDecision") as "visual-portfolio" | "corporate-services" | "product-tech" | null;
       if (requestedFamilyId && !familyChoicesForProfile(profile, authoredProjects).some((choice) => choice.id === requestedFamilyId && choice.eligible)) {
@@ -884,9 +900,9 @@ setProfile(generatedProfile);
       const optimization = await (async () => {
         try {
           return {
-            projects: await optimizeAuthoredProjectImages(authoredProjects),
+            projects: await optimizeAuthoredProjectImages(authoredProjects, activeProfileId),
             logo: typeof companyData.logoUrl === "string" && companyData.logoUrl
-              ? await optimizeAuthoredLogoImage(companyData.logoUrl)
+              ? await optimizeAuthoredLogoImage(companyData.logoUrl, companyData.logoPath, activeProfileId)
               : null,
           };
         } catch (error) {
@@ -897,6 +913,8 @@ setProfile(generatedProfile);
       const logoOptimization = optimization.logo;
       const optimizedCompanyData = { ...companyData, logoUrl: logoOptimization?.source ?? companyData.logoUrl };
       const optimizedAuthoredProjects = projectOptimization.projects;
+      const normalizedImageIssues = validateAuthoredImageOperationalLimits(optimizedCompanyData, optimizedAuthoredProjects);
+      if (normalizedImageIssues.length) throw new Error(normalizedImageIssues[0].code);
       const optimizationMs = performance.now() - optimizationStartedAt;
       const embeddedIssues = validateAuthoredEmbeddedImageLimits(optimizedCompanyData, optimizedAuthoredProjects);
       if (embeddedIssues.length) throw new Error(embeddedIssues[0].code);

@@ -39,9 +39,9 @@ export const readPersistedGeneratedProfile = (storage: StorageReader): Persisted
 };
 export const persistGeneratedProfile = (storage: StorageWriter, profile: PersistedGeneratedProfile) => getActiveProfileStorage(storage as Storage).setItem("generatedProfile", JSON.stringify(profile));
 
-export const createGeneratedProfileSourceFingerprint = (company: Pick<CompanyData, "name" | "about" | "companyType" | "industry" | "customerType" | "servicesProducts" | "activities" | "experience">, projects: readonly Pick<PersistedProject, "id" | "name" | "description" | "imageUrl">[]): string => JSON.stringify({
+export const createGeneratedProfileSourceFingerprint = (company: Pick<CompanyData, "name" | "about" | "companyType" | "industry" | "customerType" | "servicesProducts" | "activities" | "experience">, projects: readonly Pick<PersistedProject, "id" | "name" | "description" | "imageUrl" | "imagePath">[]): string => JSON.stringify({
   company: [company.name, company.about, company.companyType, company.industry, company.customerType, company.servicesProducts, company.activities, company.experience].map((value) => value.trim()),
-  projects: projects.map((project) => [project.id, project.name.trim(), project.description.trim(), persistedImageState(project.imageUrl)]),
+  projects: projects.map((project) => [project.id, project.name.trim(), project.description.trim(), persistedImageState(project.imageUrl, project.imagePath)]),
 });
 
 export const isPersistedGeneratedProfileCurrent = (profile: PersistedGeneratedProfile, company: CompanyData, projects: readonly PersistedProject[]): boolean => {
@@ -49,14 +49,14 @@ export const isPersistedGeneratedProfileCurrent = (profile: PersistedGeneratedPr
   if (profile.companyName.trim().toLowerCase() !== company.name.trim().toLowerCase()) return false;
   if ((profile.logoUrl ?? "") !== company.logoUrl) return false;
   if (projects.length === 0) return true;
-  return profile.projects.length === projects.length && profile.projects.every((project, index) => project.name === projects[index]?.name && project.description === projects[index]?.description && persistedImageState(project.imageUrl) === persistedImageState(projects[index]?.imageUrl));
+  return profile.projects.length === projects.length && profile.projects.every((project, index) => project.name === projects[index]?.name && project.description === projects[index]?.description && persistedImageState(project.imageUrl, project.imagePath) === persistedImageState(projects[index]?.imageUrl, projects[index]?.imagePath));
 };
 
 export const reconcileGeneratedProfileToSource = (profile: PersistedGeneratedProfile, company: CompanyData, projects: readonly PersistedProject[]): PersistedGeneratedProfile => {
   const findProject = (candidate: { id?: string; name: string }) => projects.find((project) => (candidate.id && project.id === candidate.id) || project.name === candidate.name);
   const reconciledProjects = profile.projects.map((project) => {
     const source = findProject(project);
-    return source ? { ...project, id: source.id, imagePath: source.imagePath, imageUrl: hasValidPersistedProjectImage(source.imageUrl) ? source.imageUrl : undefined } : { ...project, imageUrl: undefined, imagePath: undefined };
+    return source ? { ...project, id: source.id, imagePath: source.imagePath, imageUrl: hasValidPersistedProjectImage(source.imageUrl, source.imagePath) ? source.imageUrl : undefined } : { ...project, imageUrl: undefined, imagePath: undefined };
   });
   const projectSection = (section: PersistedGeneratedProfileSection) => section.id === "projects" || section.semanticRole === "projects";
   return {
@@ -68,7 +68,7 @@ export const reconcileGeneratedProfileToSource = (profile: PersistedGeneratedPro
       ...section,
       items: section.items.map((item) => {
         const source = findProject(item);
-        return source ? { ...item, id: source.id, imagePath: source.imagePath, imageUrl: hasValidPersistedProjectImage(source.imageUrl) ? source.imageUrl : undefined } : { ...item, imageUrl: undefined, imagePath: undefined };
+        return source ? { ...item, id: source.id, imagePath: source.imagePath, imageUrl: hasValidPersistedProjectImage(source.imageUrl, source.imagePath) ? source.imageUrl : undefined } : { ...item, imageUrl: undefined, imagePath: undefined };
       }),
     } : section),
   };
