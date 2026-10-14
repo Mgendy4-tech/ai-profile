@@ -24,6 +24,8 @@ assert(wordmark.includes('"text-[1.15rem] tracking-[-0.045em]"'));
 assert(workflowRoutes.every((route) => route.includes("LnkditHeader")));
 assert(icon.includes("<svg") && icon.includes("#0F172A") && icon.includes("#22D3EE") && icon.includes("#FFFFFF"));
 assert(icon.includes("<circle") && icon.includes('fill="#22D3EE"'));
+assert(icon.includes('fill="#22D3EE"') && icon.includes("c0-2.8-2.2-5-5-5"));
+assert(!icon.includes('d="M45 27v23"') && !icon.includes('stroke="#22D3EE"'));
 assert(wordmark.includes('src="/icon.svg"'));
 assert(homepageShowcase.includes("LnkditMark") && !homepageShowcase.includes("MiniLogo"));
 assert(!icon.includes("M35 32h12") && !wordmark.includes("M27 25H35"));

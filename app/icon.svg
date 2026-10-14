@@ -2,6 +2,6 @@
   <title>LNKDIT LI mark</title>
   <rect width="64" height="64" rx="18" fill="#0F172A"/>
   <path d="M16 14v36h20" fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"/>
-  <path d="M45 27v23" fill="none" stroke="#22D3EE" stroke-linecap="round" stroke-width="7"/>
-  <circle cx="45" cy="17" r="4" fill="#22D3EE"/>
+  <path d="M51 25c0-2.8-2.2-5-5-5h-5c-2.8 0-5 2.2-5 5s2.2 5 5 5h1c1.8 0 3.5 1.4 3.5 3s-1.7 3-3.5 3h0c0 0 0 1 0 3v8c0 2.8 2.2 5 5 5h0c2.8 0 5-2.2 5-5V25Z" fill="#22D3EE"/>
+  <circle cx="45" cy="14" r="4.5" fill="#22D3EE"/>
 </svg>
