@@ -47,11 +47,11 @@ body {
 .home-stage-caption { position: absolute; left: 8%; top: 5%; display: flex; align-items: center; gap: .5rem; color: #64748b; font-size: .65rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 .home-floating-card { position: absolute; z-index: 1; animation: home-float 8s ease-in-out infinite; }
 .home-floating-card > .home-preview-card { width: 100%; }
-.home-floating-workspace { left: 4%; top: 18%; width: 42%; transform: rotate(-4deg); animation-delay: -2s; }
-.home-floating-profile { right: 2%; top: 14%; z-index: 2; width: 57%; transform: rotate(3deg); animation-delay: -5s; }
-.home-floating-refinement { left: 14%; bottom: 3%; z-index: 3; width: 48%; transform: rotate(2deg); animation-delay: -1s; }
-.home-floating-export { right: 1%; bottom: 8%; z-index: 4; width: 47%; transform: rotate(-3deg); animation-delay: -6s; }
-.home-preview-card { overflow: hidden; border: 1px solid rgba(203,213,225,.9); border-radius: 1.25rem; background: rgba(255,255,255,.94); box-shadow: 0 26px 70px rgba(15,23,42,.16), 0 4px 12px rgba(15,23,42,.06); backdrop-filter: blur(12px); }
+.home-floating-workspace { left: 1%; top: 24%; width: 35%; transform: rotate(-2.5deg); animation-delay: -2s; }
+.home-floating-profile { right: 0; top: 9%; z-index: 4; width: 64%; transform: rotate(.8deg); animation-delay: -5s; }
+.home-floating-refinement { left: 9%; bottom: 7%; z-index: 2; width: 34%; transform: rotate(-1deg); animation-delay: -1s; }
+.home-floating-export { right: 1%; bottom: 2%; z-index: 3; width: 31%; transform: rotate(1.5deg); animation-delay: -6s; }
+.home-preview-card { overflow: hidden; border: 1px solid rgba(203,213,225,.9); border-radius: 1.25rem; background: rgba(255,255,255,.94); box-shadow: 0 18px 46px rgba(15,23,42,.12), 0 3px 10px rgba(15,23,42,.05); backdrop-filter: blur(12px); }
 .home-demo-image { min-height: 74px; border-radius: .75rem; background: #e2e8f0; }
 .home-pdf-sheet { width: 74px; min-width: 74px; border: 1px solid #e2e8f0; border-radius: .5rem; background: #fff; padding: .55rem; box-shadow: 0 5px 12px rgba(15,23,42,.08); }
 .home-step-card { min-height: 215px; border: 1px solid #e2e8f0; border-radius: 1.25rem; background: #fff; padding: 1.5rem; transition: transform 300ms ease, box-shadow 300ms ease, border-color 300ms ease; }
@@ -89,6 +89,6 @@ body {
 .home-phone { position: absolute; right: 0; bottom: 0; z-index: 2; width: 30%; min-height: 300px; border: 6px solid #0f172a; border-radius: 1.75rem; background: #fff; padding: 1rem .8rem; box-shadow: 0 25px 50px rgba(15,23,42,.24); }
 .home-final-cta { background: #f8fafc; }
 @keyframes home-float { 0%, 100% { margin-top: 0; } 50% { margin-top: -8px; } }
-@media (max-width: 767px) { .home-product-stage { min-height: 500px; transform: scale(.94); transform-origin: top center; margin-bottom: -28px; } .home-floating-workspace { left: 0; top: 14%; width: 47%; } .home-floating-profile { right: 0; top: 10%; width: 63%; } .home-floating-refinement { left: 5%; bottom: 0; width: 53%; } .home-floating-export { right: -2%; bottom: 2%; width: 53%; } .home-stage-caption { left: 2%; } .home-phone { width: 32%; } .home-pdf-stack { min-height: 300px; padding-right: 1rem; } .home-pdf-page-front { width: 84%; } .home-pdf-page-back { right: 1%; width: 76%; } }
+@media (max-width: 767px) { .home-product-stage { min-height: 500px; transform: scale(.94); transform-origin: top center; margin-bottom: -28px; } .home-floating-workspace { left: 0; top: 20%; width: 41%; } .home-floating-profile { right: -1%; top: 11%; width: 76%; } .home-floating-refinement { left: 3%; bottom: 5%; width: 39%; } .home-floating-export { right: 0; bottom: 1%; width: 36%; } .home-stage-caption { left: 2%; } .home-phone { width: 32%; } .home-pdf-stack { min-height: 300px; padding-right: 1rem; } .home-pdf-page-front { width: 84%; } .home-pdf-page-back { right: 1%; width: 76%; } }
 @media (min-width: 640px) { .home-page-shell main > section { padding-block: 6rem; } }
 @media (prefers-reduced-motion: reduce) { [data-home-reveal] { opacity: 1; transform: none; transition: none; } .home-floating-card, .home-step-card { animation: none; transition: none; } }

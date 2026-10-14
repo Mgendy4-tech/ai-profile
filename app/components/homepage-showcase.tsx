@@ -5,7 +5,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useEffect } from "react";
 import { LnkditMark } from "./lnkdit-wordmark";
 
-const demoSections = ["About the Studio", "Design Expertise", "Featured Project"];
+const demoSections = ["About the Studio", "Featured Project"];
 
 function Reveal({ children, className = "", delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
   return <div data-home-reveal style={{ "--home-delay": `${delay}ms` } as CSSProperties} className={className}>{children}</div>;
@@ -20,7 +20,7 @@ function ProfilePreview() {
       </div>
       <div className="space-y-5 p-5">
         <div><p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-cyan-700">Interior design studio</p><h3 className="mt-2 max-w-[220px] text-2xl font-semibold leading-tight tracking-[-0.04em] text-slate-950">Spaces with a point of view.</h3><p className="mt-2 max-w-[235px] text-[11px] leading-5 text-slate-500">A focused profile for work that deserves a clear, considered presentation.</p></div>
-        <div className="grid grid-cols-2 gap-2.5"><img className="home-demo-image object-cover object-center" src="/homepage/aurelia-interior.webp" alt="Fictional Aurelia Studio interior project" width="960" height="640" /><img className="home-demo-image object-cover object-right" src="/homepage/aurelia-interior.webp" alt="Fictional Aurelia Studio material detail" width="960" height="640" /></div>
+        <div><img className="home-demo-image h-28 w-full object-cover object-center" src="/homepage/aurelia-interior.webp" alt="Fictional Aurelia Studio interior project" width="960" height="640" /></div>
         <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] text-slate-500"><span>Residential &amp; commercial</span><span className="font-semibold text-slate-900">View profile ↗</span></div>
       </div>
     </div>
@@ -30,8 +30,7 @@ function ProfilePreview() {
 function WorkspacePreview() {
   return (
     <div className="home-preview-card home-workspace-preview" aria-label="Demo workspace dashboard card">
-      <div className="flex items-center justify-between border-b border-slate-200/80 px-4 py-3"><div className="flex items-center gap-2"><LnkditMark className="h-6 w-6" /><span className="text-xs font-semibold text-slate-900">Workspace</span></div><span className="flex items-center gap-1.5 text-[9px] font-semibold text-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Synced</span></div>
-      <div className="space-y-3 p-4"><div className="flex items-center justify-between"><div><p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Your profiles</p><p className="mt-1 text-sm font-semibold text-slate-900">Aurelia Studio</p></div><span className="rounded-lg bg-slate-950 px-2.5 py-1.5 text-[9px] font-semibold text-white">Open</span></div><div className="grid grid-cols-3 gap-2"><div className="h-14 rounded-lg bg-slate-100 p-2"><span className="block h-1.5 w-10 rounded-full bg-slate-300" /><span className="mt-2 block h-1 w-7 rounded-full bg-slate-200" /><span className="mt-1 block h-1 w-8 rounded-full bg-slate-200" /></div><div className="h-14 rounded-lg bg-cyan-50 p-2"><span className="block h-1.5 w-8 rounded-full bg-cyan-300" /><span className="mt-2 block h-1 w-10 rounded-full bg-cyan-200" /><span className="mt-1 block h-1 w-6 rounded-full bg-cyan-200" /></div><div className="h-14 rounded-lg border border-dashed border-slate-300 p-2"><span className="flex h-full items-center justify-center text-base text-slate-400">+</span></div></div><div className="flex items-center gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500"><span className="rounded bg-emerald-50 px-1.5 py-1 font-semibold text-emerald-700">Saved</span>Company, projects, and profile draft</div></div>
+      <div className="space-y-4 p-4"><div><p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Your profiles</p><p className="mt-1 text-sm font-semibold text-slate-900">Aurelia Studio</p></div><div className="flex items-center gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500"><span className="rounded bg-emerald-50 px-1.5 py-1 font-semibold text-emerald-700">Saved</span>Company, projects, and profile draft</div></div>
     </div>
   );
 }
@@ -39,9 +38,9 @@ function WorkspacePreview() {
 function RefinementPreview() {
   return (
     <div className="home-preview-card home-refinement-preview" aria-label="Demo profile refinement panel">
-      <div className="flex items-center justify-between"><div><p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-700">Profile refinement</p><p className="mt-1 text-sm font-semibold text-slate-950">Shape the story</p></div><span className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-1 text-[9px] font-semibold text-cyan-700">Draft</span></div>
+      <div><p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-700">Profile refinement</p><p className="mt-1 text-sm font-semibold text-slate-950">Shape the story</p></div>
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-center justify-between"><span className="text-[10px] font-semibold text-slate-900">About the Studio</span><button type="button" className="text-[10px] font-semibold text-cyan-700">Edit</button></div><p className="mt-2 text-[10px] leading-4 text-slate-500">Introduce the studio, its focus, and the kind of work it is known for.</p><div className="mt-3 flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-cyan-400" /><span className="h-1.5 w-16 rounded-full bg-cyan-100" /><span className="h-1.5 w-9 rounded-full bg-slate-100" /></div></div>
-      <div className="mt-3 rounded-xl border border-slate-200/80 bg-slate-50 p-3"><div className="flex items-center justify-between text-[10px]"><span className="font-semibold text-slate-700">Sections</span><span className="text-slate-400">4 ready</span></div><div className="mt-2 grid gap-1.5">{demoSections.map((section, index) => <div key={section} className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-2 text-[10px] text-slate-600"><span className="text-cyan-500">0{index + 1}</span>{section}<span className="ml-auto text-slate-300">↗</span></div>)}</div></div>
+      <div className="mt-3 rounded-xl border border-slate-200/80 bg-slate-50 p-3"><div className="flex items-center justify-between text-[10px]"><span className="font-semibold text-slate-700">Sections</span><span className="text-slate-400">2 ready</span></div><div className="mt-2 grid gap-1.5">{demoSections.map((section, index) => <div key={section} className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-2 text-[10px] text-slate-600"><span className="text-cyan-500">0{index + 1}</span>{section}<span className="ml-auto text-slate-300">↗</span></div>)}</div></div>
     </div>
   );
 }
@@ -49,7 +48,7 @@ function RefinementPreview() {
 function ExportPreview() {
   return (
     <div className="home-preview-card home-export-preview" aria-label="Demo PDF export panel">
-      <div className="flex items-center justify-between"><div><p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-700">Review export</p><p className="mt-1 text-sm font-semibold text-slate-950">Ready to share</p></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-semibold text-emerald-700">Ready</span></div>
+      <div><p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-700">Review export</p><p className="mt-1 text-sm font-semibold text-slate-950">Ready to share</p></div>
       <div className="mt-4 flex gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"><div className="home-pdf-sheet"><span className="block h-1.5 w-8 rounded-full bg-slate-900" /><span className="mt-2 block h-1 w-12 rounded-full bg-slate-200" /><span className="mt-4 block h-12 rounded-md bg-gradient-to-br from-cyan-100 via-slate-100 to-slate-200" /><span className="mt-2 block h-1 w-10 rounded-full bg-slate-200" /></div><div className="flex min-w-0 flex-1 flex-col justify-between"><div><p className="text-[10px] font-semibold text-slate-900">Aurelia Studio.pdf</p><p className="mt-1 text-[9px] leading-4 text-slate-500">Editorial Narrative · 8 pages</p></div><button type="button" className="self-start rounded-lg bg-slate-950 px-3 py-1.5 text-[9px] font-semibold text-white">Download PDF</button></div></div>
     </div>
   );

@@ -33,6 +33,8 @@ assert(home.includes("HomepageShowcase"));
 assert(page.includes("HomepageShowcase"));
 assert(styles.includes("home-reveal-visible"));
 assert(styles.includes("home-floating-card"));
+assert(styles.includes("home-floating-profile") && styles.includes("width: 64%"));
+assert(styles.includes("rotate(-2.5deg)") && styles.includes("rotate(1.5deg)"));
 assert(styles.includes("home-workflow-step-active"));
 assert(styles.includes("home-pdf-page-front"));
 assert(!home.includes("10,000") && !home.includes("testimonials"));
