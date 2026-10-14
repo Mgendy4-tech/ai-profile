@@ -35,12 +35,21 @@ function WorkspacePreview() {
   );
 }
 
-function RefinementPreview() {
+function RefinementPreviewLegacy() {
   return (
     <div className="home-preview-card home-refinement-preview" aria-label="Demo profile refinement panel">
       <div><p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-700">Profile refinement</p><p className="mt-1 text-sm font-semibold text-slate-950">Shape the story</p></div>
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"><div className="flex items-center justify-between"><span className="text-[10px] font-semibold text-slate-900">About the Studio</span><button type="button" className="text-[10px] font-semibold text-cyan-700">Edit</button></div><p className="mt-2 text-[10px] leading-4 text-slate-500">Introduce the studio, its focus, and the kind of work it is known for.</p><div className="mt-3 flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-cyan-400" /><span className="h-1.5 w-16 rounded-full bg-cyan-100" /><span className="h-1.5 w-9 rounded-full bg-slate-100" /></div></div>
       <div className="mt-3 rounded-xl border border-slate-200/80 bg-slate-50 p-3"><div className="flex items-center justify-between text-[10px]"><span className="font-semibold text-slate-700">Sections</span><span className="text-slate-400">2 ready</span></div><div className="mt-2 grid gap-1.5">{demoSections.map((section, index) => <div key={section} className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-2 text-[10px] text-slate-600"><span className="text-cyan-500">0{index + 1}</span>{section}<span className="ml-auto text-slate-300">↗</span></div>)}</div></div>
+    </div>
+  );
+}
+
+function RefinementPreview() {
+  return (
+    <div className="home-preview-card home-refinement-preview" aria-label="Demo profile refinement panel">
+      <div className="flex items-center justify-between gap-2"><div><p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-700">Profile refinement</p><p className="mt-1 text-sm font-semibold text-slate-950">About the Studio</p></div><button type="button" className="rounded-lg border border-slate-200 px-2 py-1 text-[9px] font-semibold text-cyan-700">Edit</button></div>
+      <div className="mt-3 flex items-center gap-2"><span className="text-[9px] font-semibold text-slate-500">Shape the story</span><span className="home-refinement-progress"><span /></span></div>
     </div>
   );
 }
@@ -59,6 +68,7 @@ function ProductComposition() {
     <div className="home-product-stage" aria-label="LNKDIT product showcase">
       <div className="home-stage-glow" />
       <div className="home-stage-grid" />
+      <div className="home-product-surface" aria-hidden="true" />
       <div className="home-stage-caption"><span className="h-2 w-2 rounded-full bg-cyan-400" />A workspace for the whole profile journey</div>
       <div className="home-floating-card home-floating-workspace"><WorkspacePreview /></div>
       <div className="home-floating-card home-floating-profile"><ProfilePreview /></div>
