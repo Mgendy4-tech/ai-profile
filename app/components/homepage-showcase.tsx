@@ -18,9 +18,9 @@ function ProfilePreview() {
         <div className="flex items-center gap-2.5"><LnkditMark className="h-7 w-7" /><span className="text-[11px] font-bold tracking-[0.12em] text-slate-900">AURELIA STUDIO</span></div>
         <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-cyan-700">Profile</span>
       </div>
-      <div className="space-y-5 p-5">
+      <div className="home-profile-body">
         <div><p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-cyan-700">Interior design studio</p><h3 className="mt-2 max-w-[220px] text-2xl font-semibold leading-tight tracking-[-0.04em] text-slate-950">Spaces with a point of view.</h3><p className="mt-2 max-w-[235px] text-[11px] leading-5 text-slate-500">A focused profile for work that deserves a clear, considered presentation.</p></div>
-        <div><img className="home-demo-image h-28 w-full object-cover object-center" src="/homepage/aurelia-interior.webp" alt="Fictional Aurelia Studio interior project" width="960" height="640" /></div>
+        <div className="home-profile-image-wrap"><img className="home-profile-image home-demo-image w-full object-cover object-center" src="/homepage/aurelia-interior.webp" alt="Fictional Aurelia Studio interior project" width="960" height="640" /></div>
         <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] text-slate-500"><span>Residential &amp; commercial</span><span className="font-semibold text-slate-900">View profile ↗</span></div>
       </div>
     </div>
@@ -57,7 +57,7 @@ function RefinementPreview() {
 function ExportPreview() {
   return (
     <div className="home-preview-card home-export-preview" aria-label="Demo PDF export panel">
-      <div><p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-700">Review export</p><p className="mt-1 text-sm font-semibold text-slate-950">Ready to share</p></div>
+      <div><p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-700">Preview export</p><p className="mt-1 text-sm font-semibold text-slate-950">Ready to share</p></div>
       <div className="mt-4 flex gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"><div className="home-pdf-sheet"><span className="block h-1.5 w-8 rounded-full bg-slate-900" /><span className="mt-2 block h-1 w-12 rounded-full bg-slate-200" /><span className="mt-4 block h-12 rounded-md bg-gradient-to-br from-cyan-100 via-slate-100 to-slate-200" /><span className="mt-2 block h-1 w-10 rounded-full bg-slate-200" /></div><div className="flex min-w-0 flex-1 flex-col justify-between"><div><p className="text-[10px] font-semibold text-slate-900">Aurelia Studio.pdf</p><p className="mt-1 text-[9px] leading-4 text-slate-500">Editorial Narrative · 8 pages</p></div><button type="button" className="self-start rounded-lg bg-slate-950 px-3 py-1.5 text-[9px] font-semibold text-white">Download PDF</button></div></div>
     </div>
   );
@@ -69,7 +69,6 @@ function ProductComposition() {
       <div className="home-stage-glow" />
       <div className="home-stage-grid" />
       <div className="home-product-surface" aria-hidden="true" />
-      <div className="home-stage-caption"><span className="h-2 w-2 rounded-full bg-cyan-400" />A workspace for the whole profile journey</div>
       <div className="home-product-grid">
         <div className="home-floating-card home-floating-workspace home-grid-card"><WorkspacePreview /></div>
         <div className="home-floating-card home-floating-profile home-grid-card"><ProfilePreview /></div>
