@@ -39,6 +39,7 @@ assert(styles.includes(".home-floating-refinement { left: 9%; bottom: 8%; z-inde
 assert(styles.includes(".home-floating-export { right: 5%; top: 70%; z-index: 3; width: 29%; transform: rotate(.7deg)"));
 assert(styles.includes("home-floating-profile > .home-preview-card") && styles.includes("home-floating-workspace > .home-preview-card"));
 assert(styles.includes("min-height: 1100px") && styles.includes("top: 2%; width: 74%") && styles.includes("top: 15%; width: 84%") && styles.includes("top: 56%; width: 74%") && styles.includes("top: 82%; width: 74%"));
+assert(styles.includes("@media (max-width: 480px)") && styles.includes("min-height: 760px") && styles.includes("top: 18%; width: 86%") && styles.includes(".home-floating-refinement { display: none; }") && styles.includes("top: 73%; width: 56%"));
 assert(styles.includes("home-workflow-step-active"));
 assert(styles.includes("home-pdf-page-front"));
 assert(!home.includes("10,000") && !home.includes("testimonials"));
