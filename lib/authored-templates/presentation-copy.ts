@@ -9,6 +9,10 @@ const generatedFiller = /\b(?:source-backed|supplied information|supplied (?:adv
 const plannerInstruction = /^\s*(?:describe|present|introduce|explain|showcase)\b[^.]{0,180}\b(?:supplied|provided|grounded|based on)\b/i;
 const unique = (values: readonly string[]) => values.map(normalized).filter((value, index, all) => value && all.indexOf(value) === index);
 const companyDescriptor = (company: CompanyIdentity, fallback: string) => unique([company.companyType ?? "", company.industry ?? ""]).join(" · ") || fallback;
+const productRailCompanyLabel = (company: CompanyIdentity) => {
+  const name = normalized(company.name);
+  return name.split(/\s+/).some((word) => word.length > 14) ? companyDescriptor(company, "the product") : name;
+};
 const possessive = (name: string) => `${name}${/s$/i.test(name) ? "'" : "'s"}`;
 const audience = (company: CompanyIdentity) => company.customerType ? ` for ${normalized(company.customerType)}` : "";
 const compactFacts = (value: string, limit = 2) => unique(value.split(/,|;|\band\b/i)).slice(0, limit).join(" and ");
@@ -56,7 +60,7 @@ const needsCustomerFacingRewrite = (value: string, company: CompanyIdentity) => 
 const familySupportingLine = (family: CustomerFacingFamily, company: CompanyIdentity, _items: readonly PresentationItem[]) => {
   if (family === "visual-portfolio") return `${possessive(company.name)} ${companyDescriptor(company, "design")} practice${audience(company)}.`;
   if (family === "corporate-services") return `${possessive(company.name)} practical advisory work${audience(company)}.`;
-  return `${possessive(company.name)} product capabilities${audience(company)}.`;
+  return `${possessive(productRailCompanyLabel(company))} product capabilities${audience(company)}.`;
 };
 
 const isGenericFallbackDescription = (family: CustomerFacingFamily, item: PresentationItem, description: string) => {
