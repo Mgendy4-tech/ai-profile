@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { authSetupMessage } from "@/lib/auth-env";
 import { chooseAuthenticatedWorkspace, CLOUD_OWNER_STORAGE_KEY, hasMeaningfulLocalWorkspace, migrationMarker, workspaceFingerprint, workspaceToCloudPayload } from "@/lib/cloud-workspace";
@@ -14,6 +15,7 @@ import { reportClientFailure } from "@/lib/client-observability";
 import ClientObservability from "@/app/components/client-observability";
 import { passwordRecoveryRedirect } from "@/lib/site-url";
 import { authFailureCode, customerAuthError, type AuthMessageMode } from "@/lib/auth-messages";
+import { safeNextPath } from "@/lib/auth-redirect";
 
 export type CloudSyncStatus = "local-only" | "syncing" | "synced" | "sync-failed";
 type AuthMode = AuthMessageMode;
@@ -27,7 +29,8 @@ const emitSyncStatus = (status: CloudSyncStatus, message = "") => {
 
 const customerCloudError = (code: string): string => code === "not_configured" ? authSetupMessage : code === "unauthorized" ? "Your sign-in session expired. Please sign in again." : "Cloud sync is temporarily unavailable. Your local data is safe; retry when you are online.";
 
-export function AuthPanel({ expanded = false, placement = "default" }: { expanded?: boolean; placement?: "default" | "header" }) {
+export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
+  const router = useRouter();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [session, setSession] = useState<Session | null>(null);
   const [mode, setMode] = useState<AuthMode>("sign-in");
@@ -117,6 +120,12 @@ export function AuthPanel({ expanded = false, placement = "default" }: { expande
 
   const syncCurrent = useCallback(() => { if (sessionRef.current) void sync(sessionRef.current, true); }, [sync]);
 
+  const redirectAfterAuthentication = useCallback(() => {
+    if (typeof window === "undefined" || window.location.pathname !== "/auth") return;
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (next) router.replace(safeNextPath(next));
+  }, [router]);
+
   useEffect(() => {
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mode") === "reset") setMode("reset-password");
   }, []);
@@ -133,13 +142,13 @@ export function AuthPanel({ expanded = false, placement = "default" }: { expande
 
   useEffect(() => {
     if (!supabase) return;
-    void supabase.auth.getSession().then(({ data }) => { if (mountedRef.current && !authEventSeenRef.current) { sessionRef.current = data.session; setSession(data.session); } });
+    void supabase.auth.getSession().then(({ data }) => { if (mountedRef.current && !authEventSeenRef.current) { sessionRef.current = data.session; setSession(data.session); if (data.session) redirectAfterAuthentication(); } });
     const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       authEventSeenRef.current = true;
       sessionRef.current = nextSession;
       setSession(nextSession);
       if (event === "PASSWORD_RECOVERY") setMode("reset-password");
-      if (nextSession) void sync(nextSession);
+      if (nextSession) { void sync(nextSession); redirectAfterAuthentication(); }
       else {
         clearTrustedHydratedCloudAssets();
         coordinatorRef.current?.cancel();
@@ -148,7 +157,7 @@ export function AuthPanel({ expanded = false, placement = "default" }: { expande
       }
     });
     return () => listener.subscription.unsubscribe();
-  }, [setStatus, supabase, sync]);
+  }, [redirectAfterAuthentication, setStatus, supabase, sync]);
 
   useEffect(() => {
     if (!session) return;
@@ -182,21 +191,17 @@ export function AuthPanel({ expanded = false, placement = "default" }: { expande
     const result = mode === "sign-in" ? await supabase.auth.signInWithPassword({ email: email.trim(), password }) : await supabase.auth.signUp({ email: email.trim(), password });
     setBusy(false);
     if (result.error) { reportClientFailure({ category: "auth_failure", code: authFailureCode(result.error, mode), surface: "authentication" }); setMessage(customerAuthError(result.error, mode)); return; }
-    setMessage(mode === "sign-up" && !result.data.session ? "Check your email to confirm your account, then sign in." : "Signed in. Your workspace will sync shortly.");
+    if (result.data.session) redirectAfterAuthentication();
+    setMessage(mode === "sign-up" && !result.data.session ? "Check your email to confirm your account, then sign in to continue." : "Signed in. Your workspace will sync shortly.");
   };
 
   const signOut = async () => { if (!supabase) return; await supabase.auth.signOut(); setMessage("Signed out. Your local workspace remains available on this browser."); };
 
-  if (!expanded) {
-    const compactClass = placement === "header"
-      ? "auth-header-panel"
-      : "auth-floating-panel fixed right-4 top-4 z-50 max-w-[calc(100vw-2rem)]";
-    return <div className={`${compactClass} rounded-xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur`}><div className="flex flex-wrap items-center gap-3 text-xs"><span className="font-semibold text-gray-900">{session ? `Signed in as ${session.user.email ?? "account"}` : "Guest mode"}</span>{session ? <><span className={statusClass[syncStatus]}>{statusText[syncStatus]}</span><Link href="/settings" className="font-medium text-gray-900 underline">Account</Link><button type="button" onClick={syncCurrent} className="font-medium text-gray-900 underline">Retry</button><button type="button" onClick={signOut} className="font-medium text-gray-900 underline">Sign out</button></> : <Link href="/auth" className="font-medium text-gray-900 underline">Sign in to sync</Link>}</div></div>;
-  }
+  if (!expanded) return null;
 
   const resetRequest = mode === "reset-request";
   const resetPassword = mode === "reset-password";
-  return <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Account and sync</p><h1 className="mt-2 text-2xl font-bold text-gray-900">{session ? resetRequest ? "Reset your password" : resetPassword ? "Choose a new password" : "Your workspace is account-ready" : "Keep working as a guest"}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">{session ? "Changes sync to your account. Signed-in profiles and images are stored in your private cloud workspace." : "Guest mode stays local. Sign in when you want your profiles available on another browser or device."}</p></div><span className={`text-sm font-semibold ${statusClass[syncStatus]}`}>{statusText[syncStatus]}</span></div>{session && !resetPassword && !resetRequest ? <div className="mt-5 flex flex-wrap items-center gap-3"><span className="text-sm text-gray-700">{session.user.email}</span><button type="button" onClick={syncCurrent} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Retry sync</button><button type="button" onClick={() => { setMode("reset-request"); setEmail(session.user.email ?? ""); setMessage(""); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Reset password</button><button type="button" onClick={signOut} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Sign out</button></div> : <form onSubmit={submit} className="mt-5 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">{!resetPassword && <input aria-label="Email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}{!resetRequest && <input aria-label="Password" type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}<button type="submit" disabled={busy || !supabase} className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Working…" : resetRequest ? "Send reset email" : resetPassword ? "Update password" : mode === "sign-in" ? "Sign in" : "Sign up"}</button></form>}{!session && !resetPassword && <div className="mt-3 flex flex-wrap gap-4 text-sm font-medium text-gray-900"><button type="button" onClick={() => setMode(mode === "sign-in" ? "sign-up" : "sign-in")} className="underline">{mode === "sign-in" ? "Need an account? Sign up" : "Already have an account? Sign in"}</button>{mode === "sign-in" && <button type="button" onClick={() => { setMode("reset-request"); setMessage(""); }} className="underline">Forgot password?</button>}</div>}{(message || syncMessage) && <p role="status" className="mt-4 text-sm text-gray-700">{message || syncMessage}</p>}</section>;
+  return <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Account and sync</p><h1 className="mt-2 text-2xl font-bold text-gray-900">{session ? resetRequest ? "Reset your password" : resetPassword ? "Choose a new password" : "Your workspace is account-ready" : "Sign in or create your account"}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">{session ? "Changes sync to your account. Signed-in profiles and images are stored in your private cloud workspace." : "Create an account or sign in to save your profile, projects, and images in a private workspace."}</p></div><span className={`text-sm font-semibold ${statusClass[syncStatus]}`}>{statusText[syncStatus]}</span></div>{session && !resetPassword && !resetRequest ? <div className="mt-5 flex flex-wrap items-center gap-3"><span className="text-sm text-gray-700">{session.user.email}</span><button type="button" onClick={syncCurrent} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Retry sync</button><button type="button" onClick={() => { setMode("reset-request"); setEmail(session.user.email ?? ""); setMessage(""); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Reset password</button><button type="button" onClick={signOut} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Sign out</button></div> : <form onSubmit={submit} className="mt-5 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">{!resetPassword && <input aria-label="Email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}{!resetRequest && <input aria-label="Password" type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}<button type="submit" disabled={busy || !supabase} className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Working…" : resetRequest ? "Send reset email" : resetPassword ? "Update password" : mode === "sign-in" ? "Sign in" : "Sign up"}</button></form>}{!session && !resetPassword && <div className="mt-3 flex flex-wrap gap-4 text-sm font-medium text-gray-900"><button type="button" onClick={() => setMode(mode === "sign-in" ? "sign-up" : "sign-in")} className="underline">{mode === "sign-in" ? "Create account" : "Sign in"}</button>{mode === "sign-in" && <button type="button" onClick={() => { setMode("reset-request"); setMessage(""); }} className="underline">Forgot password?</button>}</div>}{(message || syncMessage) && <p role="status" className="mt-4 text-sm text-gray-700">{message || syncMessage}</p>}</section>;
 }
 
 export default function AuthShell() {

@@ -30,7 +30,7 @@ assert(!icon.includes('d="M45 27v23"') && !icon.includes('stroke="#22D3EE"') && 
 assert(wordmark.includes('src="/icon.svg"'));
 assert(homepageShowcase.includes("LnkditMark") && !homepageShowcase.includes("MiniLogo"));
 assert(!icon.includes("M35 32h12") && !wordmark.includes("M27 25H35"));
-assert(auth.includes("Sign in to LNKDIT"));
+assert(auth.includes("Sign in or create your LNKDIT account"));
 assert(!layout.includes("AI Company Profile"));
 assert(!home.includes("AI Company Profile"));
 assert(!homepageShowcase.includes("AI Company Profile"));

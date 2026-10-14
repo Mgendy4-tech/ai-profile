@@ -33,10 +33,9 @@ assert(home.includes("prefers-reduced-motion" ) || styles.includes("prefers-redu
 assert(home.includes("HomepageShowcase"));
 assert(page.includes("HomepageShowcase"));
 assert(home.includes("home-site-header") && home.includes("home-header-main-actions"));
-assert(home.includes('<AuthPanel placement="header" />'));
-assert(auth.includes('placement?: "default" | "header"'));
-assert(auth.includes('pathname === "/"'));
-assert(styles.includes(".auth-header-panel") && styles.includes(".home-header-main-actions"));
+assert(home.includes("AuthGatedLink") && home.includes('href="/auth"'));
+assert(!home.includes("Open account"));
+assert(auth.includes("if (!expanded) return null") && auth.includes('pathname === "/"'));
 assert(styles.includes("home-reveal-visible"));
 assert(/\[data-home-reveal\]\s*\{\s*opacity:\s*1/.test(styles));
 assert(!/\[data-home-reveal\]\s*\{\s*opacity:\s*0/.test(styles));
