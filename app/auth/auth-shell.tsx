@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { authSetupMessage } from "@/lib/auth-env";
-import { chooseAuthenticatedWorkspace, CLOUD_OWNER_STORAGE_KEY, hasMeaningfulLocalWorkspace, migrationMarker, workspaceFingerprint, workspaceToCloudPayload } from "@/lib/cloud-workspace";
+import { chooseAuthenticatedWorkspace, CLOUD_OWNER_STORAGE_KEY, hasMeaningfulLocalWorkspace, migrationMarker, shouldMigrateLocalWorkspaceAssets, workspaceFingerprint, workspaceToCloudPayload } from "@/lib/cloud-workspace";
 import { CloudSyncCoordinator, fetchCloudJson, type SyncResult } from "@/lib/cloud-sync-lifecycle";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { readWorkspace, writeWorkspaceSnapshot } from "@/lib/workspace";
@@ -55,6 +55,9 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
     if (!supabase) return { ok: false, code: "not_configured", message: authSetupMessage };
       const headers = { Authorization: `Bearer ${currentSession.access_token}`, "Content-Type": "application/json" };
     try {
+      const ownerId = localStorage.getItem(CLOUD_OWNER_STORAGE_KEY);
+      const mayMigrateLocalAssets = shouldMigrateLocalWorkspaceAssets(ownerId, currentSession.user.id);
+      if (preferLocal && !mayMigrateLocalAssets) preferLocal = false;
       if (preferLocal) {
         const migrated = await migrateLocalWorkspaceAssets(readWorkspace(localStorage), supabase);
         if (migrated.uploaded > 0) {
@@ -76,19 +79,19 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
       if (!response.ok) { reportClientFailure({ category: "cloud_sync_failure", code: response.code, surface: "workspace_sync" }); return { ok: false, code: response.code, message: response.code === "aborted" ? "Cloud sync was cancelled. Retry when ready." : customerCloudError(response.code) }; }
       const body = response.body;
       if (!body.ok) { reportClientFailure({ category: "cloud_sync_failure", code: body.code ?? "cloud_unavailable", surface: "workspace_sync" }); return { ok: false, code: body.code ?? "cloud_unavailable", message: customerCloudError(body.code ?? "cloud_unavailable") }; }
-      const localMigration = await migrateLocalWorkspaceAssets(readWorkspace(localStorage), supabase);
+      const local = readWorkspace(localStorage);
+      const localMigration = mayMigrateLocalAssets ? await migrateLocalWorkspaceAssets(local, supabase) : { workspace: local, uploaded: 0, failed: 0 };
       if (localMigration.uploaded > 0) {
         suppressSyncRef.current = true;
         const savedLocal = writeWorkspaceSnapshot(localStorage, localMigration.workspace);
         if (!savedLocal.ok) { suppressSyncRef.current = false; return { ok: false, code: "local_storage", message: "Your workspace is safe locally, but the cloud asset migration could not be recorded. Retry when ready." }; }
       }
-      const local = localMigration.workspace;
-      const ownerId = localStorage.getItem(CLOUD_OWNER_STORAGE_KEY);
-      const decision = chooseAuthenticatedWorkspace(body.workspace ?? null, local, ownerId, currentSession.user.id);
+      const migratedLocal = localMigration.workspace;
+      const decision = chooseAuthenticatedWorkspace(body.workspace ?? null, migratedLocal, ownerId, currentSession.user.id);
       const hydratedWorkspace = body.workspace ? await hydrateWorkspaceAssets(decision.workspace, supabase) : decision.workspace;
       if (body.workspace) decision.workspace = hydratedWorkspace;
       const nextFingerprint = workspaceFingerprint(decision.workspace);
-      if (!decision.shouldMigrate && nextFingerprint !== workspaceFingerprint(local)) {
+      if (!decision.shouldMigrate && nextFingerprint !== workspaceFingerprint(migratedLocal)) {
         suppressSyncRef.current = true;
         const saved = writeWorkspaceSnapshot(localStorage, decision.workspace);
         if (!saved.ok) { suppressSyncRef.current = false; return { ok: false, code: "local_storage", message: "Your cloud workspace could not be applied locally. Your existing local data is safe; retry when ready." }; }
@@ -166,8 +169,10 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
       if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current);
       syncTimerRef.current = window.setTimeout(() => { syncTimerRef.current = null; const currentSession = sessionRef.current; if (currentSession) void sync(currentSession, true); }, 750);
     };
+    const onCloudSyncRetry = () => { const currentSession = sessionRef.current; if (currentSession) void sync(currentSession, true); };
     window.addEventListener("workspace-state-changed", onWorkspaceChanged);
-    return () => { window.removeEventListener("workspace-state-changed", onWorkspaceChanged); if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current); };
+    window.addEventListener("cloud-sync-retry", onCloudSyncRetry);
+    return () => { window.removeEventListener("workspace-state-changed", onWorkspaceChanged); window.removeEventListener("cloud-sync-retry", onCloudSyncRetry); if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current); };
   }, [session, sync]);
 
   const submit = async (event: React.FormEvent) => {
@@ -195,7 +200,7 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
     setMessage(mode === "sign-up" && !result.data.session ? "Check your email to confirm your account, then sign in to continue." : "Signed in. Your workspace will sync shortly.");
   };
 
-  const signOut = async () => { if (!supabase) return; await supabase.auth.signOut(); setMessage("Signed out. Your local workspace remains available on this browser."); };
+  const signOut = async () => { if (!supabase) return; await supabase.auth.signOut(); setMessage("Signed out. Your account workspace remains securely stored; this browser copy is no longer synced."); };
 
   if (!expanded) return null;
 

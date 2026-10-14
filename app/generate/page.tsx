@@ -1941,7 +1941,7 @@ setProfile(generatedProfile);
         </h1>
 
         <p className="mt-3 max-w-2xl text-gray-600">
-          Follow the four steps below. We will keep your progress in this browser so you can return when you are ready.
+          Follow the four steps below. Your private workspace keeps your progress available when you return.
         </p>
 
         <div className="mt-6"><OnboardingProgress steps={onboardingSteps} nextHref={profile ? "#export-actions" : savedCompanyData ? "/projects" : "/company"} nextLabel={profile ? "Review export" : savedCompanyData ? "Next: Projects" : "Start with Company"} /></div>

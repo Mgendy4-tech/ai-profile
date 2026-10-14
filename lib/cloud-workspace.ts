@@ -149,6 +149,8 @@ export const workspaceFromCloud = (document: CloudWorkspaceDocument, localWorksp
 };
 
 export const migrationMarker = (userId: string): string => `${CLOUD_MIGRATION_PREFIX}${userId}`;
+/** Local image migration is safe only for a new account or the account that owns the local snapshot. */
+export const shouldMigrateLocalWorkspaceAssets = (ownerId: string | null, userId: string): boolean => !ownerId || ownerId === userId;
 export const hasMeaningfulLocalWorkspace = (workspace: Workspace): boolean => workspace.profiles.some((profile) => Object.keys(profile.state).length > 0);
 export const cloudProfileOwnership = (profile: CloudProfileRecord, userId: string, rowUserId: string): boolean => Boolean(userId && rowUserId && userId === rowUserId && profile.profileId.trim());
 export const chooseAuthenticatedWorkspace = (cloud: CloudWorkspaceDocument | null, local: Workspace, ownerId: string | null, userId: string): { workspace: Workspace; shouldMigrate: boolean } => {

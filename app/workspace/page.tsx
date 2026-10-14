@@ -58,7 +58,7 @@ export default function WorkspacePage() {
   const notify = () => { window.dispatchEvent(new Event("workspace-state-changed")); refresh(); };
   const create = () => {
     if (!workspace) return;
-    if (workspace.profiles.length >= MAX_WORKSPACE_PROFILES) { setMessage(`You can save up to ${MAX_WORKSPACE_PROFILES} profiles in this browser. Delete an unused profile to create another.`); return; }
+    if (workspace.profiles.length >= MAX_WORKSPACE_PROFILES) { setMessage(`You can save up to ${MAX_WORKSPACE_PROFILES} profiles in your account workspace. Delete an unused profile to create another.`); return; }
     const result = createProfile(localStorage);
     if (!result.ok) { setMessage("This profile could not be saved because browser storage is full. Remove an image or delete an unused profile, then try again."); return; }
     setMessage("New profile created."); notify(); window.location.href = "/company";
@@ -77,7 +77,7 @@ export default function WorkspacePage() {
   };
   const duplicate = (profile: WorkspaceProfile) => {
     if (!workspace) return;
-    if (workspace.profiles.length >= MAX_WORKSPACE_PROFILES) { setMessage(`You can save up to ${MAX_WORKSPACE_PROFILES} profiles in this browser.`); return; }
+    if (workspace.profiles.length >= MAX_WORKSPACE_PROFILES) { setMessage(`You can save up to ${MAX_WORKSPACE_PROFILES} profiles in your account workspace.`); return; }
     const result = duplicateProfile(localStorage, profile.id);
     if (!result.ok) { setMessage("This profile could not be duplicated because browser storage is full."); return; }
     notify(); setMessage("Profile duplicated. The copy is now active.");
@@ -99,7 +99,7 @@ export default function WorkspacePage() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Workspace</p>
             <h1 className="mt-2 text-4xl font-bold tracking-tight text-gray-900">Your company profiles</h1>
-            <p className="mt-3 max-w-2xl text-gray-600">Keep each company&apos;s projects, generated profile, brand details, and style choice separate in this browser.</p>
+            <p className="mt-3 max-w-2xl text-gray-600">Keep each company&apos;s projects, generated profile, brand details, and style choice separate in your private account workspace.</p>
           </div>
           <CloudSyncIndicator />
           <button type="button" onClick={create} className="rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800">New Profile</button>

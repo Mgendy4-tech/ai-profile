@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chooseAuthenticatedWorkspace, cloudProfileFromLocal, cloudProfileOwnership, hasMeaningfulLocalWorkspace, migrationMarker, workspaceFromCloud, workspaceToCloudPayload } from "./cloud-workspace";
+import { chooseAuthenticatedWorkspace, cloudProfileFromLocal, cloudProfileOwnership, hasMeaningfulLocalWorkspace, migrationMarker, shouldMigrateLocalWorkspaceAssets, workspaceFromCloud, workspaceToCloudPayload } from "./cloud-workspace";
 import { createWorkspaceProfile, createEmptyWorkspace, type Workspace } from "./workspace";
 
 const image = "data:image/png;base64,small";
@@ -19,6 +19,9 @@ assert.equal(payload.profiles[0].companyData?.logoUrl, "", "Base64 logos must no
 assert.equal(payload.profiles[0].projects[0].imageUrl, "", "Base64 project images must not be written to cloud rows.");
 assert.equal(hasMeaningfulLocalWorkspace(local), true);
 assert.equal(migrationMarker("user-a"), "workspaceCloudMigration:user-a");
+assert.equal(shouldMigrateLocalWorkspaceAssets(null, "user-a"), true);
+assert.equal(shouldMigrateLocalWorkspaceAssets("user-a", "user-a"), true);
+assert.equal(shouldMigrateLocalWorkspaceAssets("user-a", "user-b"), false, "A second account must not migrate the first account's local image bytes.");
 assert.equal(cloudProfileOwnership(payload.profiles[0], "user-a", "user-a"), true);
 assert.equal(cloudProfileOwnership(payload.profiles[0], "user-a", "user-b"), false);
 

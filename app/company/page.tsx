@@ -12,6 +12,7 @@ import LnkditHeader from '@/app/components/lnkdit-header';
 import { deriveOnboardingProgress } from '@/lib/onboarding-progress';
 import { removeCloudAsset, uploadCloudAsset } from '@/lib/cloud-assets';
 import { readWorkspace } from '@/lib/workspace';
+import { PRODUCTION_V1_LIMITS } from '@/lib/production-limits';
 
 type Project = {
   id: string;
@@ -32,6 +33,23 @@ const readImageFile = (file: File) =>
     reader.onerror = () => reject(new Error('Could not read image file'));
     reader.readAsDataURL(file);
   });
+
+const validateLogoFile = async (file: File) => {
+  if (!['image/png', 'image/jpeg'].includes(file.type)) throw new Error('Please select a PNG or JPG logo file.');
+  if (file.size > PRODUCTION_V1_LIMITS.imageBytes) throw new Error('Company logos must be 3 MB or smaller.');
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      image.onerror = () => reject(new Error('The logo could not be decoded.'));
+      image.src = objectUrl;
+    });
+    if (!dimensions.width || !dimensions.height || dimensions.width > PRODUCTION_V1_LIMITS.imageDimensionPx || dimensions.height > PRODUCTION_V1_LIMITS.imageDimensionPx) throw new Error('Logos must decode successfully and be no larger than 12,000 pixels on either side.');
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
 
 export default function CompanyPage() {
   const router = useRouter();
@@ -107,12 +125,11 @@ export default function CompanyPage() {
       return;
     }
 
-    if (!['image/png', 'image/jpeg'].includes(file.type)) {
-      setErrorMessage('Please select a PNG or JPG logo file.');
+    try { await validateLogoFile(file); } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'We could not read that logo. Please try another file.');
       setSuccessMessage('');
       return;
     }
-
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = String(reader.result);
