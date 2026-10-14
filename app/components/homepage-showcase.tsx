@@ -70,10 +70,12 @@ function ProductComposition() {
       <div className="home-stage-grid" />
       <div className="home-product-surface" aria-hidden="true" />
       <div className="home-product-grid">
-        <div className="home-floating-card home-floating-workspace home-grid-card"><WorkspacePreview /></div>
         <div className="home-floating-card home-floating-profile home-grid-card"><ProfilePreview /></div>
-        <div className="home-floating-card home-floating-refinement home-grid-card"><RefinementPreview /></div>
-        <div className="home-floating-card home-floating-export home-grid-card"><ExportPreview /></div>
+        <div className="home-support-grid">
+          <div className="home-floating-card home-floating-workspace home-grid-card"><WorkspacePreview /></div>
+          <div className="home-floating-card home-floating-refinement home-grid-card"><RefinementPreview /></div>
+          <div className="home-floating-card home-floating-export home-grid-card"><ExportPreview /></div>
+        </div>
       </div>
     </div>
   );
