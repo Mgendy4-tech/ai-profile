@@ -21,6 +21,8 @@ function ProfilePreview() {
       <div className="home-profile-body">
         <div><p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-cyan-700">Interior design studio</p><h3 className="mt-2 max-w-[220px] text-2xl font-semibold leading-tight tracking-[-0.04em] text-slate-950">Spaces with a point of view.</h3><p className="mt-2 max-w-[235px] text-[11px] leading-5 text-slate-500">A focused profile for work that deserves a clear, considered presentation.</p></div>
         <div className="home-profile-image-wrap"><img className="home-profile-image home-demo-image w-full object-cover object-center" src="/homepage/aurelia-interior.webp" alt="Fictional Aurelia Studio interior project" width="960" height="640" /></div>
+        <div className="home-profile-slogan">Designing spaces that inspire<br />people and businesses.</div>
+        <span className="home-profile-accent" aria-hidden="true" />
         <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] text-slate-500"><span>Residential &amp; commercial</span><span className="font-semibold text-slate-900">View profile ↗</span></div>
       </div>
     </div>
@@ -67,8 +69,6 @@ function ProductComposition() {
   return (
     <div className="home-product-stage" aria-label="LNKDIT product showcase">
       <div className="home-stage-glow" />
-      <div className="home-stage-grid" />
-      <div className="home-product-surface" aria-hidden="true" />
       <div className="home-product-grid">
         <div className="home-floating-card home-floating-profile home-grid-card"><ProfilePreview /></div>
         <div className="home-support-grid">
