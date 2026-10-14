@@ -30,7 +30,7 @@ function ProfilePreview() {
 function WorkspacePreview() {
   return (
     <div className="home-preview-card home-workspace-preview" aria-label="Demo workspace dashboard card">
-      <div className="space-y-4 p-4"><div><p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Your profiles</p><p className="mt-1 text-sm font-semibold text-slate-900">Aurelia Studio</p></div><div className="flex items-center gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500"><span className="rounded bg-emerald-50 px-1.5 py-1 font-semibold text-emerald-700">Saved</span>Company, projects, and profile draft</div></div>
+      <div className="home-workspace-card-content p-4"><div><p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">Your profiles</p><p className="mt-1 text-sm font-semibold text-slate-900">Aurelia Studio</p></div><div className="home-workspace-profile-list"><div className="home-workspace-profile-row home-workspace-profile-row-active"><span className="home-workspace-thumb" /><span>Aurelia Studio</span><span className="ml-auto text-cyan-600">›</span></div><div className="home-workspace-profile-row"><span className="home-workspace-thumb" />Riverside Group<span className="ml-auto text-slate-300">›</span></div><div className="home-workspace-profile-row"><span className="home-workspace-thumb" />Cairo Development<span className="ml-auto text-slate-300">›</span></div></div><div className="flex items-center gap-2 border-t border-slate-100 pt-3 text-[10px] text-slate-500"><span className="rounded bg-emerald-50 px-1.5 py-1 font-semibold text-emerald-700">Saved</span>Company, projects, and profile draft</div></div>
     </div>
   );
 }
@@ -49,7 +49,7 @@ function RefinementPreview() {
   return (
     <div className="home-preview-card home-refinement-preview" aria-label="Demo profile refinement panel">
       <div className="flex items-center justify-between gap-2"><div><p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-700">Profile refinement</p><p className="mt-1 text-sm font-semibold text-slate-950">About the Studio</p></div><button type="button" className="rounded-lg border border-slate-200 px-2 py-1 text-[9px] font-semibold text-cyan-700">Edit</button></div>
-      <div className="mt-3 flex items-center gap-2"><span className="text-[9px] font-semibold text-slate-500">Shape the story</span><span className="home-refinement-progress"><span /></span></div>
+      <div className="home-refinement-rows"><div className="home-refinement-row home-refinement-row-active"><span className="home-refinement-check">✓</span><span>Content</span><span className="ml-auto text-slate-300">›</span></div><div className="home-refinement-row"><span className="home-refinement-check" /><span>Visuals</span><span className="ml-auto text-slate-300">›</span></div><div className="home-refinement-row"><span className="home-refinement-check" /><span>Structure</span><span className="ml-auto text-slate-300">›</span></div></div>
     </div>
   );
 }
@@ -70,10 +70,12 @@ function ProductComposition() {
       <div className="home-stage-grid" />
       <div className="home-product-surface" aria-hidden="true" />
       <div className="home-stage-caption"><span className="h-2 w-2 rounded-full bg-cyan-400" />A workspace for the whole profile journey</div>
-      <div className="home-floating-card home-floating-workspace"><WorkspacePreview /></div>
-      <div className="home-floating-card home-floating-profile"><ProfilePreview /></div>
-      <div className="home-floating-card home-floating-refinement"><RefinementPreview /></div>
-      <div className="home-floating-card home-floating-export"><ExportPreview /></div>
+      <div className="home-product-grid">
+        <div className="home-floating-card home-floating-workspace home-grid-card"><WorkspacePreview /></div>
+        <div className="home-floating-card home-floating-profile home-grid-card"><ProfilePreview /></div>
+        <div className="home-floating-card home-floating-refinement home-grid-card"><RefinementPreview /></div>
+        <div className="home-floating-card home-floating-export home-grid-card"><ExportPreview /></div>
+      </div>
     </div>
   );
 }
@@ -103,7 +105,7 @@ export default function HomepageShowcase({ companyName, resumeHref }: { companyN
     <div className="home-page-shell overflow-hidden">
       <section className="home-hero relative px-5 pb-20 pt-7 sm:px-8 sm:pb-28 sm:pt-10 lg:pb-36">
         <div className="home-hero-wash" />
-        <div className="relative mx-auto max-w-7xl">
+        <div className="relative mx-auto max-w-[1400px]">
           <header className="flex min-h-11 items-center justify-between gap-4"><Link href="/" aria-label="LNKDIT home" className="inline-flex items-center gap-2"><LnkditMark className="h-9 w-9" /><span className="text-[1.3rem] font-black tracking-[-0.055em]"><span className="text-slate-950">LNKD</span><span className="text-cyan-500">IT</span></span></Link><div className="hidden items-center gap-6 text-sm font-semibold text-slate-600 md:flex"><a href="#how-it-works" className="transition hover:text-slate-950">How it works</a><a href="#workspace" className="transition hover:text-slate-950">Workspace</a><Link href="/auth" className="text-slate-950 transition hover:text-cyan-700">Sign in</Link></div><Link href="/auth" className="rounded-full border border-slate-300 bg-white/75 px-3.5 py-2 text-xs font-semibold text-slate-900 shadow-sm backdrop-blur transition hover:border-slate-900 sm:px-4 sm:text-sm">Open account</Link></header>
           <div className="grid items-center gap-12 pt-16 lg:grid-cols-[0.83fr_1.17fr] lg:gap-5 lg:pt-24">
             <Reveal className="relative z-10 max-w-xl" delay={40}><p className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700 shadow-sm backdrop-blur"><span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />Profile studio for modern teams</p><h1 className="mt-6 max-w-xl text-5xl font-semibold leading-[0.98] tracking-[-0.065em] text-slate-950 sm:text-6xl lg:text-[4.9rem]">Professional company profiles, made easier.</h1><p className="mt-6 max-w-lg text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">Create, refine, and export a polished company profile in one place. Start as a guest, then sign in when you want private cloud backup and access on another device.</p><div className="mt-8 flex flex-wrap items-center gap-3"><Link href={resumeHref} className="rounded-xl bg-slate-950 px-5 py-3.5 text-sm font-semibold text-white shadow-[0_12px_25px_rgba(15,23,42,0.18)] transition duration-300 hover:-translate-y-0.5 hover:bg-slate-800">{companyName ? `Continue with ${companyName}` : "Create your profile"}<span className="ml-2 text-cyan-300">↗</span></Link><Link href="/workspace" className="rounded-xl border border-slate-300 bg-white/80 px-5 py-3.5 text-sm font-semibold text-slate-900 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:border-slate-500">View workspace</Link></div><p className="mt-4 text-xs font-medium text-slate-500">Guest mode stays local · private cloud sync when you&apos;re ready</p></Reveal>
