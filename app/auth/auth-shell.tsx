@@ -27,7 +27,7 @@ const emitSyncStatus = (status: CloudSyncStatus, message = "") => {
 
 const customerCloudError = (code: string): string => code === "not_configured" ? authSetupMessage : code === "unauthorized" ? "Your sign-in session expired. Please sign in again." : "Cloud sync is temporarily unavailable. Your local data is safe; retry when you are online.";
 
-export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
+export function AuthPanel({ expanded = false, placement = "default" }: { expanded?: boolean; placement?: "default" | "header" }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [session, setSession] = useState<Session | null>(null);
   const [mode, setMode] = useState<AuthMode>("sign-in");
@@ -187,7 +187,12 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
 
   const signOut = async () => { if (!supabase) return; await supabase.auth.signOut(); setMessage("Signed out. Your local workspace remains available on this browser."); };
 
-  if (!expanded) return <div className="auth-floating-panel fixed right-4 top-4 z-50 max-w-[calc(100vw-2rem)] rounded-xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur"><div className="flex flex-wrap items-center gap-3 text-xs"><span className="font-semibold text-gray-900">{session ? `Signed in as ${session.user.email ?? "account"}` : "Guest mode"}</span>{session ? <><span className={statusClass[syncStatus]}>{statusText[syncStatus]}</span><Link href="/settings" className="font-medium text-gray-900 underline">Account</Link><button type="button" onClick={syncCurrent} className="font-medium text-gray-900 underline">Retry</button><button type="button" onClick={signOut} className="font-medium text-gray-900 underline">Sign out</button></> : <Link href="/auth" className="font-medium text-gray-900 underline">Sign in to sync</Link>}</div></div>;
+  if (!expanded) {
+    const compactClass = placement === "header"
+      ? "auth-header-panel"
+      : "auth-floating-panel fixed right-4 top-4 z-50 max-w-[calc(100vw-2rem)]";
+    return <div className={`${compactClass} rounded-xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur`}><div className="flex flex-wrap items-center gap-3 text-xs"><span className="font-semibold text-gray-900">{session ? `Signed in as ${session.user.email ?? "account"}` : "Guest mode"}</span>{session ? <><span className={statusClass[syncStatus]}>{statusText[syncStatus]}</span><Link href="/settings" className="font-medium text-gray-900 underline">Account</Link><button type="button" onClick={syncCurrent} className="font-medium text-gray-900 underline">Retry</button><button type="button" onClick={signOut} className="font-medium text-gray-900 underline">Sign out</button></> : <Link href="/auth" className="font-medium text-gray-900 underline">Sign in to sync</Link>}</div></div>;
+  }
 
   const resetRequest = mode === "reset-request";
   const resetPassword = mode === "reset-password";
@@ -196,5 +201,5 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
 
 export default function AuthShell() {
   const pathname = usePathname();
-  return <><ClientObservability />{pathname === "/auth" ? null : <AuthPanel />}</>;
+  return <><ClientObservability />{pathname === "/auth" || pathname === "/" ? null : <AuthPanel />}</>;
 }

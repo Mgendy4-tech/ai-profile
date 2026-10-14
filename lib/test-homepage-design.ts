@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const home = readFileSync("app/components/homepage-showcase.tsx", "utf8");
 const page = readFileSync("app/page.tsx", "utf8");
 const styles = readFileSync("app/globals.css", "utf8");
+const auth = readFileSync("app/auth/auth-shell.tsx", "utf8");
 
 for (const section of [
   "how-it-works",
@@ -31,6 +32,11 @@ assert(home.includes("home-pdf-stack") && home.includes("home-pdf-page-back-two"
 assert(home.includes("prefers-reduced-motion" ) || styles.includes("prefers-reduced-motion"));
 assert(home.includes("HomepageShowcase"));
 assert(page.includes("HomepageShowcase"));
+assert(home.includes("home-site-header") && home.includes("home-header-main-actions"));
+assert(home.includes('<AuthPanel placement="header" />'));
+assert(auth.includes('placement?: "default" | "header"'));
+assert(auth.includes('pathname === "/"'));
+assert(styles.includes(".auth-header-panel") && styles.includes(".home-header-main-actions"));
 assert(styles.includes("home-reveal-visible"));
 assert(/\[data-home-reveal\]\s*\{\s*opacity:\s*1/.test(styles));
 assert(!/\[data-home-reveal\]\s*\{\s*opacity:\s*0/.test(styles));

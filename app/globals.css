@@ -119,7 +119,11 @@ body {
 @media (max-width: 767px) { .home-product-stage { --home-support-gap: 24px; min-height: 0; padding: 1rem .75rem 1.5rem; transform: none; margin-bottom: 0; } .home-product-grid { display: flex; flex-direction: column; gap: 24px; margin: 0; } .home-support-grid { display: contents; } .home-floating-card, .home-support-grid > .home-floating-card { width: 100%; height: auto; flex: 0 0 auto; transform: none; aspect-ratio: auto; } .home-floating-card > .home-preview-card, .home-floating-profile > .home-preview-card { height: 100%; aspect-ratio: auto; } .home-floating-profile { order: 1; flex: 0 0 504px; } .home-support-grid > .home-floating-workspace { order: 2; flex: 0 0 240px; } .home-support-grid > .home-floating-refinement { order: 4; flex: 0 0 240px; } .home-support-grid > .home-floating-export { order: 3; flex: 0 0 240px; } .home-phone { width: 32%; } .home-pdf-stack { min-height: 300px; padding-right: 1rem; } .home-pdf-page-front { width: 84%; } .home-pdf-page-back { right: 1%; width: 76%; } }
 @media (min-width: 768px) and (max-width: 1199px) { .home-product-grid { margin-inline: 4%; } }
 @media (max-width: 480px) { .home-floating-refinement { display: none; } .home-profile-slogan { font-size: 1rem; } }
-@media (max-width: 767px) { body:has(.home-page-shell) .auth-floating-panel { display: none; } }
-@media (min-width: 768px) { body:has(.home-page-shell) .auth-floating-panel { top: 5.5rem; } }
+.auth-header-panel { min-width: 0; max-width: min(28rem, 42vw); }
+.auth-header-panel > div { align-items: center; justify-content: flex-end; }
+@media (max-width: 767px) {
+  .home-header-main-actions { width: 100%; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
+  .home-header-main-actions .auth-header-panel { flex-basis: 100%; max-width: none; }
+}
 @media (min-width: 640px) { .home-page-shell main > section { padding-block: 6rem; } }
 @media (prefers-reduced-motion: reduce) { [data-home-reveal] { opacity: 1; transform: none; transition: none; } .home-floating-card, .home-step-card { animation: none; transition: none; } }
