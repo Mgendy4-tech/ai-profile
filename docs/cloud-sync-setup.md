@@ -14,3 +14,16 @@ The anon key is the browser-safe Supabase public key; never put a service-role k
 Signed-in sync prefers the authenticated cloud snapshot after a successful read. A guest workspace migrates once per account/browser only when that account has no cloud profiles. Local data is retained after migration. If the same browser later signs in as another account, the previous account's local state is not migrated; the second account's cloud snapshot becomes authoritative.
 
 Signed-in logo and project images upload to the private `customer-assets` bucket under `{user_id}/{profile_id}/...`; cloud profile rows store only asset paths. The browser hydrates short-lived signed URLs for display/export. Existing local/base64 images migrate on the next authenticated sync without deleting the local copy; failed uploads remain local and can be retried. Guest images remain browser-only.
+
+## Disposable Account A/B security test
+
+The live isolation test uses only the browser-safe anon key and two ordinary Supabase Auth password sessions. It never accepts or uses a service-role key. Configure these variables locally in `.env.local` without committing the file:
+
+```text
+SUPABASE_TEST_ACCOUNT_A_EMAIL=disposable-a@example.com
+SUPABASE_TEST_ACCOUNT_A_PASSWORD=use-a-local-secret
+SUPABASE_TEST_ACCOUNT_B_EMAIL=disposable-b@example.com
+SUPABASE_TEST_ACCOUNT_B_PASSWORD=use-a-local-secret
+```
+
+Create two disposable users in Supabase Auth, add the four variables locally, then run `npm run test:supabase-ab`. The test writes only uniquely prefixed records and `{user_id}/{profile_id}/...` assets, restores any pre-existing workspace row, and removes only its own fixture data. If the variables are absent, it exits with an explicit `BLOCKED` result and never invents credentials.
