@@ -16,6 +16,7 @@ import ClientObservability from "@/app/components/client-observability";
 import { passwordRecoveryRedirect } from "@/lib/site-url";
 import { authFailureCode, customerAuthError, type AuthMessageMode } from "@/lib/auth-messages";
 import { safeNextPath } from "@/lib/auth-redirect";
+import { canUpdatePasswordFromRecovery, isPasswordRecoveryEvent, PASSWORD_RECOVERY_REQUIRED_MESSAGE } from "@/lib/password-recovery";
 
 export type CloudSyncStatus = "local-only" | "syncing" | "synced" | "sync-failed";
 type AuthMode = AuthMessageMode;
@@ -40,6 +41,8 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
   const [message, setMessage] = useState("");
   const [syncStatus, setSyncStatus] = useState<CloudSyncStatus>(supabase ? "local-only" : "sync-failed");
   const [syncMessage, setSyncMessage] = useState(supabase ? "" : authSetupMessage);
+  const [recoveryVerified, setRecoveryVerified] = useState(false);
+  const [recoveryRoute, setRecoveryRoute] = useState(false);
   const suppressSyncRef = useRef(false);
   const syncTimerRef = useRef<number | null>(null);
   const sessionRef = useRef<Session | null>(null);
@@ -130,7 +133,10 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
   }, [router]);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mode") === "reset") setMode("reset-password");
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mode") === "reset") {
+      setRecoveryRoute(true);
+      setMessage(PASSWORD_RECOVERY_REQUIRED_MESSAGE);
+    }
   }, []);
 
   useEffect(() => {
@@ -150,9 +156,15 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
       authEventSeenRef.current = true;
       sessionRef.current = nextSession;
       setSession(nextSession);
-      if (event === "PASSWORD_RECOVERY") setMode("reset-password");
+      if (isPasswordRecoveryEvent(event)) {
+        setRecoveryVerified(true);
+        setEmail(nextSession?.user.email ?? "");
+        setMode("reset-password");
+        setMessage("");
+      }
       if (nextSession) { void sync(nextSession); redirectAfterAuthentication(); }
       else {
+        setRecoveryVerified(false);
         clearTrustedHydratedCloudAssets();
         coordinatorRef.current?.cancel();
         if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current);
@@ -187,6 +199,11 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
       return;
     }
     if (mode === "reset-password") {
+      if (!canUpdatePasswordFromRecovery(recoveryVerified)) {
+        setBusy(false);
+        setMessage(PASSWORD_RECOVERY_REQUIRED_MESSAGE);
+        return;
+      }
       const result = await supabase.auth.updateUser({ password });
       setBusy(false);
       if (result.error) { reportClientFailure({ category: "auth_failure", code: authFailureCode(result.error, mode), surface: "password_recovery" }); setMessage(customerAuthError(result.error, mode)); return; }
@@ -205,8 +222,12 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
   if (!expanded) return null;
 
   const resetRequest = mode === "reset-request";
-  const resetPassword = mode === "reset-password";
-  return <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Account and sync</p><h1 className="mt-2 text-2xl font-bold text-gray-900">{session ? resetRequest ? "Reset your password" : resetPassword ? "Choose a new password" : "Your workspace is account-ready" : "Sign in or create your account"}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">{session ? "Changes sync to your account. Signed-in profiles and images are stored in your private cloud workspace." : "Create an account or sign in to save your profile, projects, and images in a private workspace."}</p></div><span className={`text-sm font-semibold ${statusClass[syncStatus]}`}>{statusText[syncStatus]}</span></div>{session && !resetPassword && !resetRequest ? <div className="mt-5 flex flex-wrap items-center gap-3"><span className="text-sm text-gray-700">{session.user.email}</span><button type="button" onClick={syncCurrent} disabled={syncStatus === "syncing" || !supabase} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900 disabled:cursor-not-allowed disabled:opacity-50">{syncStatus === "syncing" ? "Syncing…" : "Retry sync"}</button><button type="button" onClick={() => { setMode("reset-request"); setEmail(session.user.email ?? ""); setMessage(""); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Reset password</button><button type="button" onClick={signOut} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Sign out</button></div> : <form onSubmit={submit} className="mt-5 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">{!resetPassword && <input aria-label="Email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}{!resetRequest && <input aria-label="Password" type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}<button type="submit" disabled={busy || !supabase} className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Working…" : resetRequest ? "Send reset email" : resetPassword ? "Update password" : mode === "sign-in" ? "Sign in" : "Sign up"}</button></form>}{!session && !resetPassword && <div className="mt-3 flex flex-wrap gap-4 text-sm font-medium text-gray-900"><button type="button" onClick={() => setMode(mode === "sign-in" ? "sign-up" : "sign-in")} className="underline">{mode === "sign-in" ? "Create account" : "Sign in"}</button>{mode === "sign-in" && <button type="button" onClick={() => { setMode("reset-request"); setMessage(""); }} className="underline">Forgot password?</button>}</div>}{(message || syncMessage) && <p role="status" className="mt-4 text-sm text-gray-700">{message || syncMessage}</p>}</section>;
+  const resetPassword = mode === "reset-password" && recoveryVerified;
+  const recoveryRouteWithoutVerification = mode === "reset-password" && !recoveryVerified;
+  const heading = resetPassword ? "Choose a new password" : session ? resetRequest ? "Reset your password" : "Your workspace is account-ready" : "Sign in or create your account";
+  const description = resetPassword ? `Updating the password for ${session?.user.email ?? email}.` : session ? "Changes sync to your account. Signed-in profiles and images are stored in your private cloud workspace." : "Create an account or sign in to save your profile, projects, and images in a private workspace.";
+  const visibleMessage = recoveryRoute && !recoveryVerified ? PASSWORD_RECOVERY_REQUIRED_MESSAGE : message || syncMessage;
+  return <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-500">Account and sync</p><h1 className="mt-2 text-2xl font-bold text-gray-900">{heading}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">{description}</p></div><span className={`text-sm font-semibold ${statusClass[syncStatus]}`}>{statusText[syncStatus]}</span></div>{session && !resetPassword && !resetRequest ? <div className="mt-5 flex flex-wrap items-center gap-3"><span className="text-sm text-gray-700">{session.user.email}</span><button type="button" onClick={syncCurrent} disabled={syncStatus === "syncing" || !supabase} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900 disabled:cursor-not-allowed disabled:opacity-50">{syncStatus === "syncing" ? "Syncing…" : "Retry sync"}</button><button type="button" onClick={() => { setMode("reset-request"); setEmail(session.user.email ?? ""); setMessage(""); }} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Reset password</button><button type="button" onClick={signOut} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">Sign out</button></div> : resetPassword ? <form onSubmit={submit} className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]"><input aria-label="New password" type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="New password" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/><button type="submit" disabled={busy || !supabase} className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Working…" : "Update password"}</button></form> : recoveryRouteWithoutVerification ? <p role="status" className="mt-5 text-sm text-gray-700">{PASSWORD_RECOVERY_REQUIRED_MESSAGE}</p> : <form onSubmit={submit} className="mt-5 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">{!resetPassword && <input aria-label="Email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}{!resetRequest && <input aria-label="Password" type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" className="rounded-lg border border-gray-300 px-3 py-2 text-sm"/>}<button type="submit" disabled={busy || !supabase} className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Working…" : resetRequest ? "Send reset email" : mode === "sign-in" ? "Sign in" : "Sign up"}</button></form>}{!session && !resetPassword && !recoveryRouteWithoutVerification && <div className="mt-3 flex flex-wrap gap-4 text-sm font-medium text-gray-900"><button type="button" onClick={() => setMode(mode === "sign-in" ? "sign-up" : "sign-in")} className="underline">{mode === "sign-in" ? "Create account" : "Sign in"}</button>{mode === "sign-in" && <button type="button" onClick={() => { setMode("reset-request"); setMessage(""); }} className="underline">Forgot password?</button>}</div>}{visibleMessage && <p role="status" className="mt-4 text-sm text-gray-700">{visibleMessage}</p>}</section>;
 }
 
 export default function AuthShell() {
