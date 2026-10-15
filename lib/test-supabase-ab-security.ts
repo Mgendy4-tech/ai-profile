@@ -80,6 +80,7 @@ if (missing.length) {
     const bWorkspaceBefore = await readWorkspace(b, b.userId);
     const logoPath = `${a.userId}/${profileId}/logo.png`;
     const projectPath = `${a.userId}/${profileId}/project.jpg`;
+    const replacementPath = `${a.userId}/${profileId}/logo-replaced.png`;
     const bPath = `${b.userId}/${bProfileId}/logo.png`;
     const logoBytes = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWO4o6HxHwAFPAIsLJMkUQAAAABJRU5ErkJggg==", "base64"));
     const replacementBytes = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWPQqLjzHwAExAJ88J3R2AAAAABJRU5ErkJggg==", "base64"));
@@ -95,8 +96,9 @@ if (missing.length) {
       await signedDownload(a, projectPath, projectBytes);
       requireNoError("Account A profile update", (await a.client.from("cloud_profiles").update({ display_name: "Disposable A/B isolation fixture updated" }).eq("user_id", a.userId).eq("profile_id", profileId)).error);
       assert.equal((await readProfile(a, a.userId, profileId))?.display_name, "Disposable A/B isolation fixture updated", "Account A profile update failed");
-      requireNoError("Account A asset replacement", (await a.client.storage.from(bucket).update(logoPath, Buffer.from(replacementBytes), { contentType: "image/png" })).error);
-      assert.deepEqual(await download(a, logoPath), replacementBytes, "Account A asset replacement failed");
+      requireNoError("Account A replacement upload", (await a.client.storage.from(bucket).upload(replacementPath, Buffer.from(replacementBytes), { contentType: "image/png", upsert: false })).error);
+      requireNoError("Account A replacement path persistence", (await a.client.from("cloud_profiles").update({ company_data: { name: "Account A fixture", logoPath: replacementPath } }).eq("user_id", a.userId).eq("profile_id", profileId)).error);
+      assert.deepEqual(await download(a, replacementPath), replacementBytes, "Account A asset replacement failed");
       assert.equal((await readWorkspace(a, a.userId))?.active_profile_id, profileId, "Account A workspace persistence failed");
 
       assert.equal(await readProfile(b, a.userId, profileId), null, "Account B read Account A profile");
@@ -104,9 +106,9 @@ if (missing.length) {
       assert.ok((await b.client.storage.from(bucket).download(logoPath)).error, "Account B downloaded Account A asset");
       const bSigned = await b.client.storage.from(bucket).createSignedUrl(logoPath, 60);
       assert.ok(bSigned.error || !bSigned.data?.signedUrl, "Account B signed Account A asset");
-      await crossUserWritesMustBeBlocked(b, a.userId, profileId, logoPath);
+      await crossUserWritesMustBeBlocked(b, a.userId, profileId, replacementPath);
       assert.equal((await readProfile(a, a.userId, profileId))?.display_name, "Disposable A/B isolation fixture updated", "Account B changed Account A profile");
-      assert.deepEqual(await download(a, logoPath), replacementBytes, "Account B changed Account A asset");
+      assert.deepEqual(await download(a, replacementPath), replacementBytes, "Account B changed Account A asset");
 
       requireNoError("Account B profile create", (await b.client.from("cloud_profiles").insert({ user_id: b.userId, profile_id: bProfileId, display_name: "Disposable B fixture", company_data: { name: "Account B fixture", logoPath: bPath }, projects: [], generated_profile: null, profile_structure: null, selected_family: null, selected_variant: null, export_decision: null, freshness: {}, unsupported_assets: [] })).error);
       requireNoError("Account B workspace create/update", (await b.client.from("cloud_workspaces").upsert({ user_id: b.userId, version: 1, active_profile_id: bProfileId, updated_at: new Date().toISOString() }, { onConflict: "user_id" })).error);
@@ -116,7 +118,7 @@ if (missing.length) {
 
       const freshA = await signIn("A", process.env.SUPABASE_TEST_ACCOUNT_A_EMAIL!, process.env.SUPABASE_TEST_ACCOUNT_A_PASSWORD!);
       assert.equal((await readProfile(freshA, a.userId, profileId))?.profile_id, profileId, "Fresh Account A session cannot read profile");
-      assert.deepEqual(await download(freshA, logoPath), replacementBytes, "Fresh Account A session cannot hydrate logo");
+      assert.deepEqual(await download(freshA, replacementPath), replacementBytes, "Fresh Account A session cannot hydrate logo");
       assert.deepEqual(await download(freshA, projectPath), projectBytes, "Fresh Account A session cannot hydrate project image");
       await freshA.client.auth.signOut();
 
@@ -135,10 +137,10 @@ if (missing.length) {
       const signedOut = client();
       requireNoError("Signed-out fixture sign-in", (await signedOut.auth.signInWithPassword({ email: process.env.SUPABASE_TEST_ACCOUNT_A_EMAIL!, password: process.env.SUPABASE_TEST_ACCOUNT_A_PASSWORD! })).error);
       requireNoError("Signed-out fixture sign-out", (await signedOut.auth.signOut()).error);
-      assert.ok((await signedOut.storage.from(bucket).download(logoPath)).error, "Signed-out client downloaded private asset");
+      assert.ok((await signedOut.storage.from(bucket).download(replacementPath)).error, "Signed-out client downloaded private asset");
       return { status: "PASS", liveSupabase: true, accountIsolation: "PASS", profileWorkspaceIsolation: "PASS", storageIsolation: "PASS", freshSessionHydration: "PASS", accountSwitchingAndSignOut: "PASS", formats: ["PNG logo", "JPEG project"], serviceRoleUsed: false, credentialsPrinted: false };
     } finally {
-      const cleanupA = await a.client.storage.from(bucket).remove([logoPath, projectPath]);
+      const cleanupA = await a.client.storage.from(bucket).remove([logoPath, replacementPath, projectPath]);
       if (cleanupA.error) console.error(`Cleanup warning A assets: ${errorText(cleanupA.error)}`);
       const cleanupB = await b.client.storage.from(bucket).remove([bPath]);
       if (cleanupB.error) console.error(`Cleanup warning B assets: ${errorText(cleanupB.error)}`);
