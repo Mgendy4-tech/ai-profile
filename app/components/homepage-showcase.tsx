@@ -2,17 +2,22 @@
 
 import NextLink from "next/link";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import { Children, useEffect, useState } from "react";
+import { Children, createContext, useContext, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import AuthGatedLink from "./auth-gated-link";
 import { LnkditMark } from "./lnkdit-wordmark";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const demoSections = ["About the Studio", "Featured Project"];
+const HomepageSessionContext = createContext<Session | null>(null);
 
 function Link(props: ComponentProps<typeof NextLink>) {
+  const session = useContext(HomepageSessionContext);
   const isCreateProfile = Children.toArray(props.children).some((child) => typeof child === "string" && child.includes("Create your profile"));
+  const privatePath = typeof props.href === "string" && ["/company", "/projects", "/generate", "/export", "/workspace"].includes(props.href.split("?")[0]);
   if (isCreateProfile) return <AuthGatedLink nextHref="/company" className={props.className ?? ""}>{props.children}</AuthGatedLink>;
+  if (props.href === "/workspace" && !session) return null;
+  if (privatePath) return <AuthGatedLink nextHref={String(props.href)} className={props.className ?? ""}>{props.children}</AuthGatedLink>;
   return <NextLink {...props} />;
 }
 
@@ -94,7 +99,11 @@ function StepCard({ number, title, copy, accent }: { number: string; title: stri
   return <article className="home-step-card"><span className={`home-step-number ${accent}`}>{number}</span><h3 className="mt-8 text-xl font-semibold tracking-[-0.03em] text-slate-950">{title}</h3><p className="mt-3 text-sm leading-6 text-slate-600">{copy}</p></article>;
 }
 
-function HomepageHeader() {
+function HomepageHeader({ session }: { session: Session | null }) {
+  return <header className="home-site-header flex min-h-11 items-center justify-between gap-4"><Link href="/" aria-label="LNKDIT home" className="inline-flex items-center gap-2"><LnkditMark className="h-9 w-9" /><span className="text-[1.3rem] font-black tracking-[-0.055em]"><span className="text-slate-950">LNKD</span><span className="text-cyan-500">IT</span></span></Link><div className="home-header-main-actions flex min-w-0 items-center gap-4 md:gap-6"><div className="flex items-center gap-4 text-sm font-semibold text-slate-600 md:gap-6"><a href="#how-it-works" className="hidden transition hover:text-slate-950 md:inline">How it works</a>{session ? <><Link href="/workspace" className="transition hover:text-slate-950">Workspace</Link><Link href="/settings" className="text-slate-950 transition hover:text-cyan-700">Account</Link></> : <><a href="#workspace" className="hidden transition hover:text-slate-950 md:inline">Workspace</a><Link href="/auth" className="text-slate-950 transition hover:text-cyan-700">Sign in</Link></>}</div></div></header>;
+}
+
+export default function HomepageShowcase({ companyName, resumeHref }: { companyName: string; resumeHref: string }) {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
@@ -106,10 +115,6 @@ function HomepageHeader() {
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, []);
 
-  return <header className="home-site-header flex min-h-11 items-center justify-between gap-4"><Link href="/" aria-label="LNKDIT home" className="inline-flex items-center gap-2"><LnkditMark className="h-9 w-9" /><span className="text-[1.3rem] font-black tracking-[-0.055em]"><span className="text-slate-950">LNKD</span><span className="text-cyan-500">IT</span></span></Link><div className="home-header-main-actions flex min-w-0 items-center gap-4 md:gap-6"><div className="flex items-center gap-4 text-sm font-semibold text-slate-600 md:gap-6"><a href="#how-it-works" className="hidden transition hover:text-slate-950 md:inline">How it works</a>{session ? <><Link href="/workspace" className="transition hover:text-slate-950">Workspace</Link><Link href="/settings" className="text-slate-950 transition hover:text-cyan-700">Account</Link></> : <><a href="#workspace" className="hidden transition hover:text-slate-950 md:inline">Workspace</a><Link href="/auth" className="text-slate-950 transition hover:text-cyan-700">Sign in</Link></>}</div></div></header>;
-}
-
-export default function HomepageShowcase({ companyName, resumeHref }: { companyName: string; resumeHref: string }) {
   useEffect(() => {
     const nodes = Array.from(document.querySelectorAll<HTMLElement>("[data-home-reveal]"));
     if (!("IntersectionObserver" in window)) {
@@ -127,13 +132,13 @@ export default function HomepageShowcase({ companyName, resumeHref }: { companyN
   }, []);
 
   return (
-    <div className="home-page-shell overflow-hidden">
+    <HomepageSessionContext.Provider value={session}><div className="home-page-shell overflow-hidden">
       <section className="home-hero relative px-5 pb-20 pt-7 sm:px-8 sm:pb-28 sm:pt-10 lg:pb-36">
         <div className="home-hero-wash" />
         <div className="relative mx-auto max-w-[1400px]">
-          <HomepageHeader />
+          <HomepageHeader session={session} />
           <div className="grid items-start gap-12 pt-16 lg:grid-cols-[0.83fr_1.17fr] lg:gap-5 lg:pt-24">
-            <Reveal className="relative z-10 max-w-xl" delay={40}><p className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700 shadow-sm backdrop-blur"><span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />Profile studio for modern teams</p><h1 className="mt-6 max-w-xl text-5xl font-semibold leading-[0.98] tracking-[-0.065em] text-slate-950 sm:text-6xl lg:text-[4.9rem]">Professional company profiles, made easier.</h1><p className="mt-6 max-w-lg text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">Create, refine, and export a polished company profile in one place. Build your private workspace first, then keep every draft and image available across devices.</p><div className="mt-8 flex flex-wrap items-center gap-3"><Link href={resumeHref} className="rounded-xl bg-slate-950 px-5 py-3.5 text-sm font-semibold text-white shadow-[0_12px_25px_rgba(15,23,42,0.18)] transition duration-300 hover:-translate-y-0.5 hover:bg-slate-800">{companyName ? `Continue with ${companyName}` : "Create your profile"}<span className="ml-2 text-cyan-300">↗</span></Link><Link href="/workspace" className="rounded-xl border border-slate-300 bg-white/80 px-5 py-3.5 text-sm font-semibold text-slate-900 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:border-slate-500">View workspace</Link></div></Reveal>
+            <Reveal className="relative z-10 max-w-xl" delay={40}><p className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700 shadow-sm backdrop-blur"><span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />Profile studio for modern teams</p><h1 className="mt-6 max-w-xl text-5xl font-semibold leading-[0.98] tracking-[-0.065em] text-slate-950 sm:text-6xl lg:text-[4.9rem]">Professional company profiles, made easier.</h1><p className="mt-6 max-w-lg text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">Create, refine, and export a polished company profile in one place. Build your private workspace first, then keep every draft and image available across devices.</p><div className="mt-8 flex flex-wrap items-center gap-3"><AuthGatedLink nextHref={resumeHref} className="rounded-xl bg-slate-950 px-5 py-3.5 text-sm font-semibold text-white shadow-[0_12px_25px_rgba(15,23,42,0.18)] transition duration-300 hover:-translate-y-0.5 hover:bg-slate-800">{companyName ? `Continue with ${companyName}` : "Create your profile"}<span className="ml-2 text-cyan-300">↗</span></AuthGatedLink><Link href="/workspace" className="rounded-xl border border-slate-300 bg-white/80 px-5 py-3.5 text-sm font-semibold text-slate-900 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:border-slate-500">View workspace</Link></div></Reveal>
             <Reveal className="min-w-0" delay={160}><ProductComposition /></Reveal>
           </div>
         </div>
@@ -152,6 +157,6 @@ export default function HomepageShowcase({ companyName, resumeHref }: { companyN
 
         <section className="home-final-cta px-5 py-20 sm:px-8 sm:py-28"><Reveal className="mx-auto max-w-4xl text-center"><LnkditMark className="mx-auto h-12 w-12" /><p className="mt-6 text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">Ready when you are</p><h2 className="mx-auto mt-4 max-w-3xl text-4xl font-semibold tracking-[-0.06em] text-slate-950 sm:text-6xl">Make the next version of your company story easier to share.</h2><p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-slate-600">Start with the essentials, keep the work in view, and export when it feels right.</p><Link href={resumeHref} className="mt-8 inline-flex rounded-xl bg-slate-950 px-6 py-3.5 text-sm font-semibold text-white shadow-[0_12px_25px_rgba(15,23,42,0.18)] transition hover:-translate-y-0.5 hover:bg-slate-800">{companyName ? `Continue with ${companyName}` : "Create your profile"}<span className="ml-2 text-cyan-300">↗</span></Link></Reveal></section>
       </main>
-    </div>
+    </div></HomepageSessionContext.Provider>
   );
 }

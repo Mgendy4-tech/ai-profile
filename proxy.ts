@@ -2,17 +2,23 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getSupabaseConfig } from "@/lib/auth-env";
-import { isBetaTestModeEnabled } from "@/lib/beta-test-mode";
+import { isBetaTestModeEnabled, isLocalQaFixtureRequest } from "@/lib/beta-test-mode";
 import { authPathFor } from "@/lib/auth-redirect";
 
 const protectedPaths = new Set(["/company", "/projects", "/generate", "/export", "/workspace"]);
 
 export async function proxy(request: NextRequest) {
-  if (!protectedPaths.has(request.nextUrl.pathname)) return NextResponse.next();
+  const pathname = request.nextUrl.pathname;
+  const betaFixtureRequest = isBetaTestModeEnabled(process.env.NEXT_PUBLIC_BETA_TEST_MODE) && isLocalQaFixtureRequest(request);
 
-  // The local Preview QA harness intentionally exercises the real workflow without a customer account.
-  // This branch is enabled only by the Preview/test build flag and is false in Production.
-  if (isBetaTestModeEnabled(process.env.NEXT_PUBLIC_BETA_TEST_MODE)) return NextResponse.next();
+  if (pathname === "/beta-test" && isBetaTestModeEnabled(process.env.NEXT_PUBLIC_BETA_TEST_MODE) && !betaFixtureRequest) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+  if (!protectedPaths.has(pathname)) return NextResponse.next();
+
+  // Fixture access is loopback-only and requires the explicit QA marker.
+  // Beta mode is never an anonymous bypass on Preview or Production hosts.
+  if (betaFixtureRequest) return NextResponse.next();
 
   const config = getSupabaseConfig();
   if (!config) return NextResponse.redirect(new URL(authPathFor(`${request.nextUrl.pathname}${request.nextUrl.search}`), request.url));
@@ -35,5 +41,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/company", "/projects", "/generate", "/export", "/workspace"],
+  matcher: ["/beta-test", "/company", "/projects", "/generate", "/export", "/workspace"],
 };

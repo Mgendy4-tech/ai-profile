@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { betaFixtureImageState, createBetaFixture, loadBetaFixture, type BetaFixtureId } from "./beta-test-fixtures";
-import { isBetaTestModeEnabled } from "./beta-test-mode";
+import { isBetaTestModeEnabled, isLocalQaFixtureRequest } from "./beta-test-mode";
 import { APPLICATION_STORAGE_KEYS, clearApplicationLocalData } from "./local-profile-data";
 import { generatedProjectEvidenceCount, readPersistedGeneratedProfile } from "./generated-profile-storage";
 import { familyChoices } from "./authored-templates/family-selection";
@@ -9,6 +9,10 @@ import { readPersistedProjects } from "./persisted-projects";
 import { validateProjectOperationalLimits } from "./production-limits";
 
 assert.equal(isBetaTestModeEnabled(undefined), false); assert.equal(isBetaTestModeEnabled("false"), false); assert.equal(isBetaTestModeEnabled("true"), true);
+const qaRequest = (hostname: string, marker: string | null) => ({ nextUrl: { hostname }, headers: { get: (name: string) => name === "x-lnkdit-qa-fixture" ? marker : null } });
+assert.equal(isLocalQaFixtureRequest(qaRequest("localhost", "local")), true);
+assert.equal(isLocalQaFixtureRequest(qaRequest("preview.vercel.app", "local")), false);
+assert.equal(isLocalQaFixtureRequest(qaRequest("localhost", null)), false);
 const values = new Map<string, string>([["unrelated-origin-state", "keep"]]); const writes: string[] = [];
 const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { writes.push(key); values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
 const image = "data:image/png;base64,QUJD";
