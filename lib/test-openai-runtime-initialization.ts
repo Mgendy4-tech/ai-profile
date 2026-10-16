@@ -19,4 +19,9 @@ for (const route of routes) {
   assert(source.includes("createOpenAIClient().responses.create("),
     `${route} must call OpenAI through the request-time factory.`);
 }
+const visionSource = readFileSync(resolve("lib", "visual-system", "vision-score.ts"), "utf8");
+assert(!/const\s+client\s*=\s*new\s+OpenAI\s*\(/.test(visionSource),
+  "Vision scoring must not initialize OpenAI during API route import.");
+assert(visionSource.includes("createOpenAIClient().responses.create("),
+  "Vision scoring must instantiate the client only during image evaluation.");
 console.log("OpenAI clients initialize at request time, not at build time.");
