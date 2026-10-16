@@ -1,0 +1,40 @@
+name: LNKDIT Preview QA
+
+on:
+  push:
+    branches:
+      - design/lnkdit-homepage-rich-v1
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lnkdit-preview-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-and-security:
+    name: Automated QA, security and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NEXT_PUBLIC_BETA_TEST_MODE: "false"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run automated QA (includes recovery guards and TypeScript)
+        run: npm run qa:beta
+      - name: Verify production build without enabling beta fixtures
+        run: npm run build
