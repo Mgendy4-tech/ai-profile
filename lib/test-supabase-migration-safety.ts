@@ -36,4 +36,15 @@ assert(customer.includes("using ((select auth.uid()) = user_id)"),
   "Base Supabase migration must preserve optimized cached owner checks.");
 assert(customer.includes("(storage.foldername(name))[1] = (select auth.uid())::text"),
   "Base storage policies must preserve optimized cached owner checks.");
+const isolationAudit = readFileSync(join(process.cwd(), "supabase/verify-owner-isolation-readonly.sql"), "utf8");
+assert.equal((isolationAudit.match(/BEGIN READ ONLY;/g) ?? []).length, 2,
+  "A/B RLS checks must each run inside a read-only transaction.");
+assert.equal((isolationAudit.match(/ROLLBACK;/g) ?? []).length, 2,
+  "A/B RLS checks must leave the database unchanged.");
+assert.equal((isolationAudit.match(/SET LOCAL ROLE authenticated;/g) ?? []).length, 2,
+  "Both A and B checks must execute as authenticated rather than postgres.");
+assert(isolationAudit.includes("request.jwt.claim.sub"),
+  "The read-only audit must simulate JWT subject under authenticated RLS.");
+assert(isolationAudit.includes("simulated_account"),
+  "The A/B audit must label the simulated direction.");
 console.log("Supabase migration safety checks passed.");
