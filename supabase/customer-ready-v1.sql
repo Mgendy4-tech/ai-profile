@@ -33,14 +33,14 @@ alter table public.cloud_profiles enable row level security;
 drop policy if exists "workspace owner access" on public.cloud_workspaces;
 create policy "workspace owner access" on public.cloud_workspaces
   for all to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 drop policy if exists "profile owner access" on public.cloud_profiles;
 create policy "profile owner access" on public.cloud_profiles
   for all to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 create index if not exists cloud_profiles_user_updated_idx
   on public.cloud_profiles (user_id, updated_at desc);
@@ -66,7 +66,7 @@ create policy "customer assets owner read" on storage.objects
   for select to authenticated
   using (
     bucket_id = 'customer-assets'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
 drop policy if exists "customer assets owner upload" on storage.objects;
@@ -74,7 +74,7 @@ create policy "customer assets owner upload" on storage.objects
   for insert to authenticated
   with check (
     bucket_id = 'customer-assets'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
     and array_length(storage.foldername(name), 1) >= 3
   );
 
@@ -83,11 +83,11 @@ create policy "customer assets owner update" on storage.objects
   for update to authenticated
   using (
     bucket_id = 'customer-assets'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   )
   with check (
     bucket_id = 'customer-assets'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
 drop policy if exists "customer assets owner delete" on storage.objects;
@@ -95,5 +95,5 @@ create policy "customer assets owner delete" on storage.objects
   for delete to authenticated
   using (
     bucket_id = 'customer-assets'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );
