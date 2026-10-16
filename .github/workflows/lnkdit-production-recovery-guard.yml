@@ -1,0 +1,34 @@
+name: LNKDIT Production Recovery Guard
+on:
+  push:
+    branches: [design/lnkdit-homepage-rich-v1]
+    paths: [.github/workflows/lnkdit-production-recovery-guard.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lnkdit-live-supabase-ab
+  cancel-in-progress: false
+jobs:
+  production-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 1864e6af590aaca3339102749a51bcf2dfdd08da
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright-core install --with-deps chromium
+      - name: Verify live production recovery guards without changing passwords
+        env:
+          SMOKE_BASE_URL: https://www.lnkdit.com
+          SUPABASE_TEST_ACCOUNT_A_EMAIL: mgendy4+lnkdit-a@gmail.com
+          SUPABASE_TEST_ACCOUNT_A_PASSWORD: ${{ secrets.SUPABASE_TEST_ACCOUNT_A_PASSWORD }}
+        run: |
+          export CHROME_PATH="$(node -e 'process.stdout.write(require("playwright-core").chromium.executablePath())')"
+          timeout 120s node lib/browser-password-recovery-guard.cjs
