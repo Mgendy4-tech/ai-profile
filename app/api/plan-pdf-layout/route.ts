@@ -7,7 +7,8 @@ import {
 } from "@/lib/visual-system/page-composition-planner";
 import { logServerFailure } from "@/lib/server/observability";
 
-const client = new OpenAI({
+// Instantiate only when a request needs OpenAI; Vercel builds must not require runtime secrets.
+const createOpenAIClient = () => new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
@@ -153,7 +154,7 @@ STRICT RULES:
 `;
 
     try {
-      const response = await client.responses.create({
+      const response = await createOpenAIClient().responses.create({
         model: "gpt-5.6",
         input: prompt,
       });
