@@ -47,4 +47,13 @@ assert(isolationAudit.includes("request.jwt.claim.sub"),
   "The read-only audit must simulate JWT subject under authenticated RLS.");
 assert(isolationAudit.includes("simulated_account"),
   "The A/B audit must label the simulated direction.");
+const storageIsolationAudit = readFileSync(join(process.cwd(), "supabase/verify-storage-isolation-readonly.sql"), "utf8");
+assert.equal((storageIsolationAudit.match(/BEGIN READ ONLY;/g) ?? []).length, 2,
+  "Storage owner A/B checks must run inside read-only transactions.");
+assert.equal((storageIsolationAudit.match(/ROLLBACK;/g) ?? []).length, 2,
+  "Storage owner A/B checks must leave customer objects untouched.");
+assert.equal((storageIsolationAudit.match(/SET LOCAL ROLE authenticated;/g) ?? []).length, 2,
+  "Storage owner A/B checks must use the authenticated RLS role.");
+assert(storageIsolationAudit.includes("request.jwt.claim.sub") && storageIsolationAudit.includes("storage_owner_isolation"),
+  "Storage audit must simulate owner JWT claims and report isolation results.");
 console.log("Supabase migration safety checks passed.");
