@@ -76,8 +76,20 @@ if (missing.length) {
     const a = await signIn("A", process.env.SUPABASE_TEST_ACCOUNT_A_EMAIL!, process.env.SUPABASE_TEST_ACCOUNT_A_PASSWORD!);
     const b = await signIn("B", process.env.SUPABASE_TEST_ACCOUNT_B_EMAIL!, process.env.SUPABASE_TEST_ACCOUNT_B_PASSWORD!);
     assert.notEqual(a.userId, b.userId, "Account A and B resolved to the same user");
+    // Never overwrite an existing customer's active workspace, even if real credentials
+    // were accidentally provided to this disposable-account integration test.
+    const aExistingProfiles = await a.client.from("cloud_profiles").select("profile_id", { count: "exact", head: true }).eq("user_id", a.userId);
+    const bExistingProfiles = await b.client.from("cloud_profiles").select("profile_id", { count: "exact", head: true }).eq("user_id", b.userId);
+    requireNoError("Account A fixture preflight", aExistingProfiles.error);
+    requireNoError("Account B fixture preflight", bExistingProfiles.error);
+    if ((aExistingProfiles.count ?? 0) > 0 || (bExistingProfiles.count ?? 0) > 0) {
+      throw new Error("BLOCKED: A/B test accounts already contain profiles. Use two empty disposable accounts; existing customer profiles will not be modified.");
+    }
     const aWorkspaceBefore = await readWorkspace(a, a.userId);
     const bWorkspaceBefore = await readWorkspace(b, b.userId);
+    if (aWorkspaceBefore || bWorkspaceBefore) {
+      throw new Error("BLOCKED: A/B test accounts already contain workspaces. Use two empty disposable accounts; existing customer workspaces will not be modified.");
+    }
     const logoPath = `${a.userId}/${profileId}/logo.png`;
     const projectPath = `${a.userId}/${profileId}/project.jpg`;
     const replacementPath = `${a.userId}/${profileId}/logo-replaced.png`;
