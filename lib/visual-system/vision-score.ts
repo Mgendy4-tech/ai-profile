@@ -5,7 +5,8 @@ import {
   VISION_MAX_DIMENSION,
 } from "./vision-image-normalizer";
 
-const client = new OpenAI({
+// Do not initialize OpenAI during module evaluation (Next.js build collects route metadata).
+const createOpenAIClient = () => new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
@@ -90,7 +91,7 @@ Return exactly:
 }
 `;
 
-  const response = await client.responses.create({
+  const response = await createOpenAIClient().responses.create({
     model: "gpt-5-mini",
     input: [
       {
