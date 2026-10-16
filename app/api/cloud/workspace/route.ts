@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authenticatedSupabase } from "@/lib/supabase-server";
 import { type CloudProfileRecord, type CloudWorkspaceDocument } from "@/lib/cloud-workspace";
 import { isCloudWorkspacePayload } from "@/lib/cloud-workspace-payload";
+import { readCloudWorkspaceJson } from "@/lib/cloud-workspace-request";
 import { logServerFailure } from "@/lib/server/observability";
 
 const safeError = (code: "not_configured" | "unauthorized" | "cloud_unavailable" | "invalid_payload") => { if (code === "unauthorized") logServerFailure({ category: "auth_failure", code: "cloud_request_unauthorized", surface: "api", route: "/api/cloud/workspace", status: 401 }); return NextResponse.json({ ok: false, code }, { status: code === "unauthorized" ? 401 : code === "not_configured" ? 503 : 400 }); };
@@ -28,8 +29,11 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const auth = await authenticatedSupabase(request);
   if ("error" in auth) return safeError(auth.error);
-  let payload: unknown;
-  try { payload = await request.json(); } catch { return safeError("invalid_payload"); }
+  const parsed = await readCloudWorkspaceJson(request);
+  if (!parsed.ok) return parsed.code === "payload_too_large"
+    ? NextResponse.json({ ok: false, code: parsed.code }, { status: 413 })
+    : safeError("invalid_payload");
+  const payload = parsed.value;
   if (!isCloudWorkspacePayload(payload)) return safeError("invalid_payload");
   const now = new Date().toISOString();
   const workspaceWrite = await auth.client.from("cloud_workspaces").upsert({ user_id: auth.userId, version: payload.version, active_profile_id: payload.activeProfileId, updated_at: now }, { onConflict: "user_id" });
