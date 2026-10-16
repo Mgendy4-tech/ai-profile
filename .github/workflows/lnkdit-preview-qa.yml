@@ -34,6 +34,9 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      # Next.js 16 generates LayoutProps/PageProps types; a clean runner has no .next/types yet.
+      - name: Generate Next.js route and layout types
+        run: npx next typegen
       - name: Run automated QA (includes recovery guards and TypeScript)
         run: npm run qa:beta
       - name: Verify production build without enabling beta fixtures
