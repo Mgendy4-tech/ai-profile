@@ -1,0 +1,46 @@
+name: LNKDIT Live Supabase A/B Isolation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lnkdit-live-supabase-ab
+  cancel-in-progress: false
+
+jobs:
+  live-account-isolation:
+    name: Disposable account A/B security smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.LNKDIT_TEST_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.LNKDIT_TEST_SUPABASE_ANON_KEY }}
+      SUPABASE_TEST_ACCOUNT_A_EMAIL: ${{ secrets.LNKDIT_TEST_ACCOUNT_A_EMAIL }}
+      SUPABASE_TEST_ACCOUNT_A_PASSWORD: ${{ secrets.LNKDIT_TEST_ACCOUNT_A_PASSWORD }}
+      SUPABASE_TEST_ACCOUNT_B_EMAIL: ${{ secrets.LNKDIT_TEST_ACCOUNT_B_EMAIL }}
+      SUPABASE_TEST_ACCOUNT_B_PASSWORD: ${{ secrets.LNKDIT_TEST_ACCOUNT_B_PASSWORD }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Validate disposable test account configuration
+        shell: bash
+        run: |
+          for name in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_TEST_ACCOUNT_A_EMAIL SUPABASE_TEST_ACCOUNT_A_PASSWORD SUPABASE_TEST_ACCOUNT_B_EMAIL SUPABASE_TEST_ACCOUNT_B_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret for $name. Live A/B integration test has NOT run."
+              exit 1
+            fi
+          done
+          echo "Disposable account test configuration is present. Credentials are never printed."
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Test live authentication, owner isolation and private assets
+        run: npx tsx lib/test-supabase-ab-security.ts
