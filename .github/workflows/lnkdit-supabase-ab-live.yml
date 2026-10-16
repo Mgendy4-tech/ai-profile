@@ -2,6 +2,9 @@ name: LNKDIT Live Supabase A/B Isolation
 
 on:
   workflow_dispatch:
+  push:
+    branches: [design/lnkdit-homepage-rich-v1]
+    paths: [.github/workflows/lnkdit-supabase-ab-live.yml]
 
 permissions:
   contents: read
@@ -13,34 +16,31 @@ concurrency:
 jobs:
   live-account-isolation:
     name: Disposable account A/B security smoke
+    if: github.ref == 'refs/heads/design/lnkdit-homepage-rich-v1'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.LNKDIT_TEST_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.LNKDIT_TEST_SUPABASE_ANON_KEY }}
-      SUPABASE_TEST_ACCOUNT_A_EMAIL: ${{ secrets.LNKDIT_TEST_ACCOUNT_A_EMAIL }}
-      SUPABASE_TEST_ACCOUNT_A_PASSWORD: ${{ secrets.LNKDIT_TEST_ACCOUNT_A_PASSWORD }}
-      SUPABASE_TEST_ACCOUNT_B_EMAIL: ${{ secrets.LNKDIT_TEST_ACCOUNT_B_EMAIL }}
-      SUPABASE_TEST_ACCOUNT_B_PASSWORD: ${{ secrets.LNKDIT_TEST_ACCOUNT_B_PASSWORD }}
     steps:
-      - name: Check out source
-        uses: actions/checkout@v4
+      - name: Check out reviewed test source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 6450b48539b37a17e31a481cbf0b19cecb7d772e
+          persist-credentials: false
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-      - name: Validate disposable test account configuration
-        shell: bash
-        run: |
-          for name in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_TEST_ACCOUNT_A_EMAIL SUPABASE_TEST_ACCOUNT_A_PASSWORD SUPABASE_TEST_ACCOUNT_B_EMAIL SUPABASE_TEST_ACCOUNT_B_PASSWORD; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Missing GitHub Actions secret for $name. Live A/B integration test has NOT run."
-              exit 1
-            fi
-          done
-          echo "Disposable account test configuration is present. Credentials are never printed."
       - name: Install locked dependencies
         run: npm ci
+      - name: Install pinned TypeScript test runner
+        run: npm install --no-save --package-lock=false --ignore-scripts tsx@4.20.5
       - name: Test live authentication, owner isolation and private assets
-        run: npx tsx lib/test-supabase-ab-security.ts
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://yeplwaainflckcrjsauw.supabase.co
+          # Browser-safe publishable key; no service-role credentials are used.
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_QWxzQMOj4MAUeK_c8O7foQ_9zqmRgox
+          SUPABASE_TEST_ACCOUNT_A_EMAIL: mgendy4+lnkdit-a@gmail.com
+          SUPABASE_TEST_ACCOUNT_A_PASSWORD: ${{ secrets.SUPABASE_TEST_ACCOUNT_A_PASSWORD }}
+          SUPABASE_TEST_ACCOUNT_B_EMAIL: mgendy4+lnkdit-b@gmail.com
+          SUPABASE_TEST_ACCOUNT_B_PASSWORD: ${{ secrets.SUPABASE_TEST_ACCOUNT_B_PASSWORD }}
+        run: node_modules/.bin/tsx lib/test-supabase-ab-security.ts
