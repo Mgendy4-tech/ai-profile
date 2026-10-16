@@ -62,6 +62,17 @@ jobs:
             cat /tmp/lnkdit-ci-next.log
             exit 1
           fi
+          # Verify the actual Next.js proxy rejects anonymous calls before any
+          # OpenAI/Pexels request can be made. Empty payloads cannot incur cost.
+          for route in analyze-brand analyze-structure generate-profile plan-pdf-layout select-visuals visual-direction; do
+            STATUS=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" \
+              -X POST -H "Content-Type: application/json" --data '{}' \
+              "http://127.0.0.1:3108/api/$route")
+            if [ "$STATUS" != "401" ]; then
+              echo "::error::Anonymous AI endpoint /api/$route returned $STATUS instead of 401"
+              exit 1
+            fi
+          done
           node lib/browser-homepage-responsive.cjs http://127.0.0.1:3108
       - name: Upload responsive QA screenshots on failure
         if: failure()
