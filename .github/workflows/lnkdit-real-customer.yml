@@ -8,7 +8,7 @@ permissions:
   contents: read
 concurrency:
   group: lnkdit-live-supabase-ab
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   customer-journey:
     if: github.ref == 'refs/heads/design/lnkdit-homepage-rich-v1'
@@ -56,5 +56,5 @@ jobs:
             sleep 1
           done
           test "$READY" = "1"
-          node lib/browser-live-customer-journey.cjs
+          timeout 600s node lib/browser-live-customer-journey.cjs
 
