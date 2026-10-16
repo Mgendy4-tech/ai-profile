@@ -76,14 +76,28 @@ export default function CompanyPage() {
   useEffect(() => {
     const loadCompanyData = () => {
       const persisted = inspectPersistedCompanyData(localStorage);
-      if (persisted.data) { loadedCompanyName.current = persisted.data.name; setCompanyData(persisted.data); }
+      if (persisted.data) {
+        const restored = persisted.data;
+        loadedCompanyName.current = restored.name;
+        setCompanyData((current) => {
+          // Late cloud hydration fills untouched fields without erasing a form draft.
+          const next = { ...restored };
+          for (const field of explicitlyEditedFields.current) next[field] = current[field];
+          if (logoExplicitlySelected.current) { next.logoUrl = current.logoUrl; next.logoPath = current.logoPath; }
+          return next;
+        });
+      }
       else if (persisted.issue) { removeApplicationStorage(localStorage, 'companyData'); setErrorMessage('Saved company information could not be read. Please enter it again and save it.'); }
 
     };
 
     const loadTimeout = window.setTimeout(loadCompanyData, 0);
 
-    return () => window.clearTimeout(loadTimeout);
+    const onCloudSync = (event: Event) => {
+      if ((event as CustomEvent<{ status?: string }>).detail?.status === 'synced') loadCompanyData();
+    };
+    window.addEventListener('cloud-sync-status', onCloudSync);
+    return () => { window.clearTimeout(loadTimeout); window.removeEventListener('cloud-sync-status', onCloudSync); };
   }, []);
 
   useEffect(() => {
@@ -96,7 +110,11 @@ export default function CompanyPage() {
 
     const loadTimeout = window.setTimeout(loadProjects, 0);
 
-    return () => window.clearTimeout(loadTimeout);
+    const onCloudSync = (event: Event) => {
+      if ((event as CustomEvent<{ status?: string }>).detail?.status === 'synced' && !projectsExplicitlyEdited.current && !explicitlyEditedFields.current.has('name')) loadProjects();
+    };
+    window.addEventListener('cloud-sync-status', onCloudSync);
+    return () => { window.clearTimeout(loadTimeout); window.removeEventListener('cloud-sync-status', onCloudSync); };
   }, []);
 
   const updateField = (field: keyof CompanyData, value: string) => {

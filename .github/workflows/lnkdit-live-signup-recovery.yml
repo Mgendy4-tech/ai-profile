@@ -2,7 +2,7 @@ name: LNKDIT Fresh Signup and Recovery
 on:
   push:
     branches: [design/lnkdit-homepage-rich-v1]
-    paths: [.github/workflows/lnkdit-live-signup-recovery.yml, lib/browser-live-signup-recovery.cjs]
+    paths: [.github/workflows/lnkdit-live-signup-recovery.yml, lib/browser-live-signup-recovery.cjs, app/company/page.tsx, app/auth/auth-shell.tsx]
   workflow_dispatch:
 permissions:
   contents: read
