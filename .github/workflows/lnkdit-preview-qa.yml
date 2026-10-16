@@ -41,3 +41,24 @@ jobs:
         run: npm run qa:beta
       - name: Verify production build without enabling beta fixtures
         run: npm run build
+      - name: Install headless Chromium and WebKit for responsive QA
+        run: npx playwright-core install --with-deps chromium webkit
+      - name: Run automated homepage responsive browser QA
+        shell: bash
+        run: |
+          npm run start -- -p 3108 > /tmp/lnkdit-ci-next.log 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3108/ > /dev/null; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$READY" -ne 1 ]; then
+            cat /tmp/lnkdit-ci-next.log
+            exit 1
+          fi
+          node lib/browser-homepage-responsive.cjs http://127.0.0.1:3108
