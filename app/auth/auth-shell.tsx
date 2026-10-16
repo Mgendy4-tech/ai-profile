@@ -43,6 +43,7 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
   const [syncMessage, setSyncMessage] = useState(supabase ? "" : authSetupMessage);
   const [recoveryVerified, setRecoveryVerified] = useState(false);
   const [recoveryRoute, setRecoveryRoute] = useState(false);
+  const recoveryUserIdRef = useRef<string | null>(null);
   const suppressSyncRef = useRef(false);
   const syncTimerRef = useRef<number | null>(null);
   const sessionRef = useRef<Session | null>(null);
@@ -158,6 +159,7 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
       setSession(nextSession);
       if (isPasswordRecoveryEvent(event)) {
         setRecoveryVerified(true);
+        recoveryUserIdRef.current = nextSession?.user.id ?? null;
         setEmail(nextSession?.user.email ?? "");
         setMode("reset-password");
         setMessage("");
@@ -165,6 +167,7 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
       if (nextSession) { void sync(nextSession); redirectAfterAuthentication(); }
       else {
         setRecoveryVerified(false);
+        recoveryUserIdRef.current = null;
         clearTrustedHydratedCloudAssets();
         coordinatorRef.current?.cancel();
         if (syncTimerRef.current !== null) window.clearTimeout(syncTimerRef.current);
@@ -204,9 +207,17 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
         setMessage(PASSWORD_RECOVERY_REQUIRED_MESSAGE);
         return;
       }
+      const { data: sessionData } = await supabase.auth.getSession();
+      const activeRecoverySession = sessionData.session;
+      if (!activeRecoverySession || activeRecoverySession.user.id !== recoveryUserIdRef.current) {
+        setBusy(false);
+        reportClientFailure({ category: "auth_failure", code: "recovery_session_invalid", surface: "password_recovery", status: 401 });
+        setMessage(customerAuthError({ code: "session_not_found" }, mode));
+        return;
+      }
       const result = await supabase.auth.updateUser({ password });
       setBusy(false);
-      if (result.error) { reportClientFailure({ category: "auth_failure", code: authFailureCode(result.error, mode), surface: "password_recovery" }); setMessage(customerAuthError(result.error, mode)); return; }
+      if (result.error) { reportClientFailure({ category: "auth_failure", code: authFailureCode(result.error, mode), surface: "password_recovery", status: result.error.status }); setMessage(customerAuthError(result.error, mode)); return; }
       setPassword(""); setMode("sign-in"); setMessage("Your password was updated. You can sign in again.");
       return;
     }
