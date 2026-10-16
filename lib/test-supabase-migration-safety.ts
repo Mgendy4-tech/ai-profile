@@ -18,4 +18,6 @@ for (const policy of ["workspace owner access", "profile owner access"]) {
 }
 assert(/using\s*\(\(select auth\.uid\(\)\)\s*=\s*user_id\)/i.test(hardening),
   "Owner policy should use a cached auth.uid() expression.");
+assert(/revoke\s+all\s+privileges\s+on\s+table\s+public\.cloud_workspaces,\s*public\.cloud_profiles\s+from\s+anon/i.test(hardening),
+  "Anonymous role must not retain direct access to private cloud tables.");
 console.log("Supabase migration safety checks passed.");
