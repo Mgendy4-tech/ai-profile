@@ -10,6 +10,19 @@ BEGIN
   END IF;
 END $$;
 
+-- Optimize owner checks: cache auth.uid() once per statement rather than
+-- re-evaluating it for each row. These ALTER POLICY statements keep the
+-- existing policy names and do not modify customer data.
+ALTER POLICY "workspace owner access" ON public.cloud_workspaces
+  TO authenticated
+  USING ((select auth.uid()) = user_id)
+  WITH CHECK ((select auth.uid()) = user_id);
+
+ALTER POLICY "profile owner access" ON public.cloud_profiles
+  TO authenticated
+  USING ((select auth.uid()) = user_id)
+  WITH CHECK ((select auth.uid()) = user_id);
+
 -- Separate dashboard action required:
 -- Supabase > Authentication > Settings > Password security:
 -- enable leaked-password protection, if supported by the project's plan.
