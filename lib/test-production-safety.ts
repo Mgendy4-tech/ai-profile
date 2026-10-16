@@ -14,4 +14,9 @@ for (const route of ["app/page.tsx", "app/company/page.tsx", "app/projects/page.
 }
 const environment = validateProductionEnvironment({ NODE_ENV: "production", OPENAI_API_KEY: "configured", PEXELS_API_KEY: "configured", NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co", NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon" });
 assert(environment.ready && environment.accidentalClientExposure.length === 0, "Production safety environment must not expose server secrets to the client.");
+const publicReadinessRoute = readFileSync(resolve("app/api/health/readiness/route.ts"), "utf8");
+assert(publicReadinessRoute.includes("{ ok: ready, ready }"),
+  "Public readiness must return only an overall boolean, never the environment audit.");
+assert(!publicReadinessRoute.includes("Response.json(report"),
+  "Public readiness must not expose which server secrets are configured.");
 console.log("Production safety and Preview-only beta gate tests passed.");
