@@ -80,6 +80,8 @@ export default function CompanyPage() {
         const restored = persisted.data;
         loadedCompanyName.current = restored.name;
         setCompanyData((current) => {
+          // An identity change starts a separate draft; do not reintroduce inherited assets.
+          if (explicitlyEditedFields.current.has('name') && !isSameCompanyIdentity(restored.name, current.name)) return current;
           // Late cloud hydration fills untouched fields without erasing a form draft.
           const next = { ...restored };
           for (const field of explicitlyEditedFields.current) Object.assign(next, { [field]: current[field] });
