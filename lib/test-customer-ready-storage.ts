@@ -9,7 +9,7 @@ const migration = readFileSync(resolve("supabase", "customer-ready-v1.sql"), "ut
 assert.match(migration, /insert into storage\.buckets/i);
 assert.match(migration, /'customer-assets'/g);
 assert.match(migration, /public\s*=\s*false/i);
-assert.match(migration, /auth\.uid\(\)::text/i);
+assert.match(migration, /\(select auth\.uid\(\)\)::text/i);
 assert.match(migration, /for select to authenticated/i);
 assert.match(migration, /for insert to authenticated/i);
 assert.match(migration, /for delete to authenticated/i);
