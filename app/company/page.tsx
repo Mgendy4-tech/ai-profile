@@ -82,7 +82,7 @@ export default function CompanyPage() {
         setCompanyData((current) => {
           // Late cloud hydration fills untouched fields without erasing a form draft.
           const next = { ...restored };
-          for (const field of explicitlyEditedFields.current) next[field] = current[field];
+          for (const field of explicitlyEditedFields.current) Object.assign(next, { [field]: current[field] });
           if (logoExplicitlySelected.current) { next.logoUrl = current.logoUrl; next.logoPath = current.logoPath; }
           return next;
         });
