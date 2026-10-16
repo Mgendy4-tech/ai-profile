@@ -1,3 +1,5 @@
+import { markPendingCloudWrite } from "./cloud-pending-write";
+
 export const WORKSPACE_STORAGE_KEY = "workspaceData";
 export const WORKSPACE_VERSION = 1;
 export const MAX_WORKSPACE_PROFILES = 10;
@@ -107,7 +109,7 @@ const emptyWorkspace = (): Workspace => {
   return { version: WORKSPACE_VERSION, profiles: [profile], activeProfileId: profile.id };
 };
 
-const writeWorkspace = (storage: WorkspaceStorage, workspace: Workspace): WorkspaceWriteResult => {
+const writeWorkspace = (storage: WorkspaceStorage, workspace: Workspace, markPending = true): WorkspaceWriteResult => {
   try {
     storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(workspace));
     if (legacyBrowserCompatibilityEnabled()) {
@@ -118,6 +120,7 @@ const writeWorkspace = (storage: WorkspaceStorage, workspace: Workspace): Worksp
         storage.setItem(legacyMirrorKey(key), value ?? "");
       }
     }
+    if (markPending) markPendingCloudWrite(storage);
     if (typeof window !== "undefined" && storage === window.localStorage) window.dispatchEvent(new Event("workspace-state-changed"));
     return { ok: true, workspace: cloneWorkspace(workspace) };
   } catch (error) { return { ok: false, code: storageFailure(error) }; }
@@ -125,7 +128,7 @@ const writeWorkspace = (storage: WorkspaceStorage, workspace: Workspace): Worksp
 
 export const createEmptyWorkspace = (): Workspace => emptyWorkspace();
 
-export const writeWorkspaceSnapshot = (storage: WorkspaceStorage, workspace: Workspace): WorkspaceWriteResult => writeWorkspace(storage, cloneWorkspace(workspace));
+export const writeWorkspaceSnapshot = (storage: WorkspaceStorage, workspace: Workspace, markPending = true): WorkspaceWriteResult => writeWorkspace(storage, cloneWorkspace(workspace), markPending);
 
 export const readWorkspace = (storage: WorkspaceStorage): Workspace => {
   let raw: string | null = null;

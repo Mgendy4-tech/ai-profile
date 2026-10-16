@@ -128,7 +128,7 @@ export const routeEditorialInteriorsV1Export = async (input: ProductionEnrichmen
 
   if (!servicesEntry) return fallback([{ stage: "planning", code: "source_content_not_covered", path: "profile.sections", pageRole: "capabilities" }], ranking);
   if (narrativeEntry.section.items.length > 1) return fallback([{ stage: "planning", code: "source_content_not_covered", path: `profile.sections.${input.profile.sections.indexOf(narrativeEntry.section)}.items`, pageRole: "narrative" }], ranking);
-  if (servicesEntry.section.items.length < 4 || servicesEntry.section.items.length > 12) return fallback([{ stage: "planning", code: "capability_count_unsupported", path: `profile.sections.${input.profile.sections.indexOf(servicesEntry.section)}.items`, pageRole: "capabilities" }], ranking);
+  if (servicesEntry.section.items.length < 1 || servicesEntry.section.items.length > 12) return fallback([{ stage: "planning", code: "capability_count_unsupported", path: `profile.sections.${input.profile.sections.indexOf(servicesEntry.section)}.items`, pageRole: "capabilities" }], ranking);
   const imageDiagnostics = enriched.diagnostics.filter((issue) => issue.code.startsWith("image_") || issue.code === "authentic_project_image_metadata_missing");
   if (imageDiagnostics.length > 0) return fallback(imageDiagnostics.map(enrichmentReason), ranking);
   const missingVisuals: AuthoredExportFallbackReason[] = input.projects.flatMap((project, index) => visualByProjectId.has(project.id) ? [] : [{ stage: "enrichment", code: "authentic_project_image_metadata_missing", path: `projects.${index}.imageUrl`, pageRole: "project_grid" }]);

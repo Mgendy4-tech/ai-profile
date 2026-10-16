@@ -97,10 +97,18 @@ const run = async () => {
   const missingNarrativeDecision = await routeEditorialInteriorsV1Export(missingNarrative, decode);
   assert(missingNarrativeDecision.mode === "fallback" && missingNarrativeDecision.reasons.some((reason) => reason.pageRole === "narrative"), "Missing narrative must select fallback with a role-specific reason.");
 
-  const wrongCapabilityCount = fixture();
-  wrongCapabilityCount.profile.sections[1].items = wrongCapabilityCount.profile.sections[1].items.slice(0, 3);
-  const capabilityDecision = await routeEditorialInteriorsV1Export(wrongCapabilityCount, decode);
-  assert(capabilityDecision.mode === "fallback" && capabilityDecision.reasons.some((reason) => reason.code === "capability_count_unsupported"), "Visual capability counts below the supported 4-12 range must select fallback.");
+  for (const count of [1, 2, 3]) {
+    const sparse = fixture();
+    sparse.profile.sections[1].items = sparse.profile.sections[1].items.slice(0, count);
+    const decision = await routeEditorialInteriorsV1Export(sparse, decode);
+    assert(decision.mode === "authored", `${count} genuine services with a project must export without invented capabilities.`);
+    if (decision.mode !== "authored") throw new Error(JSON.stringify(decision.reasons));
+    assert(decision.pageOrder.includes(`editorial-interiors-v1.capabilities-continuation-${count}`), "Sparse capabilities must select their exact-count layout.");
+    const pdfText = decision.pdf.output();
+    for (const item of sparse.profile.sections[1].items) assert(pdfText.includes(item.name), "Every supplied capability must be retained.");
+    assert(!pdfText.includes("Visual curation"), "Sparse export must not invent a fourth service.");
+    assert(pdfText.includes("/Subtype /Image"), "Sparse export must retain the authentic project image.");
+  }
 
   const overCapacity = fixture();
   overCapacity.profile.sections[0].content = Array.from({ length: 180 }, () => "overlong").join(" ");

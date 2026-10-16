@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
+import { acknowledgeCloudWrite, pendingCloudWrite } from "@/lib/cloud-pending-write";
 import { authSetupMessage } from "@/lib/auth-env";
 import { chooseAuthenticatedWorkspace, CLOUD_OWNER_STORAGE_KEY, hasMeaningfulLocalWorkspace, migrationMarker, shouldMigrateLocalWorkspaceAssets, workspaceFingerprint, workspaceToCloudPayload } from "@/lib/cloud-workspace";
 import { CloudSyncCoordinator, fetchCloudJson, type SyncResult } from "@/lib/cloud-sync-lifecycle";
@@ -55,49 +56,57 @@ export function AuthPanel({ expanded = false }: { expanded?: boolean }) {
   const coordinatorRef = useRef<CloudSyncCoordinator<Session> | null>(null);
   if (!coordinatorRef.current) coordinatorRef.current = new CloudSyncCoordinator((currentSession) => currentSession.user.id, (status, detail) => { if (mountedRef.current) setStatus(status, detail); });
 
-  const runSync = useCallback(async (currentSession: Session, signal: AbortSignal, preferLocal: boolean): Promise<SyncResult> => {
+  const runSync = useCallback(async function runSync(currentSession: Session, signal: AbortSignal, preferLocal: boolean): Promise<SyncResult> {
     if (!supabase) return { ok: false, code: "not_configured", message: authSetupMessage };
       const headers = { Authorization: `Bearer ${currentSession.access_token}`, "Content-Type": "application/json" };
     try {
       const ownerId = localStorage.getItem(CLOUD_OWNER_STORAGE_KEY);
+      const pendingRevision = pendingCloudWrite(localStorage, currentSession.user.id);
+      if (pendingRevision) preferLocal = true;
       const mayMigrateLocalAssets = shouldMigrateLocalWorkspaceAssets(ownerId, currentSession.user.id);
       if (preferLocal && !mayMigrateLocalAssets) preferLocal = false;
       if (preferLocal) {
         const migrated = await migrateLocalWorkspaceAssets(readWorkspace(localStorage), supabase);
+        if (signal.aborted) return { ok: false, code: "aborted" };
+        if (pendingCloudWrite(localStorage, currentSession.user.id) !== pendingRevision) return runSync(currentSession, signal, true);
         if (migrated.uploaded > 0) {
           suppressSyncRef.current = true;
-          const savedLocal = writeWorkspaceSnapshot(localStorage, migrated.workspace);
+          const savedLocal = writeWorkspaceSnapshot(localStorage, migrated.workspace, false);
           if (!savedLocal.ok) { suppressSyncRef.current = false; return { ok: false, code: "local_storage", message: "Your workspace is safe locally, but the cloud asset migration could not be recorded. Retry when ready." }; }
         }
         const local = migrated.workspace;
         const localFingerprint = workspaceFingerprint(local);
-        if (coordinatorRef.current?.getLastSyncedFingerprint() === localFingerprint) return { ok: true, fingerprint: localFingerprint };
+        if (coordinatorRef.current?.getLastSyncedFingerprint() === localFingerprint) { acknowledgeCloudWrite(localStorage, currentSession.user.id, pendingRevision); return { ok: true, fingerprint: localFingerprint }; }
         const upload = await fetchCloudJson<{ ok?: boolean; code?: string; warnings?: string[] }>(fetch, "/api/cloud/workspace", { method: "PUT", headers, body: JSON.stringify(workspaceToCloudPayload(local)) }, signal);
       if (!upload.ok) { reportClientFailure({ category: "cloud_sync_failure", code: upload.code, surface: "workspace_sync" }); return { ok: false, code: upload.code, message: upload.code === "aborted" ? "Cloud sync was cancelled. Retry when ready." : customerCloudError(upload.code) }; }
         const uploadBody = upload.body;
       if (!uploadBody.ok) { reportClientFailure({ category: "cloud_sync_failure", code: uploadBody.code ?? "cloud_unavailable", surface: "workspace_sync" }); return { ok: false, code: uploadBody.code ?? "cloud_unavailable", message: customerCloudError(uploadBody.code ?? "cloud_unavailable") }; }
         localStorage.setItem(CLOUD_OWNER_STORAGE_KEY, currentSession.user.id);
+        acknowledgeCloudWrite(localStorage, currentSession.user.id, pendingRevision);
         return { ok: true, fingerprint: localFingerprint, message: migrated.failed || uploadBody.warnings?.length ? "Workspace synced. One or more images still need a cloud upload retry." : undefined };
       }
       const response = await fetchCloudJson<{ ok?: boolean; code?: string; workspace?: Parameters<typeof chooseAuthenticatedWorkspace>[0] }>(fetch, "/api/cloud/workspace", { headers }, signal);
       if (!response.ok) { reportClientFailure({ category: "cloud_sync_failure", code: response.code, surface: "workspace_sync" }); return { ok: false, code: response.code, message: response.code === "aborted" ? "Cloud sync was cancelled. Retry when ready." : customerCloudError(response.code) }; }
       const body = response.body;
       if (!body.ok) { reportClientFailure({ category: "cloud_sync_failure", code: body.code ?? "cloud_unavailable", surface: "workspace_sync" }); return { ok: false, code: body.code ?? "cloud_unavailable", message: customerCloudError(body.code ?? "cloud_unavailable") }; }
+      if (pendingCloudWrite(localStorage, currentSession.user.id)) return runSync(currentSession, signal, true);
       const local = readWorkspace(localStorage);
       const localMigration = mayMigrateLocalAssets ? await migrateLocalWorkspaceAssets(local, supabase) : { workspace: local, uploaded: 0, failed: 0 };
+      if (pendingCloudWrite(localStorage, currentSession.user.id)) return runSync(currentSession, signal, true);
       if (localMigration.uploaded > 0) {
         suppressSyncRef.current = true;
-        const savedLocal = writeWorkspaceSnapshot(localStorage, localMigration.workspace);
+        const savedLocal = writeWorkspaceSnapshot(localStorage, localMigration.workspace, false);
         if (!savedLocal.ok) { suppressSyncRef.current = false; return { ok: false, code: "local_storage", message: "Your workspace is safe locally, but the cloud asset migration could not be recorded. Retry when ready." }; }
       }
       const migratedLocal = localMigration.workspace;
       const decision = chooseAuthenticatedWorkspace(body.workspace ?? null, migratedLocal, ownerId, currentSession.user.id);
       const hydratedWorkspace = body.workspace ? await hydrateWorkspaceAssets(decision.workspace, supabase) : decision.workspace;
       if (body.workspace) decision.workspace = hydratedWorkspace;
+      if (pendingCloudWrite(localStorage, currentSession.user.id)) return runSync(currentSession, signal, true);
       const nextFingerprint = workspaceFingerprint(decision.workspace);
       if (!decision.shouldMigrate && nextFingerprint !== workspaceFingerprint(migratedLocal)) {
         suppressSyncRef.current = true;
-        const saved = writeWorkspaceSnapshot(localStorage, decision.workspace);
+        const saved = writeWorkspaceSnapshot(localStorage, decision.workspace, false);
         if (!saved.ok) { suppressSyncRef.current = false; return { ok: false, code: "local_storage", message: "Your cloud workspace could not be applied locally. Your existing local data is safe; retry when ready." }; }
       }
       if (decision.shouldMigrate || (!body.workspace && hasMeaningfulLocalWorkspace(decision.workspace))) {

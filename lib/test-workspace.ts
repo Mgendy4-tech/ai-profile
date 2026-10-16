@@ -1,3 +1,4 @@
+import { pendingCloudWrite, acknowledgeCloudWrite, CLOUD_PENDING_WRITE_KEY } from "./cloud-pending-write";
 import assert from "node:assert/strict";
 import {
   MAX_WORKSPACE_PROFILES,
@@ -10,6 +11,7 @@ import {
   readWorkspace,
   readWorkspaceProfileValue,
   switchProfile,
+  writeWorkspaceSnapshot,
   type WorkspaceStorage,
 } from "./workspace";
 
@@ -63,3 +65,21 @@ assert.equal(readWorkspace(malformed).profiles.length, 1, "Malformed profile ent
 assert.deepEqual(WORKSPACE_PROFILE_STATE_KEYS, ["companyData", "projectsData", "profileStructure", "generatedProfile", "authoredFamilyDecision", "authoredVariantDecision", "exportDecision"]);
 
 console.log("Workspace migration, isolation, duplication, deletion, malformed recovery, idempotence, and profile-limit tests passed.");
+
+// Save + immediate reload must retain a durable, account-scoped pending revision.
+const pendingStorage = new MemoryStorage();
+pendingStorage.setItem("workspaceCloudOwnerId", "account-a");
+const pendingWorkspace = readWorkspace(pendingStorage);
+writeWorkspaceSnapshot(pendingStorage, pendingWorkspace);
+const firstRevision = pendingCloudWrite(pendingStorage, "account-a");
+assert(firstRevision, "A local save must survive loss of the debounce timer.");
+assert.equal(pendingCloudWrite(pendingStorage, "account-b"), null, "Account B must never upload account A's pending work.");
+writeWorkspaceSnapshot(pendingStorage, pendingWorkspace);
+const secondRevision = pendingCloudWrite(pendingStorage, "account-a");
+assert.notEqual(firstRevision, secondRevision);
+acknowledgeCloudWrite(pendingStorage, "account-a", firstRevision);
+assert.equal(pendingCloudWrite(pendingStorage, "account-a"), secondRevision, "An older completed upload must not clear newer edits.");
+writeWorkspaceSnapshot(pendingStorage, pendingWorkspace, false);
+assert.equal(pendingCloudWrite(pendingStorage, "account-a"), secondRevision, "Cloud hydration must not create or replace a local edit revision.");
+acknowledgeCloudWrite(pendingStorage, "account-a", secondRevision);
+assert.equal(pendingStorage.getItem(CLOUD_PENDING_WRITE_KEY), null, "Only the current successfully uploaded revision may be cleared.");

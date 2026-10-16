@@ -15,7 +15,7 @@ export type VisualPortfolioPlanningInput = {
   cover: AuthoredCoverContent | CoverContent;
   coverTemplateId?: CoverTemplateId;
   narrative: NarrativeContent;
-  capabilities: CapabilitiesContent;
+  capabilities: CapabilitiesContent | CapabilitiesContinuationContent;
   capabilitiesSupporting?: CapabilitiesSupportingContent;
   capabilityContinuations?: readonly CapabilitiesContinuationContent[];
   details?: readonly NarrativeContent[];
@@ -81,7 +81,7 @@ export const createVisualPortfolioDocumentPlan = (
       ...(company ? [{ contentId: company.id, mode: "consume" as const, slotId: "companyName" }] : []),
     ] },
     { pageId: "narrative", templateId: selectEditorialInteriorsNarrativeTemplate(input.narrative).id, pageRole: "narrative", candidate: input.narrative, claims: narrative ? [{ contentId: narrative.id, mode: "consume", slotId: "body" }] : [] },
-    { pageId: "capabilities", templateId: "editorial-interiors-v1.capabilities", pageRole: "capabilities", candidate: input.capabilities, claims: services.slice(0, 4).map((service, index) => ({ contentId: service.id, mode: "consume", slotId: `capabilities.${index}` })) },
+    { pageId: "capabilities", templateId: services.length < 4 ? `editorial-interiors-v1.capabilities-continuation-${services.length}` : "editorial-interiors-v1.capabilities", pageRole: services.length < 4 ? "continuation" : "capabilities", candidate: input.capabilities, claims: services.slice(0, 4).map((service, index) => ({ contentId: service.id, mode: "consume", slotId: `capabilities.${index}` })) },
     ...(input.capabilitiesSupporting ? [{ pageId: "capabilities:supporting", templateId: "editorial-interiors-v1.capabilities-supporting-2", pageRole: "continuation" as const, candidate: input.capabilitiesSupporting, claims: [
       ...services.slice(4, 6).map((service, index) => ({ contentId: service.id, mode: "consume" as const, slotId: `capabilities.${index}` })),
       { contentId: input.capabilitiesSupporting.detail.contentId, mode: "consume" as const, slotId: "detail.body" },
