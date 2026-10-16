@@ -5,8 +5,9 @@ import { createEmptyWorkspace, MAX_WORKSPACE_PROFILES } from "./workspace";
 
 const valid = workspaceToCloudPayload(createEmptyWorkspace());
 assert.equal(isCloudWorkspacePayload(valid), true, "An ordinary client workspace must remain accepted.");
-const clone = (): Record<string, any> => JSON.parse(JSON.stringify(valid)) as Record<string, any>;
-const reject = (description: string, mutate: (payload: Record<string, any>) => void): void => {
+type MutablePayload = { version: number; activeProfileId: string | null; profiles: Array<Record<string, unknown>> };
+const clone = (): MutablePayload => structuredClone(valid) as unknown as MutablePayload;
+const reject = (description: string, mutate: (payload: MutablePayload) => void): void => {
   const payload = clone();
   mutate(payload);
   assert.equal(isCloudWorkspacePayload(payload), false, description);
