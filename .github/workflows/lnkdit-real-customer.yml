@@ -1,0 +1,59 @@
+name: LNKDIT Real Customer Journey
+on:
+  push:
+    branches: [design/lnkdit-homepage-rich-v1]
+    paths: [.github/workflows/lnkdit-real-customer.yml, lib/browser-live-customer-journey.cjs]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lnkdit-live-supabase-ab
+  cancel-in-progress: false
+jobs:
+  customer-journey:
+    if: github.ref == 'refs/heads/design/lnkdit-homepage-rich-v1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://yeplwaainflckcrjsauw.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_QWxzQMOj4MAUeK_c8O7foQ_9zqmRgox
+      NEXT_PUBLIC_BETA_TEST_MODE: "false"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Check test runner provider credentials
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          SUPABASE_TEST_ACCOUNT_A_PASSWORD: ${{ secrets.SUPABASE_TEST_ACCOUNT_A_PASSWORD }}
+        run: |
+          for name in OPENAI_API_KEY PEXELS_API_KEY SUPABASE_TEST_ACCOUNT_A_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::BLOCKED: GitHub Actions secret $name is missing. Vercel secrets are not shared with GitHub. No live customer journey has run."
+              exit 2
+            fi
+          done
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright-core install --with-deps chromium
+      - name: Exercise real AI, cloud persistence and PDF export
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          SUPABASE_TEST_ACCOUNT_A_PASSWORD: ${{ secrets.SUPABASE_TEST_ACCOUNT_A_PASSWORD }}
+        run: |
+          npm run start -- -p 3119 >/tmp/lnkdit-real-customer.log 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3119/api/health/readiness >/dev/null; then READY=1; break; fi
+            sleep 1
+          done
+          test "$READY" = "1"
+          node lib/browser-live-customer-journey.cjs
