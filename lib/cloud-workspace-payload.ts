@@ -12,6 +12,19 @@ const isRecordArray = (value: unknown): boolean => Array.isArray(value) && value
 const isStringArray = (value: unknown): boolean =>
   Array.isArray(value) && value.every((item) => typeof item === "string");
 
+// Images belong in private Storage, never in workspace JSON rows. Expiring
+// signed URLs also must not be persisted as durable cloud profile data.
+const hasUnsafeAssetValue = (value: unknown, depth = 0): boolean => {
+  if (depth > 32) return true;
+  if (typeof value === "string") {
+    return /^data:image\//i.test(value) ||
+      /^https?:\/\/[^\s]+\/storage\/v1\/object\/sign\/customer-assets\//i.test(value);
+  }
+  if (Array.isArray(value)) return value.some((item) => hasUnsafeAssetValue(item, depth + 1));
+  if (isRecord(value)) return Object.values(value).some((item) => hasUnsafeAssetValue(item, depth + 1));
+  return false;
+};
+
 export const isCloudWorkspacePayload = (value: unknown): value is CloudWorkspacePayload => {
   if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.profiles)) return false;
   if (value.profiles.length < 1 || value.profiles.length > MAX_WORKSPACE_PROFILES) return false;
@@ -26,6 +39,7 @@ export const isCloudWorkspacePayload = (value: unknown): value is CloudWorkspace
     if (!isOptionalText(entry.selectedFamily) || !isOptionalText(entry.selectedVariant)) return false;
     if (!(isOptionalText(entry.exportDecision) || isRecord(entry.exportDecision))) return false;
     if (!isRecord(entry.freshness) || !isStringArray(entry.unsupportedAssets)) return false;
+    if (hasUnsafeAssetValue(entry)) return false;
     seen.add(entry.profileId);
   }
   return value.activeProfileId === null ||
