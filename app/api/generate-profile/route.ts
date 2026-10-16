@@ -6,7 +6,8 @@ import { emitProductionTelemetry } from "@/lib/production-telemetry";
 import { logServerFailure } from "@/lib/server/observability";
 import { approvedSectionManifest, semanticCoverageContract } from "@/lib/generated-profile-prompt-contract";
 
-const client = new OpenAI({
+// Instantiate only when a request needs OpenAI; Vercel builds must not require runtime secrets.
+const createOpenAIClient = () => new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
@@ -164,7 +165,7 @@ Do not return markdown.
 Do not return explanations outside the JSON.
 `;
 
-    const response = await client.responses.create({
+    const response = await createOpenAIClient().responses.create({
       model: "gpt-5.6",
       input: prompt,
     });
