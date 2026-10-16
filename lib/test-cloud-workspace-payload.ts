@@ -26,5 +26,15 @@ reject("Malformed project data must be rejected", (p) => { p.profiles[0].project
 reject("Malformed generated profile must be rejected", (p) => { p.profiles[0].generatedProfile = []; });
 reject("Malformed unsupported assets must be rejected", (p) => { p.profiles[0].unsupportedAssets = [null]; });
 reject("Unsupported schema versions must be rejected", (p) => { p.version = 2; });
+reject("Base64 images must never be stored in cloud JSON", (p) => {
+  p.profiles[0].companyData = { name: "Example", logoUrl: "data:image/png;base64,QUJD" };
+});
+reject("Nested base64 images must never be stored in cloud JSON", (p) => {
+  p.profiles[0].generatedProfile = { sections: [{ items: [{ imageUrl: "data:image/jpeg;base64,QUJD" }] }] };
+});
+reject("Expiring private signed URLs must never be stored in cloud JSON", (p) => {
+  p.profiles[0].projects = [{ imageUrl: "https://example.supabase.co/storage/v1/object/sign/customer-assets/user/profile/project-x.png?token=test" }];
+});
+
 assert.equal(isCloudWorkspacePayload({ ...valid, activeProfileId: null }), true, "A null active profile is safe.");
 console.log("Cloud workspace API payload validation passed.");
