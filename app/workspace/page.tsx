@@ -121,7 +121,7 @@ export default function WorkspacePage() {
               {profile.id === activeId && <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-gray-900">Current profile</p>}
               <div className="mt-5 flex flex-wrap gap-2">
                 {profile.id !== activeId && <button type="button" onClick={() => choose(profile.id)} className="rounded-lg bg-black px-3 py-2 text-xs font-medium text-white">Switch to this profile</button>}
-                <Link href={profile.id === activeId ? "/company" : "/workspace"} className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">Open</Link>
+                {profile.id === activeId ? <Link href="/company" className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">Open</Link> : <button type="button" onClick={() => choose(profile.id)} className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">Open</button>}
                 <button type="button" onClick={() => rename(profile)} className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">Rename</button>
                 <button type="button" onClick={() => duplicate(profile)} className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-900">Duplicate</button>
                 <button type="button" onClick={() => remove(profile)} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-700">Delete</button>
