@@ -13,4 +13,9 @@ assert(/public\s*=\s*false/i.test(customer), "Customer assets must remain privat
 assert(/auth\.uid\(\)/i.test(customer), "Owner-scoped storage and profile policies are required.");
 assert(/revoke\s+execute\s+on\s+function\s+public\.rls_auto_enable\(\)\s+from\s+public,\s*anon,\s*authenticated/i.test(hardening),
   "SECURITY DEFINER event-trigger function must not be callable by browser roles.");
+for (const policy of ["workspace owner access", "profile owner access"]) {
+  assert(hardening.includes(`ALTER POLICY "${policy}"`), `Missing optimized owner policy: ${policy}`);
+}
+assert(/using\s*\(\(select auth\.uid\(\)\)\s*=\s*user_id\)/i.test(hardening),
+  "Owner policy should use a cached auth.uid() expression.");
 console.log("Supabase migration safety checks passed.");
