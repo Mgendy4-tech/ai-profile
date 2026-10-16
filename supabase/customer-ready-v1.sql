@@ -59,7 +59,7 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
-alter table storage.objects enable row level security;
+-- Supabase owns storage.objects and already enforces RLS on it.\n-- Do not ALTER this managed table: the SQL editor may fail with\n-- "must be owner of table objects". Configure only the policies below.\n
 
 drop policy if exists "customer assets owner read" on storage.objects;
 create policy "customer assets owner read" on storage.objects
