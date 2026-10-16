@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
 import { authenticatedSupabase } from "@/lib/supabase-server";
-import { cloudProfileFromLocal, type CloudProfileRecord, type CloudWorkspaceDocument, type CloudWorkspacePayload } from "@/lib/cloud-workspace";
+import { type CloudProfileRecord, type CloudWorkspaceDocument } from "@/lib/cloud-workspace";
+import { isCloudWorkspacePayload } from "@/lib/cloud-workspace-payload";
 import { logServerFailure } from "@/lib/server/observability";
 
 const safeError = (code: "not_configured" | "unauthorized" | "cloud_unavailable" | "invalid_payload") => { if (code === "unauthorized") logServerFailure({ category: "auth_failure", code: "cloud_request_unauthorized", surface: "api", route: "/api/cloud/workspace", status: 401 }); return NextResponse.json({ ok: false, code }, { status: code === "unauthorized" ? 401 : code === "not_configured" ? 503 : 400 }); };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
-const isPayload = (value: unknown): value is CloudWorkspacePayload => {
-  if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.profiles)) return false;
-  return value.profiles.every((profile) => isRecord(profile) && typeof profile.profileId === "string" && typeof profile.displayName === "string");
-};
-
 const rowToProfile = (row: Record<string, unknown>): CloudProfileRecord => ({
   profileId: String(row.profile_id ?? ""), displayName: String(row.display_name ?? "New Profile"), createdAt: String(row.created_at ?? new Date().toISOString()), updatedAt: String(row.updated_at ?? new Date().toISOString()),
   companyData: isRecord(row.company_data) ? row.company_data : null, projects: Array.isArray(row.projects) ? row.projects.filter(isRecord) : [], generatedProfile: isRecord(row.generated_profile) ? row.generated_profile : null, profileStructure: isRecord(row.profile_structure) ? row.profile_structure : null,
@@ -34,7 +30,7 @@ export async function PUT(request: Request) {
   if ("error" in auth) return safeError(auth.error);
   let payload: unknown;
   try { payload = await request.json(); } catch { return safeError("invalid_payload"); }
-  if (!isPayload(payload)) return safeError("invalid_payload");
+  if (!isCloudWorkspacePayload(payload)) return safeError("invalid_payload");
   const now = new Date().toISOString();
   const workspaceWrite = await auth.client.from("cloud_workspaces").upsert({ user_id: auth.userId, version: payload.version, active_profile_id: payload.activeProfileId, updated_at: now }, { onConflict: "user_id" });
   if (workspaceWrite.error) { logServerFailure({ category: "cloud_sync_failure", code: "cloud_workspace_write_failed", surface: "api", route: "/api/cloud/workspace", status: 503 }); return safeError("cloud_unavailable"); }
