@@ -20,4 +20,20 @@ assert(/using\s*\(\(select auth\.uid\(\)\)\s*=\s*user_id\)/i.test(hardening),
   "Owner policy should use a cached auth.uid() expression.");
 assert(/revoke\s+all\s+privileges\s+on\s+table\s+public\.cloud_workspaces,\s*public\.cloud_profiles\s+from\s+anon/i.test(hardening),
   "Anonymous role must not retain direct access to private cloud tables.");
+const liveAudit = readFileSync(join(process.cwd(), "supabase/launch-security-audit-readonly.sql"), "utf8");
+for (const gate of [
+  "private_asset_bucket", "profiles_rls_enabled", "workspaces_rls_enabled",
+  "anon_cannot_execute_rls_trigger", "authenticated_cannot_execute_rls_trigger",
+  "anon_cannot_select_profiles", "anon_cannot_select_workspaces",
+  "profiles_owner_policy_optimized", "workspaces_owner_policy_optimized",
+  "storage_owner_path_consistent",
+]) {
+  assert(liveAudit.includes(gate), `Missing read-only live audit gate: ${gate}`);
+}
+assert(!/\\b(?:insert|update|delete|alter|drop|truncate|revoke|grant)\\s+(?:into\\s+|table\\s+|policy\\s+|on\\s+)?(?:public|storage)[.]/i.test(liveAudit),
+  "Read-only security audit must not mutate live database tables or policies.");
+assert(customer.includes("using ((select auth.uid()) = user_id)"),
+  "Base Supabase migration must preserve optimized cached owner checks.");
+assert(customer.includes("(storage.foldername(name))[1] = (select auth.uid())::text"),
+  "Base storage policies must preserve optimized cached owner checks.");
 console.log("Supabase migration safety checks passed.");
