@@ -10,6 +10,11 @@ BEGIN
   END IF;
 END $$;
 
+-- Anonymous visitors have no reason to access cloud workspace/profile tables.
+-- Revoke direct table grants in addition to the owner-scoped RLS policies.
+-- Existing authenticated sessions and their data are unaffected.
+REVOKE ALL PRIVILEGES ON TABLE public.cloud_workspaces, public.cloud_profiles FROM anon;
+
 -- Optimize owner checks: cache auth.uid() once per statement rather than
 -- re-evaluating it for each row. These ALTER POLICY statements keep the
 -- existing policy names and do not modify customer data.
