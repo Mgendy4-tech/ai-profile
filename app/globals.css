@@ -121,3 +121,8 @@ body {
 @media (max-width: 480px) { .home-floating-refinement { display: none; } .home-profile-slogan { font-size: 1rem; } }
 @media (min-width: 640px) { .home-page-shell main > section { padding-block: 6rem; } }
 @media (prefers-reduced-motion: reduce) { [data-home-reveal] { opacity: 1; transform: none; transition: none; } .home-floating-card, .home-step-card { animation: none; transition: none; } }
+
+/* Match the mobile hero-to-content gap to the other section transitions. */
+@media (max-width: 639px) {
+  .home-hero { padding-bottom: 2.5rem; }
+}
