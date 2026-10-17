@@ -857,7 +857,8 @@ setProfile(generatedProfile);
       const persistedProjects = readPersistedProjects(localStorage);
       if (persistedProjects.issues.length) throw new Error("persisted_project_state_invalid");
       const authoredProjects = persistedProjects.projects;
-      const activeProfileId = activeWorkspaceProfile(readWorkspace(localStorage)).id;
+      const activeProfileId = activeWorkspaceProfile(readWorkspace(localStorage))?.id;
+      if (!activeProfileId) throw new Error("stale_generated_profile");
       if (!persistedCompanyData || !isPersistedGeneratedProfileCurrent(profile, persistedCompanyData, authoredProjects)) throw new Error("stale_generated_profile");
       const requestedFamilyId = readApplicationStorage(localStorage, "authoredFamilyDecision") as "visual-portfolio" | "corporate-services" | "product-tech" | null;
       if (requestedFamilyId && !familyChoicesForProfile(profile, authoredProjects).some((choice) => choice.id === requestedFamilyId && choice.eligible)) {

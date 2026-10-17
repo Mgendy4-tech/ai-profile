@@ -83,3 +83,17 @@ writeWorkspaceSnapshot(pendingStorage, pendingWorkspace, false);
 assert.equal(pendingCloudWrite(pendingStorage, "account-a"), secondRevision, "Cloud hydration must not create or replace a local edit revision.");
 acknowledgeCloudWrite(pendingStorage, "account-a", secondRevision);
 assert.equal(pendingStorage.getItem(CLOUD_PENDING_WRITE_KEY), null, "Only the current successfully uploaded revision may be cleared.");
+
+// Deleting the final draft must not silently create another identically named draft.
+const cleared = new MemoryStorage();
+const firstDraft = readWorkspace(cleared).profiles[0];
+const extraDraft = createProfile(cleared, "Second");
+assert(extraDraft.ok && extraDraft.profile);
+assert(deleteProfile(cleared, firstDraft.id).ok);
+assert.equal(readWorkspace(cleared).profiles.length, 1);
+assert(deleteProfile(cleared, extraDraft.profile.id).ok);
+for (let reload = 0; reload < 3; reload += 1) {
+  assert.deepEqual(readWorkspace(cleared), { version: 1, profiles: [], activeProfileId: null }, "An empty workspace must survive reload without a replacement draft.");
+}
+assert(createProfile(cleared, "Fresh start").ok);
+assert.equal(readWorkspace(cleared).profiles.length, 1, "Creating after final deletion must create exactly one profile.");

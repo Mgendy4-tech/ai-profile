@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { getAuthoredVariant } from "@/lib/authored-templates/variant-registry";
 import {
   MAX_WORKSPACE_PROFILES,
-  activeWorkspaceProfile,
   createProfile,
   deleteProfile,
   duplicateProfile,
@@ -102,7 +101,7 @@ export default function WorkspacePage() {
             <p className="mt-3 max-w-2xl text-gray-600">Keep each company&apos;s projects, generated profile, brand details, and style choice separate in your private account workspace.</p>
           </div>
           <CloudSyncIndicator />
-          <button type="button" onClick={create} className="rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800">New Profile</button>
+          <button type="button" onClick={create} className="rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800">Create new profile</button>
         </div>
         <p className="mt-3 text-xs text-gray-500">{workspace?.profiles.length ?? 0} of {MAX_WORKSPACE_PROFILES} profiles used</p>
         {message && <p role="status" className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">{message}</p>}
@@ -129,8 +128,8 @@ export default function WorkspacePage() {
             </article>;
           })}
         </section>
-        {!workspace?.profiles.length && <div className="mt-8 rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center"><p className="text-gray-700">No active profile is selected.</p><button type="button" onClick={create} className="mt-4 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white">Create your first profile</button></div>}
-        <p className="mt-8 text-sm text-gray-600"><Link href={activeId ? "/company" : "/workspace"} className="font-medium text-gray-900 underline">Continue with the active profile</Link></p>
+        {!workspace?.profiles.length && <div className="mt-8 rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center"><p className="text-gray-700">No profiles yet. Create a new profile to get started.</p><button type="button" onClick={create} className="mt-4 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white">Create your first profile</button></div>}
+        {activeId && <p className="mt-8 text-sm text-gray-600"><Link href="/company" className="font-medium text-gray-900 underline">Continue with the active profile</Link></p>}
       </div>
     </main>
   );

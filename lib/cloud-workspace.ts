@@ -155,7 +155,7 @@ export const hasMeaningfulLocalWorkspace = (workspace: Workspace): boolean => wo
 export const cloudProfileOwnership = (profile: CloudProfileRecord, userId: string, rowUserId: string): boolean => Boolean(userId && rowUserId && userId === rowUserId && profile.profileId.trim());
 export const chooseAuthenticatedWorkspace = (cloud: CloudWorkspaceDocument | null, local: Workspace, ownerId: string | null, userId: string): { workspace: Workspace; shouldMigrate: boolean } => {
   const sameOwner = ownerId === userId;
-  if (cloud?.profiles.length) return { workspace: workspaceFromCloud(cloud, sameOwner ? local : undefined), shouldMigrate: false };
+  if (cloud) return { workspace: workspaceFromCloud(cloud, sameOwner ? local : undefined), shouldMigrate: false };
   if (!sameOwner && ownerId) return { workspace: createEmptyWorkspace(), shouldMigrate: false };
   return { workspace: local, shouldMigrate: hasMeaningfulLocalWorkspace(local) };
 };

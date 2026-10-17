@@ -85,10 +85,10 @@ const parseWorkspace = (raw: string | null): Workspace | null => {
         state,
       }];
     });
-    if (!profiles.length) return null;
+    if (!profiles.length && value.profiles.length) return null;
     const activeProfileId = typeof value.activeProfileId === "string" && profiles.some((profile) => profile.id === value.activeProfileId)
       ? value.activeProfileId
-      : profiles[0].id;
+      : profiles[0]?.id ?? null;
     return { version: WORKSPACE_VERSION, profiles, activeProfileId };
   } catch { return null; }
 };
@@ -145,8 +145,10 @@ export const readWorkspace = (storage: WorkspaceStorage): Workspace => {
   return candidate;
 };
 
-export const activeWorkspaceProfile = (workspace: Workspace): WorkspaceProfile =>
-  cloneProfile(workspace.profiles.find((profile) => profile.id === workspace.activeProfileId) ?? workspace.profiles[0]);
+export const activeWorkspaceProfile = (workspace: Workspace): WorkspaceProfile | undefined => {
+  const profile = workspace.profiles.find((profile) => profile.id === workspace.activeProfileId) ?? workspace.profiles[0];
+  return profile ? cloneProfile(profile) : undefined;
+};
 
 export const readWorkspaceProfileValue = (profile: WorkspaceProfile, key: WorkspaceProfileStateKey): string | null => profile.state[key] ?? null;
 
@@ -184,9 +186,14 @@ export const getActiveProfileStorage = (storage: WorkspaceStorage): WorkspaceSto
       if (!legacyKeys.has(key)) { storage.setItem(key, value); return; }
       const workspace = readWorkspace(storage);
       const active = workspace.profiles.find((profile) => profile.id === workspace.activeProfileId) ?? workspace.profiles[0];
-      if (!active) throw new Error("workspace_unavailable");
       const next = cloneWorkspace(workspace);
-      const nextActive = next.profiles.find((profile) => profile.id === active.id) ?? next.profiles[0];
+      // A cleared workspace stays empty until the customer saves a new draft.
+      if (!active) {
+        const profile = createWorkspaceProfile();
+        next.profiles.push(profile);
+        next.activeProfileId = profile.id;
+      }
+      const nextActive = next.profiles.find((profile) => profile.id === next.activeProfileId) ?? next.profiles[0];
       nextActive.state[key as WorkspaceProfileStateKey] = value;
       if (key === "companyData") nextActive.displayName = profileNameFromState(nextActive.state);
       nextActive.updatedAt = Date.now();
@@ -260,13 +267,8 @@ export const duplicateProfile = (storage: WorkspaceStorage, profileId: string): 
 
 export const deleteProfile = (storage: WorkspaceStorage, profileId: string): WorkspaceMutationResult => {
   const current = readWorkspace(storage);
-  if (current.profiles.length <= 1) {
-    const replacement = createWorkspaceProfile();
-    const saved = writeWorkspace(storage, { ...current, profiles: [replacement], activeProfileId: replacement.id });
-    return saved.ok ? { ...saved, profile: replacement } : saved;
-  }
   const remaining = current.profiles.filter((profile) => profile.id !== profileId);
-  const activeProfileId = current.activeProfileId === profileId ? remaining[0].id : current.activeProfileId;
+  const activeProfileId = current.activeProfileId === profileId ? remaining[0]?.id ?? null : current.activeProfileId;
   const saved = writeWorkspace(storage, { ...current, profiles: remaining, activeProfileId });
   return saved.ok ? { ...saved, profile: activeWorkspaceProfile(saved.workspace) } : saved;
 };

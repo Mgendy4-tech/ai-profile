@@ -27,7 +27,7 @@ const hasUnsafeAssetValue = (value: unknown, depth = 0): boolean => {
 
 export const isCloudWorkspacePayload = (value: unknown): value is CloudWorkspacePayload => {
   if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.profiles)) return false;
-  if (value.profiles.length < 1 || value.profiles.length > MAX_WORKSPACE_PROFILES) return false;
+  if (value.profiles.length > MAX_WORKSPACE_PROFILES) return false;
   const seen = new Set<string>();
   for (const entry of value.profiles) {
     if (!isRecord(entry)) return false;

@@ -176,4 +176,8 @@ export const migrateLocalWorkspaceAssets = async (workspace: Workspace, client =
   return { workspace: next, uploaded, failed };
 };
 
-export const activeProfileAssetPath = (storage: Storage): string => activeWorkspaceProfile(readWorkspace(storage)).id;
+export const activeProfileAssetPath = (storage: Storage): string => {
+  const profile = activeWorkspaceProfile(readWorkspace(storage));
+  if (!profile) throw new Error("workspace_unavailable");
+  return profile.id;
+};

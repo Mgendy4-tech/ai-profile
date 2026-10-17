@@ -42,3 +42,9 @@ assert.equal(cloudWins.shouldMigrate, false);
 const empty = createEmptyWorkspace();
 assert.equal(empty.profiles.length, 1);
 console.log("Cloud workspace mapping, image fallback, migration, conflict, and ownership tests passed.");
+
+for (const owner of [null, "user-a", "user-b"]) {
+  const restored = chooseAuthenticatedWorkspace({ version: 1, profiles: [], activeProfileId: null }, local, owner, "user-a");
+  assert.deepEqual(restored.workspace, { version: 1, profiles: [], activeProfileId: null }, "An intentionally empty cloud workspace must beat stale browser profiles.");
+  assert.equal(restored.shouldMigrate, false, "Deleted profiles must not be re-imported from a stale browser.");
+}

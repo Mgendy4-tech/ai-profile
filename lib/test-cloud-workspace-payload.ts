@@ -13,7 +13,8 @@ const reject = (description: string, mutate: (payload: MutablePayload) => void):
   assert.equal(isCloudWorkspacePayload(payload), false, description);
 };
 
-reject("Empty workspace must not delete every cloud profile", (p) => { p.profiles = []; p.activeProfileId = null; });
+assert.equal(isCloudWorkspacePayload({ version: 1, profiles: [], activeProfileId: null }), true, "Deleting the last profile must sync an empty workspace.");
+reject("Empty workspace cannot select a removed profile", (p) => { p.profiles = []; });
 reject("Duplicate profile IDs must not be accepted", (p) => { p.profiles.push({ ...p.profiles[0] }); });
 reject("More than the UI profile limit must be rejected", (p) => {
   p.profiles = Array.from({ length: MAX_WORKSPACE_PROFILES + 1 }, (_, index) => ({ ...p.profiles[0], profileId: `id-${index}` }));
