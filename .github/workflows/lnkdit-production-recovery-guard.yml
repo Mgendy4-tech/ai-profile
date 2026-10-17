@@ -1,4 +1,4 @@
-name: LNKDIT Production Recovery Guard
+name: LNKDIT Production Mobile Login
 on:
   push:
     branches: [design/lnkdit-homepage-rich-v1]
@@ -16,19 +16,18 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: 1864e6af590aaca3339102749a51bcf2dfdd08da
+          ref: f41980c74342f73ed309aa69d96eb2aa0a68f48a
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npx playwright-core install --with-deps chromium
-      - name: Verify live production recovery guards without changing passwords
+      - run: npx playwright-core install --with-deps chromium webkit
+      - name: Verify live mobile login, navigation and recovery guards
         env:
           SMOKE_BASE_URL: https://www.lnkdit.com
           SUPABASE_TEST_ACCOUNT_A_EMAIL: mgendy4+lnkdit-a@gmail.com
           SUPABASE_TEST_ACCOUNT_A_PASSWORD: ${{ secrets.SUPABASE_TEST_ACCOUNT_A_PASSWORD }}
         run: |
-          export CHROME_PATH="$(node -e 'process.stdout.write(require("playwright-core").chromium.executablePath())')"
-          timeout 120s node lib/browser-password-recovery-guard.cjs
+          timeout 240s node lib/browser-login-flow.cjs
