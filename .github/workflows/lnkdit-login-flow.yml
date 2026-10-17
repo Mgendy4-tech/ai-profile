@@ -1,0 +1,44 @@
+name: LNKDIT Mobile Login Flow
+on:
+  push:
+    branches: [design/lnkdit-homepage-rich-v1]
+    paths: [.github/workflows/lnkdit-login-flow.yml, lib/browser-login-flow.cjs, app/auth/auth-shell.tsx, lib/auth-redirect.ts]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lnkdit-live-supabase-ab
+  cancel-in-progress: false
+jobs:
+  mobile-login:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://yeplwaainflckcrjsauw.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_QWxzQMOj4MAUeK_c8O7foQ_9zqmRgox
+      NEXT_PUBLIC_BETA_TEST_MODE: "false"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright-core install --with-deps chromium webkit
+      - name: Test readable mobile login, homepage routing, creation and recovery guards
+        env:
+          SUPABASE_TEST_ACCOUNT_A_PASSWORD: ${{ secrets.SUPABASE_TEST_ACCOUNT_A_PASSWORD }}
+        run: |
+          npm run start -- -p 3123 >/tmp/lnkdit-login.log 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3123/ >/dev/null; then READY=1; break; fi
+            sleep 1
+          done
+          test "$READY" = "1"
+          timeout 240s node lib/browser-login-flow.cjs
