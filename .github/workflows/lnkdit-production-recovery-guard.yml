@@ -1,4 +1,4 @@
-name: LNKDIT Production Mobile Login
+name: LNKDIT Production Login and Workspace
 on:
   push:
     branches: [design/lnkdit-homepage-rich-v1]
@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: f41980c74342f73ed309aa69d96eb2aa0a68f48a
+          ref: 8854aa9536bf5d016d94aa93b0070c521011bab5
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -31,3 +31,9 @@ jobs:
           SUPABASE_TEST_ACCOUNT_A_PASSWORD: ${{ secrets.SUPABASE_TEST_ACCOUNT_A_PASSWORD }}
         run: |
           timeout 240s node lib/browser-login-flow.cjs
+      - name: Verify live final-profile deletion and cloud restore
+        env:
+          SMOKE_BASE_URL: https://www.lnkdit.com
+          NEXT_PUBLIC_SUPABASE_URL: https://yeplwaainflckcrjsauw.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_QWxzQMOj4MAUeK_c8O7foQ_9zqmRgox
+        run: timeout 360s node lib/browser-workspace-delete.cjs
