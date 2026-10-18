@@ -131,3 +131,9 @@ body {
 .auth-input { color: #0f172a; background-color: #fff; -webkit-text-fill-color: #0f172a; caret-color: #0f172a; }
 .auth-input::placeholder { color: #64748b; -webkit-text-fill-color: #64748b; opacity: 1; }
 .auth-input:-webkit-autofill { -webkit-text-fill-color: #0f172a; caret-color: #0f172a; }
+
+/* Use the same desktop bottom spacing as the following sections. */
+@media (min-width: 1024px) {
+  .home-hero { padding-bottom: 6rem; }
+  .home-product-grid { margin-bottom: 0; }
+}
