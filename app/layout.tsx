@@ -29,7 +29,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col"><div className="flex-1">{children}</div><footer className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 border-t border-gray-200 bg-white px-4 py-6 text-center text-xs text-gray-500"><LnkditWordmark className="mr-1"/><span aria-hidden="true">·</span><a href="/privacy" className="underline">Privacy</a><span aria-hidden="true">·</span><a href="/terms" className="underline">Terms</a></footer><AuthShell /><LocalDataControls /></body>
+      <body className="min-h-full flex flex-col"><div className="flex-1">{children}</div><footer className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 border-t border-gray-200 bg-white px-4 py-6 text-center text-xs text-gray-500"><LnkditWordmark className="mr-1"/><span aria-hidden="true">·</span><a href="/privacy" className="underline">Privacy</a><span aria-hidden="true">·</span><a href="/terms" className="underline">Terms</a><span aria-hidden="true">·</span><a href="/support" className="underline">Support</a></footer><AuthShell /><LocalDataControls /></body>
     </html>
   );
 }

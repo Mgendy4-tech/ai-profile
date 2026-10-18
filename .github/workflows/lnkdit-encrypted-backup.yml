@@ -1,0 +1,39 @@
+name: LNKDIT Encrypted Backup
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lnkdit-production-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    if: github.ref == 'refs/heads/design/lnkdit-homepage-rich-v1' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Require configured backup credentials
+        env:
+          LNKDIT_BACKUP_DATABASE_URL: ${{ secrets.LNKDIT_BACKUP_DATABASE_URL }}
+          LNKDIT_BACKUP_KEY: ${{ secrets.LNKDIT_BACKUP_KEY }}
+          SUPABASE_BACKUP_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_BACKUP_SERVICE_ROLE_KEY }}
+        run: |
+          for name in LNKDIT_BACKUP_DATABASE_URL LNKDIT_BACKUP_KEY SUPABASE_BACKUP_SERVICE_ROLE_KEY; do
+            if [ -z "${!name}" ]; then echo "::error::Required backup secret $name is not configured. No backup was created."; exit 2; fi
+          done
+      - name: Create encrypted database and private asset backup
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://yeplwaainflckcrjsauw.supabase.co
+          LNKDIT_BACKUP_DATABASE_URL: ${{ secrets.LNKDIT_BACKUP_DATABASE_URL }}
+          LNKDIT_BACKUP_KEY: ${{ secrets.LNKDIT_BACKUP_KEY }}
+          SUPABASE_BACKUP_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_BACKUP_SERVICE_ROLE_KEY }}
+        run: bash scripts/backup-production.sh encrypted-backups
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lnkdit-encrypted-backup-${{ github.run_id }}
+          path: encrypted-backups/
+          retention-days: 14
+          if-no-files-found: error

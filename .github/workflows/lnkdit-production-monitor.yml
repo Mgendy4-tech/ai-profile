@@ -1,0 +1,37 @@
+name: LNKDIT Production Availability
+on:
+  schedule:
+    - cron: '17,47 * * * *'
+  push:
+    branches: [main, design/lnkdit-homepage-rich-v1]
+    paths: [.github/workflows/lnkdit-production-monitor.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lnkdit-availability
+  cancel-in-progress: false
+jobs:
+  availability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Check live availability and anonymous access protection
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --retry 2 --retry-delay 3 --max-time 20 --fail --silent --show-error https://www.lnkdit.com/api/health/readiness -o /tmp/lnkdit-health.json
+          node -e 'const h=require("/tmp/lnkdit-health.json");if(h.ok!==true||h.ready!==true)process.exit(1)'
+          for path in / /auth /privacy /terms; do
+            curl --retry 1 --max-time 20 --fail --silent --show-error "https://www.lnkdit.com$path" -o /dev/null
+          done
+          for route in generate-profile analyze-structure; do
+            STATUS=$(curl --max-time 20 --silent --show-error -X POST -H 'Content-Type: application/json' --data '{}' -o /dev/null -w '%{http_code}' "https://www.lnkdit.com/api/$route")
+            test "$STATUS" = 401
+          done
+          echo 'Production readiness, public pages and anonymous AI protection passed.'
+      - name: Publish incident summary
+        if: failure()
+        run: |
+          echo '### LNKDIT production availability check failed' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Check https://www.lnkdit.com/api/health/readiness and Vercel runtime logs. No customer data or secrets are included in this report.' >> "$GITHUB_STEP_SUMMARY"
