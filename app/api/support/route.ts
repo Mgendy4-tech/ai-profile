@@ -20,6 +20,6 @@ export async function POST(request: Request) {
   const message = typeof value?.message==="string"?value.message.trim():"";
   if (!title || title.length>120 || !message || message.length>4000) return NextResponse.json({ok:false,code:"invalid_message"},{status:400});
   const result = await auth.client.from("support_requests").insert({user_id:auth.userId,title,message}).select("id").single();
-  if (result.error) return NextResponse.json({ok:false,code:result.error.code==="42501"?"daily_limit":"unavailable"},{status:result.error.code==="42501"?429:503});
+  if (result.error) return NextResponse.json({ok:false,code:result.error.code==="P0001"?"daily_limit":"unavailable"},{status:result.error.code==="P0001"?429:503});
   return NextResponse.json({ok:true,id:result.data.id},{status:201});
 }

@@ -15,7 +15,7 @@ For a failure: inspect readiness, then Vercel runtime `[observability]` events. 
 
 ## Private support
 
-Customers open `/support` from the footer, sign in and submit a subject and message. Their requests and replies are private to their account. Authenticated users cannot write an administrator reply or status. A maximum of five retained requests in a rolling 24-hour period is enforced by the insert policy. A customer can remove their own support data through the data API.
+Customers open `/support` from the footer, sign in and submit a subject and message. Their requests and replies are private to their account. Authenticated users cannot write an administrator reply or status. A maximum of five retained requests in a rolling 24-hour period is enforced by an invoker-security insert trigger using an advisory transaction lock, alongside the account ownership RLS policy. A customer can remove their own support data through the data API.
 
 The owner reviews open requests in Supabase's `support_requests` table. Reply by editing only the selected request's `reply` and `status` (`answered` or `closed`). Never request passwords or confidential company documents. No response-time promise or email notification is implemented.
 
