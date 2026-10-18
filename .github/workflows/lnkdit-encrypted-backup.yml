@@ -14,6 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          ref: 88483c29fdbad9c0d67cf8670ed05cc5905a44d1
           persist-credentials: false
       - name: Require configured backup credentials
         env:
