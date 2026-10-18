@@ -1,4 +1,4 @@
-name: LNKDIT Production Login and Workspace
+name: LNKDIT Production Customer Release Verification
 on:
   push:
     branches: [design/lnkdit-homepage-rich-v1]
@@ -12,11 +12,11 @@ concurrency:
 jobs:
   production-guard:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: 8854aa9536bf5d016d94aa93b0070c521011bab5
+          ref: 81b202879fb39cb3b0dd039677b55127b297a1a0
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -37,3 +37,21 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://yeplwaainflckcrjsauw.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_QWxzQMOj4MAUeK_c8O7foQ_9zqmRgox
         run: timeout 360s node lib/browser-workspace-delete.cjs
+      - name: Verify live private customer support
+        env:
+          SMOKE_BASE_URL: https://www.lnkdit.com
+          NEXT_PUBLIC_SUPABASE_URL: https://yeplwaainflckcrjsauw.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_QWxzQMOj4MAUeK_c8O7foQ_9zqmRgox
+          SUPABASE_TEST_ACCOUNT_A_PASSWORD: ${{ secrets.SUPABASE_TEST_ACCOUNT_A_PASSWORD }}
+          SUPABASE_TEST_ACCOUNT_B_PASSWORD: ${{ secrets.SUPABASE_TEST_ACCOUNT_B_PASSWORD }}
+        run: timeout 240s node lib/browser-support-privacy.cjs
+      - name: Verify real AI and restored PDF export for all three families on production
+        env:
+          SMOKE_BASE_URL: https://www.lnkdit.com
+          NEXT_PUBLIC_SUPABASE_URL: https://yeplwaainflckcrjsauw.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_QWxzQMOj4MAUeK_c8O7foQ_9zqmRgox
+          SUPABASE_TEST_ACCOUNT_A_PASSWORD: ${{ secrets.SUPABASE_TEST_ACCOUNT_A_PASSWORD }}
+        run: |
+          for family in visual-portfolio corporate-services product-tech; do
+            QA_PROFILE_FAMILY="$family" timeout 600s node lib/browser-live-customer-journey.cjs
+          done
