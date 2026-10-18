@@ -8,12 +8,12 @@ permissions:
   contents: read
 concurrency:
   group: lnkdit-live-supabase-ab
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   customer-journey:
     if: github.ref == 'refs/heads/design/lnkdit-homepage-rich-v1'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://yeplwaainflckcrjsauw.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_QWxzQMOj4MAUeK_c8O7foQ_9zqmRgox
@@ -56,5 +56,7 @@ jobs:
             sleep 1
           done
           test "$READY" = "1"
-          timeout 600s node lib/browser-live-customer-journey.cjs
+          for family in visual-portfolio corporate-services product-tech; do
+            QA_PROFILE_FAMILY="$family" timeout 600s node lib/browser-live-customer-journey.cjs
+          done
 
